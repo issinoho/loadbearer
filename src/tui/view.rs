@@ -14,7 +14,7 @@ use crate::scoring::{Grade, ResultFile};
 const ACCENT: Color = Color::Cyan;
 const DIM: Color = Color::DarkGray;
 
-pub fn draw(f: &mut Frame, app: &App) {
+pub fn draw(f: &mut Frame, app: &mut App) {
     let area = f.area();
     if area.width < 44 || area.height < 12 {
         f.render_widget(
@@ -25,11 +25,13 @@ pub fn draw(f: &mut Frame, app: &App) {
     }
     match &app.phase {
         Phase::Running => match &app.soak {
-            Some(soak) => draw_soak(f, app, soak, area),
+            Some(soak) => draw_soak(f, &app.header, soak, app.cancelling, area),
             None => draw_running(f, app, area),
         },
-        Phase::Done(result) => draw_results(f, app, result, area),
         Phase::Failed(err) => draw_failed(f, err, area),
+        // `results_scroll` is a disjoint field from `phase`, so this mutable
+        // borrow alongside the shared borrow of `phase` is fine.
+        Phase::Done(result) => draw_results(f, &mut app.results_scroll, result, area),
     }
 }
 
@@ -175,7 +177,7 @@ fn subtest_line(s: &SubRow) -> Line<'static> {
 
 // --- soak screen ----------------------------------------------------------
 
-fn draw_soak(f: &mut Frame, app: &App, soak: &SoakView, area: Rect) {
+fn draw_soak(f: &mut Frame, header: &str, soak: &SoakView, cancelling: bool, area: Rect) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(ACCENT))
@@ -195,7 +197,10 @@ fn draw_soak(f: &mut Frame, app: &App, soak: &SoakView, area: Rect) {
     .split(inner);
 
     f.render_widget(
-        Paragraph::new(Span::styled(&app.header, Style::default().fg(ACCENT))),
+        Paragraph::new(Span::styled(
+            header.to_string(),
+            Style::default().fg(ACCENT),
+        )),
         rows[0],
     );
     f.render_widget(
@@ -266,7 +271,7 @@ fn draw_soak(f: &mut Frame, app: &App, soak: &SoakView, area: Rect) {
         rows[5],
     );
 
-    let hint = if app.cancelling {
+    let hint = if cancelling {
         "cancelling — keeping the graded result…".to_string()
     } else {
         format!("q  skip the soak (keeps the graded result) · ~{remaining:.0}s left")
@@ -306,7 +311,7 @@ fn soak_spark(soak: &SoakView, width: usize) -> String {
 
 // --- results screen --------------------------------------------------------
 
-fn draw_results(f: &mut Frame, app: &App, r: &ResultFile, area: Rect) {
+fn draw_results(f: &mut Frame, scroll: &mut u16, r: &ResultFile, area: Rect) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(grade_color(r.overall.grade)))
@@ -315,6 +320,10 @@ fn draw_results(f: &mut Frame, app: &App, r: &ResultFile, area: Rect) {
     f.render_widget(block, area);
 
     let rows = Layout::vertical([Constraint::Min(3), Constraint::Length(1)]).split(inner);
+
+    // Subtest label column: whatever is left after the fixed value / unit /
+    // ratio / score / confidence columns, within bounds.
+    let name_w = (inner.width as usize).saturating_sub(46).clamp(22, 40);
 
     let mut lines: Vec<Line> = Vec::new();
     let m = &r.machine;
@@ -342,8 +351,8 @@ fn draw_results(f: &mut Frame, app: &App, r: &ResultFile, area: Rect) {
         for st in &c.subtests {
             lines.push(Line::from(Span::styled(
                 format!(
-                    "    {:<24} {:>11} {:<7} {:>5.2}x  {:>5.0}  {}",
-                    truncate(&st.label, 24),
+                    "    {:<name_w$} {:>11} {:<7} {:>5.2}x  {:>5.0}  {}",
+                    truncate(&st.label, name_w),
                     fmt_val(st.value),
                     st.unit,
                     st.ratio,
@@ -414,18 +423,18 @@ fn draw_results(f: &mut Frame, app: &App, r: &ResultFile, area: Rect) {
 
     let viewport = rows[0].height as usize;
     let max_scroll = lines.len().saturating_sub(viewport) as u16;
-    let scroll = app.results_scroll.min(max_scroll);
+    *scroll = (*scroll).min(max_scroll);
     f.render_widget(
         Paragraph::new(lines)
             .wrap(Wrap { trim: false })
-            .scroll((scroll, 0)),
+            .scroll((*scroll, 0)),
         rows[0],
     );
 
     let hint = if max_scroll > 0 {
-        "↑/↓ scroll · q / enter  exit"
+        format!("↑/↓ scroll · {}/{} · q / enter  exit", *scroll, max_scroll)
     } else {
-        "q / enter  exit"
+        "q / enter  exit".to_string()
     };
     f.render_widget(
         Paragraph::new(Span::styled(hint, Style::default().fg(DIM))),

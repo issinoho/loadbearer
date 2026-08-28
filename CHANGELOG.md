@@ -2,7 +2,19 @@
 
 All notable changes to loadbearer are documented in this file.
 
-## 0.6.2 - Thu, 28 Aug 2026
+## 0.6.3 - Thu, 28 Aug 2026
+
+Carries the `compare`-TUI fixes back to the `run` TUI:
+
+- The graded results screen sizes its subtest-label column from the
+  terminal width instead of a fixed 24, so names like `Sequential read,
+  all cores` and `TCP throughput, single stream` stop truncating on a
+  normal-width terminal.
+- The results scroll position is now clamped and written back each
+  frame, so pressing `↓` at the bottom no longer banks phantom scroll
+  that `↑` then has to unwind before anything moves.
+- The results screen gains `j`/`k`/`space` and `Home`/`End` (`g`/`G`)
+  to match the `compare` view, and the scroll hint shows the position.
 
 - The `compare` TUI now sizes its label column from the terminal width
   (bounded 22–48) instead of a fixed 30, so subtest names like

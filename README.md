@@ -229,7 +229,8 @@ loadbearer net-server [--bind ADDR]
 
 While a TUI run is in progress: `q` cancels it cleanly (the current measurement
 finishes, then the process exits). On the results screen: `↑`/`↓`/`PgUp`/`PgDn`
-scroll, `q` or `Enter` exits.
+(or `j`/`k`/`space`) scroll, `Home`/`End` (or `g`/`G`) jump to top/bottom, `q` or
+`Enter` exits — the same keys as the `compare` view.
 
 ### `compare` options
 

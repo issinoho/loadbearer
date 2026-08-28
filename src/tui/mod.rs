@@ -74,7 +74,7 @@ fn event_loop(
     rx: &Receiver<Msg>,
 ) -> Result<Option<ResultFile>> {
     loop {
-        terminal.draw(|f| view::draw(f, app))?;
+        terminal.draw(|f| view::draw(f, &mut *app))?;
 
         while let Ok(msg) = rx.try_recv() {
             app.apply(msg);
@@ -98,10 +98,14 @@ fn event_loop(
                     app.abort.store(true, Ordering::Relaxed);
                 }
                 KeyCode::Enter if app.is_finished() => return resolve(app),
-                KeyCode::Up => app.scroll_results(-1),
-                KeyCode::Down => app.scroll_results(1),
+                KeyCode::Up | KeyCode::Char('k') => app.scroll_results(-1),
+                KeyCode::Down | KeyCode::Char('j') => app.scroll_results(1),
                 KeyCode::PageUp => app.scroll_results(-10),
-                KeyCode::PageDown => app.scroll_results(10),
+                KeyCode::PageDown | KeyCode::Char(' ') => app.scroll_results(10),
+                KeyCode::Home | KeyCode::Char('g') if app.is_finished() => app.results_scroll = 0,
+                KeyCode::End | KeyCode::Char('G') if app.is_finished() => {
+                    app.results_scroll = u16::MAX
+                }
                 _ if ctrl_c => {
                     app.cancelling = true;
                     app.abort.store(true, Ordering::Relaxed);
