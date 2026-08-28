@@ -2,6 +2,12 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 0.6.5 - Thu, 28 Aug 2026
+
+- The `compare` TUI now word-wraps the `!` warning lines and the verdict
+  onto indented continuation lines instead of letting a long OS-mismatch
+  warning run off the edge of the pane.
+
 ## 0.6.4 - Thu, 28 Aug 2026
 
 - The live run screen now sizes its subtest-label column from the

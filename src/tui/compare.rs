@@ -84,7 +84,7 @@ fn draw(f: &mut Frame, c: &Comparison, scroll: &mut u16) {
     let name_w = (inner.width as usize)
         .saturating_sub(2 + n * (COL_W + 1) + 4)
         .clamp(NAME_MIN, NAME_MAX);
-    let lines = build_lines(c, name_w);
+    let lines = build_lines(c, name_w, inner.width as usize);
 
     let viewport = rows[0].height as usize;
     let max_scroll = lines.len().saturating_sub(viewport) as u16;
@@ -105,7 +105,7 @@ fn draw(f: &mut Frame, c: &Comparison, scroll: &mut u16) {
 
 // --- line building --------------------------------------------------------
 
-fn build_lines(c: &Comparison, name_w: usize) -> Vec<Line<'static>> {
+fn build_lines(c: &Comparison, name_w: usize, wrap_w: usize) -> Vec<Line<'static>> {
     let mut out: Vec<Line<'static>> = Vec::new();
     let n = c.machines.len();
 
@@ -137,10 +137,16 @@ fn build_lines(c: &Comparison, name_w: usize) -> Vec<Line<'static>> {
     if !c.warnings.is_empty() {
         out.push(Line::raw(""));
         for w in &c.warnings {
-            out.push(Line::from(Span::styled(
-                format!("  ! {w}"),
-                Style::default().fg(Color::Yellow),
-            )));
+            for (i, seg) in wrap_words(w, wrap_w.saturating_sub(4))
+                .into_iter()
+                .enumerate()
+            {
+                let prefix = if i == 0 { "  ! " } else { "    " };
+                out.push(Line::from(Span::styled(
+                    format!("{prefix}{seg}"),
+                    Style::default().fg(Color::Yellow),
+                )));
+            }
         }
     }
 
@@ -236,11 +242,64 @@ fn build_lines(c: &Comparison, name_w: usize) -> Vec<Line<'static>> {
     }
 
     out.push(Line::raw(""));
-    out.push(Line::from(vec![
-        Span::styled("  Verdict: ", Style::default().add_modifier(Modifier::BOLD)),
-        Span::styled(c.overall.summary.clone(), Style::default().fg(ACCENT)),
-    ]));
+    let verdict = wrap_words(&c.overall.summary, wrap_w.saturating_sub(11));
+    for (i, seg) in verdict.into_iter().enumerate() {
+        if i == 0 {
+            out.push(Line::from(vec![
+                Span::styled("  Verdict: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::styled(seg, Style::default().fg(ACCENT)),
+            ]));
+        } else {
+            out.push(Line::from(Span::styled(
+                format!("           {seg}"),
+                Style::default().fg(ACCENT),
+            )));
+        }
+    }
 
+    out
+}
+
+/// Greedy word-wrap to `width` columns. A single word longer than `width` is
+/// hard-split into `width`-sized chunks rather than left to overflow.
+fn wrap_words(text: &str, width: usize) -> Vec<String> {
+    let width = width.max(8);
+    let mut out: Vec<String> = Vec::new();
+    let mut line = String::new();
+    for raw in text.split_whitespace() {
+        let mut chunks: Vec<String> = Vec::new();
+        if raw.chars().count() > width {
+            let mut buf = String::new();
+            for ch in raw.chars() {
+                buf.push(ch);
+                if buf.chars().count() == width {
+                    chunks.push(std::mem::take(&mut buf));
+                }
+            }
+            if !buf.is_empty() {
+                chunks.push(buf);
+            }
+        } else {
+            chunks.push(raw.to_string());
+        }
+        for word in chunks {
+            if line.is_empty() {
+                line = word;
+            } else if line.chars().count() + 1 + word.chars().count() <= width {
+                line.push(' ');
+                line.push_str(&word);
+            } else {
+                out.push(std::mem::take(&mut line));
+                line = word;
+            }
+        }
+    }
+    if !line.is_empty() {
+        out.push(line);
+    }
+    if out.is_empty() {
+        out.push(String::new());
+    }
     out
 }
 
@@ -393,7 +452,7 @@ mod tests {
 
     #[test]
     fn build_lines_covers_every_section() {
-        let lines = build_lines(&two_machine_comparison(true), 30);
+        let lines = build_lines(&two_machine_comparison(true), 30, 100);
         let joined = lines.iter().map(text).collect::<Vec<_>>().join("\n");
 
         assert!(joined.contains("2 machines"));
@@ -410,7 +469,7 @@ mod tests {
 
     #[test]
     fn winner_and_reference_cells_render() {
-        let lines = build_lines(&two_machine_comparison(false), 30);
+        let lines = build_lines(&two_machine_comparison(false), 30, 100);
         let joined = lines.iter().map(text).collect::<Vec<_>>().join("\n");
         // Machine A is the reference; the delta column shows the winner tag B.
         let overall = lines
@@ -428,6 +487,49 @@ mod tests {
     fn no_panic_with_the_minimum_two_machines_and_no_warnings_or_soak() {
         let mut c = two_machine_comparison(false);
         c.warnings.clear();
-        let _ = build_lines(&c, 30);
+        let _ = build_lines(&c, 30, 100);
+    }
+
+    #[test]
+    fn a_long_warning_wraps_onto_indented_continuation_lines() {
+        let mut c = two_machine_comparison(false);
+        c.warnings = vec![
+            "files are from different operating systems (Linux (Ubuntu 24.04), \
+             Linux (Ubuntu 26.04)); the network component in particular is not \
+             comparable across OSes"
+                .to_string(),
+        ];
+        let lines: Vec<String> = build_lines(&c, 30, 60).iter().map(text).collect();
+        let start = lines.iter().position(|l| l.starts_with("  ! ")).unwrap();
+        let warn: Vec<&String> = lines[start..]
+            .iter()
+            .take_while(|l| l.starts_with("  ! ") || l.starts_with("    "))
+            .collect();
+        assert!(warn.len() > 1, "expected the warning to wrap: {lines:#?}");
+        assert!(warn[0].starts_with("  ! "));
+        assert!(warn[1..].iter().all(|l| l.starts_with("    ")));
+        // Every wrapped warning line fits the 60-col pane.
+        assert!(
+            warn.iter().all(|l| l.chars().count() <= 60),
+            "a warning line overflowed: {warn:#?}"
+        );
+        // No content was dropped.
+        let joined: String = warn.iter().map(|l| l.trim()).collect::<Vec<_>>().join(" ");
+        assert!(joined.contains("Ubuntu 26.04"));
+        assert!(joined.contains("comparable across OSes"));
+    }
+
+    #[test]
+    fn wrap_words_greedy_and_hard_splits_overlong_words() {
+        let w = wrap_words("the quick brown fox jumps", 10);
+        assert!(w.iter().all(|l| l.chars().count() <= 10));
+        assert_eq!(w.join(" "), "the quick brown fox jumps");
+
+        let w = wrap_words("supercalifragilisticexpialidocious tail", 10);
+        assert!(w.iter().all(|l| l.chars().count() <= 10));
+        assert_eq!(
+            w.concat().replace(' ', ""),
+            "supercalifragilisticexpialidocioustail"
+        );
     }
 }
