@@ -81,7 +81,7 @@ pub fn collect() -> Inventory {
         arch: System::cpu_arch(),
         cpu_model,
         cpu_vendor,
-        cpu_physical_cores: sys.physical_core_count(),
+        cpu_physical_cores: System::physical_core_count(),
         cpu_logical_cores: cpus.len(),
         cpu_mhz_spot,
         ram_bytes: sys.total_memory(),
