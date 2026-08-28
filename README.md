@@ -34,7 +34,7 @@ through, `compare` internals, and how to recalibrate the baseline — see the
 ## What a run looks like
 
 ```
-loadbearer 0.6.1 — assessment
+loadbearer 0.6.4 — assessment
 
   Machine   ThinkPad-X280 · Intel(R) Core(TM) i5-8350U CPU @ 1.70GHz · 8 threads · 7.0 GiB RAM
   Profile   general · curve k=0.5 · baseline reference-v1 · short preset
@@ -77,7 +77,7 @@ loadbearer 0.6.1 — assessment
 
 Each subtest row is: raw measurement, its ratio to the baseline, its score, and a
 confidence flag derived from run-to-run spread. (A few rows are trimmed above for
-length — a real run shows all six CPU and all five memory subtests.) In a
+length — a real run shows all eight CPU and all five memory subtests.) In a
 terminal this is a coloured, scrollable full-screen view with a live progress
 gauge while the run is in progress; the block above is the `--plain` rendering.
 
@@ -279,7 +279,7 @@ folded into the verdict.
 
 ```
 re-scoring thinkpad-x280 (2026-08-28T15:45:20Z)
-  tool      0.4.0  →  0.6.0
+  tool      0.4.0  →  0.6.4
   baseline  reference-v1  →  our-fleet
   profile   general  →  server
   curve k   0.5  →  0.7
