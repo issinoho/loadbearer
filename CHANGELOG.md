@@ -2,6 +2,14 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 0.6.6 - Thu, 28 Aug 2026
+
+- The `compare` TUI's machine columns now widen from 15 up to whatever
+  their `A: <name>` header needs (capped at 28), so a machine name like
+  `ThinkPad-X280` shows in full in the column header instead of
+  truncating to `A: ThinkPad-X2…` on a terminal with room to spare. The
+  machine list at the top keeps the full names regardless.
+
 ## 0.6.5 - Thu, 28 Aug 2026
 
 - The `compare` TUI now word-wraps the `!` warning lines and the verdict

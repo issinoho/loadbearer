@@ -17,10 +17,11 @@ use crate::compare::Comparison;
 
 const ACCENT: Color = Color::Cyan;
 const DIM: Color = Color::DarkGray;
-const COL_W: usize = 15;
-/// Label-column width bounds; the actual width is picked from the terminal.
+/// Column-width bounds; the actual widths are picked from the terminal.
 const NAME_MIN: usize = 22;
 const NAME_MAX: usize = 48;
+const COL_MIN: usize = 15;
+const COL_MAX: usize = 28;
 
 /// Show the comparison in an alternate screen until the user quits.
 pub fn run(c: &Comparison) -> Result<()> {
@@ -78,13 +79,25 @@ fn draw(f: &mut Frame, c: &Comparison, scroll: &mut u16) {
 
     let rows = Layout::vertical([Constraint::Min(3), Constraint::Length(1)]).split(inner);
 
-    // Give the label column whatever width is left after the value columns and
-    // the winner tag, within bounds.
+    // Size the columns to the terminal. The label column gets first call on
+    // the width (subtest names are longer); the machine columns then widen
+    // from COL_MIN up to whatever their "A: <name>" header needs.
     let n = c.machines.len();
-    let name_w = (inner.width as usize)
-        .saturating_sub(2 + n * (COL_W + 1) + 4)
+    let inner_w = inner.width as usize;
+    let want_col = c
+        .machines
+        .iter()
+        .map(|m| m.tag.chars().count() + 2 + m.label.chars().count())
+        .max()
+        .unwrap_or(COL_MIN)
+        .clamp(COL_MIN, COL_MAX);
+    let name_w = inner_w
+        .saturating_sub(2 + n * (COL_MIN + 1) + 4)
         .clamp(NAME_MIN, NAME_MAX);
-    let lines = build_lines(c, name_w, inner.width as usize);
+    let col_w = (inner_w.saturating_sub(2 + name_w + 4) / n.max(1))
+        .saturating_sub(1)
+        .clamp(COL_MIN, want_col);
+    let lines = build_lines(c, name_w, col_w, inner_w);
 
     let viewport = rows[0].height as usize;
     let max_scroll = lines.len().saturating_sub(viewport) as u16;
@@ -105,9 +118,11 @@ fn draw(f: &mut Frame, c: &Comparison, scroll: &mut u16) {
 
 // --- line building --------------------------------------------------------
 
-fn build_lines(c: &Comparison, name_w: usize, wrap_w: usize) -> Vec<Line<'static>> {
+fn build_lines(c: &Comparison, name_w: usize, col_w: usize, wrap_w: usize) -> Vec<Line<'static>> {
     let mut out: Vec<Line<'static>> = Vec::new();
     let n = c.machines.len();
+    // The machine list carries the full names; keep this column wide.
+    let list_w = name_w.max(28);
 
     out.push(Line::from(Span::styled(
         format!("{n} machines"),
@@ -119,7 +134,11 @@ fn build_lines(c: &Comparison, name_w: usize, wrap_w: usize) -> Vec<Line<'static
                 format!("  {}  ", m.tag),
                 Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
             ),
-            Span::raw(format!("{:<22} {}", truncate(&m.label, 22), m.cpu_model)),
+            Span::raw(format!(
+                "{:<list_w$} {}",
+                truncate(&m.label, list_w),
+                m.cpu_model
+            )),
         ]));
         out.push(Line::from(Span::styled(
             format!(
@@ -155,8 +174,8 @@ fn build_lines(c: &Comparison, name_w: usize, wrap_w: usize) -> Vec<Line<'static
     for m in &c.machines {
         hdr.push(Span::styled(
             format!(
-                " {:>COL_W$}",
-                truncate(&format!("{}: {}", m.tag, m.label), COL_W)
+                " {:>col_w$}",
+                truncate(&format!("{}: {}", m.tag, m.label), col_w)
             ),
             Style::default().add_modifier(Modifier::BOLD),
         ));
@@ -178,6 +197,7 @@ fn build_lines(c: &Comparison, name_w: usize, wrap_w: usize) -> Vec<Line<'static
                 st.best,
                 false,
                 name_w,
+                col_w,
             ));
         }
         out.push(metric_row(
@@ -188,6 +208,7 @@ fn build_lines(c: &Comparison, name_w: usize, wrap_w: usize) -> Vec<Line<'static
             comp.best,
             true,
             name_w,
+            col_w,
         ));
     }
 
@@ -200,6 +221,7 @@ fn build_lines(c: &Comparison, name_w: usize, wrap_w: usize) -> Vec<Line<'static
         c.overall.ranking[0],
         true,
         name_w,
+        col_w,
     ));
 
     if let Some(sk) = &c.soak {
@@ -216,6 +238,7 @@ fn build_lines(c: &Comparison, name_w: usize, wrap_w: usize) -> Vec<Line<'static
             sk.best_sustained,
             false,
             name_w,
+            col_w,
         ));
         let mut row = vec![Span::raw(format!(
             "  {:<name_w$}",
@@ -228,7 +251,7 @@ fn build_lines(c: &Comparison, name_w: usize, wrap_w: usize) -> Vec<Line<'static
                 Style::default()
             };
             row.push(Span::styled(
-                format!(" {:>COL_W$}", format!("{v:.0}%")),
+                format!(" {:>col_w$}", format!("{v:.0}%")),
                 style,
             ));
         }
@@ -314,6 +337,7 @@ fn metric_row(
     best: usize,
     aggregate: bool,
     name_w: usize,
+    col_w: usize,
 ) -> Line<'static> {
     let mut spans = vec![Span::raw(format!("  {:<name_w$}", truncate(label, name_w)))];
     for (i, r) in rel.iter().enumerate() {
@@ -341,7 +365,7 @@ fn metric_row(
         } else {
             Style::default()
         };
-        spans.push(Span::styled(format!(" {cell:>COL_W$}"), style));
+        spans.push(Span::styled(format!(" {cell:>col_w$}"), style));
     }
     spans.push(winner_span(c, rel, best));
     Line::from(spans)
@@ -452,7 +476,7 @@ mod tests {
 
     #[test]
     fn build_lines_covers_every_section() {
-        let lines = build_lines(&two_machine_comparison(true), 30, 100);
+        let lines = build_lines(&two_machine_comparison(true), 30, 15, 100);
         let joined = lines.iter().map(text).collect::<Vec<_>>().join("\n");
 
         assert!(joined.contains("2 machines"));
@@ -468,8 +492,24 @@ mod tests {
     }
 
     #[test]
+    fn wide_machine_columns_show_the_full_name_in_the_header() {
+        let mut c = two_machine_comparison(false);
+        c.machines[0].label = "ThinkPad-X280".into();
+        c.machines[1].label = "docker-nuc".into();
+        // col_w 16 fits "A: ThinkPad-X280"; col_w 15 would truncate it.
+        let header = build_lines(&c, 40, 16, 120)
+            .iter()
+            .map(text)
+            .find(|l| l.trim_start().starts_with("metric"))
+            .unwrap();
+        assert!(header.contains("A: ThinkPad-X280"), "{header:?}");
+        assert!(header.contains("B: docker-nuc"), "{header:?}");
+        assert!(!header.contains('…'), "{header:?}");
+    }
+
+    #[test]
     fn winner_and_reference_cells_render() {
-        let lines = build_lines(&two_machine_comparison(false), 30, 100);
+        let lines = build_lines(&two_machine_comparison(false), 30, 15, 100);
         let joined = lines.iter().map(text).collect::<Vec<_>>().join("\n");
         // Machine A is the reference; the delta column shows the winner tag B.
         let overall = lines
@@ -487,7 +527,7 @@ mod tests {
     fn no_panic_with_the_minimum_two_machines_and_no_warnings_or_soak() {
         let mut c = two_machine_comparison(false);
         c.warnings.clear();
-        let _ = build_lines(&c, 30, 100);
+        let _ = build_lines(&c, 30, 15, 100);
     }
 
     #[test]
@@ -499,7 +539,7 @@ mod tests {
              comparable across OSes"
                 .to_string(),
         ];
-        let lines: Vec<String> = build_lines(&c, 30, 60).iter().map(text).collect();
+        let lines: Vec<String> = build_lines(&c, 30, 15, 60).iter().map(text).collect();
         let start = lines.iter().position(|l| l.starts_with("  ! ")).unwrap();
         let warn: Vec<&String> = lines[start..]
             .iter()
