@@ -2,6 +2,15 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 0.2.1 - Thu, 28 Aug 2026
+
+- `loadbearer --version` / `-V` now report a full build version: the crate
+  version plus the git commit, build date, target triple and profile, e.g.
+  `loadbearer 0.2.1 (a1b2c3d4e 2026-08-28, x86_64-pc-windows-msvc, release)`.
+  A `build.rs` captures this at compile time; it honours `SOURCE_DATE_EPOCH`
+  for reproducible builds and falls back to `unknown` for the commit when built
+  outside a git checkout.
+
 ## 0.2.0 - Thu, 28 Aug 2026
 
 - **Network is now a first-class graded component.** Four loopback subtests over

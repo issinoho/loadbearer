@@ -1,9 +1,10 @@
 [package]
 name = "loadbearer"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 rust-version = "1.88"
-description = "CLI system-assessment tool: benchmarks CPU, memory and disk, then grades the machine"
+build = "build.rs"
+description = "CLI system-assessment tool: benchmarks CPU, memory, disk and network, then grades the machine"
 repository = "https://github.com/issinoho/loadbearer"
 license = "MIT"
 readme = "README.md"
@@ -24,6 +25,9 @@ flate2 = { version = "1", default-features = false, features = ["rust_backend"] 
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+[build-dependencies]
+time = { version = "0.3", default-features = false, features = ["std"] }
 
 [profile.release]
 lto = true

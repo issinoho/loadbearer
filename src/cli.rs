@@ -20,7 +20,7 @@ pub enum DurationArg {
 /// Run the same build on two machines and compare their result files to see
 /// which is stronger and why.
 #[derive(Parser, Debug)]
-#[command(name = "loadbearer", version, about, long_about = None)]
+#[command(name = "loadbearer", version = env!("LOADBEARER_VERSION"), about, long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,
