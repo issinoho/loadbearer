@@ -3,10 +3,10 @@
 # loadbearer
 
 A command-line system-assessment tool. It benchmarks a host machine's **CPU**,
-**memory** and **disk**, scores every measurement against an embedded reference
-baseline, and grades each component — and the machine as a whole — on an S-to-F
-scale. Run the same build on two laptops and it will tell you which one is
-stronger, by how much, and *why*.
+**memory**, **disk** and **network stack**, scores every measurement against an
+embedded reference baseline, and grades each component — and the machine as a
+whole — on an S-to-F scale. Run the same build on two laptops and it will tell
+you which one is stronger, by how much, and *why*.
 
 There is no GUI. Everything is driven by switches or a config file. In an
 interactive terminal `loadbearer run` shows a TUI — live per-subtest progress, a
