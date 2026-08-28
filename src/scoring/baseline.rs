@@ -69,12 +69,14 @@ mod tests {
                     "float_multi",
                     "hash",
                     "compress",
+                    "aes_gcm",
+                    "sha256",
                 ]
                 .as_slice(),
             ),
             (
                 "memory",
-                ["bw_read", "bw_write", "bw_copy", "latency"].as_slice(),
+                ["bw_read", "bw_write", "bw_copy", "bw_read_mt", "latency"].as_slice(),
             ),
             (
                 "disk",

@@ -20,12 +20,17 @@ float_single = 8000.0    # MFLOP/s
 float_multi  = 70000.0   # MFLOP/s
 hash         = 4200.0    # MiB/s   (BLAKE3, SIMD)
 compress     = 68.0      # MiB/s   (DEFLATE level 6)
+# These two assume the reference chip has hardware AES + SHA acceleration
+# (AES-NI + CLMUL, and the SHA extensions) — mainstream from ~2019 on x86.
+aes_gcm      = 1800.0    # MiB/s   (AES-256-GCM, single thread)
+sha256       = 1800.0    # MiB/s   (SHA-256, single thread)
 
 [components.memory]
-bw_read  = 22.0          # GiB/s
-bw_write = 16.0          # GiB/s
-bw_copy  = 14.0          # GiB/s
-latency  = 95.0          # ns      (lower is better)
+bw_read     = 22.0       # GiB/s   (single thread)
+bw_write    = 16.0       # GiB/s
+bw_copy     = 14.0       # GiB/s
+bw_read_mt  = 28.0       # GiB/s   (all logical CPUs, summed)
+latency     = 95.0       # ns      (lower is better)
 
 [components.disk]
 seq_write  = 1500.0      # MiB/s   (with fsync)

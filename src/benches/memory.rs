@@ -20,7 +20,7 @@ use std::time::Duration;
 
 use anyhow::{Result, bail};
 
-use crate::engine::{Benchmark, Direction, RunContext, SubtestSpec, throughput};
+use crate::engine::{Benchmark, Direction, RunContext, SubtestSpec, parallel_sum, throughput};
 use crate::util::{GIB, SplitMix64};
 
 /// Target working-set size before the RAM/8 cap, per preset.
@@ -36,6 +36,21 @@ fn working_bytes(ctx: &RunContext) -> (usize, bool) {
     let capped = target > cap;
     let chosen = target.min(cap) & !(8 * 1024 - 1);
     (chosen.max(8 * 1024), capped)
+}
+
+/// Per-thread working set for the all-core read: the single-thread size split
+/// across the threads (floored at 16 MiB each), with the total held to RAM/4.
+fn mt_read_bytes(ctx: &RunContext) -> (usize, bool) {
+    let threads = ctx.threads.max(1);
+    let (single, _) = working_bytes(ctx);
+    let mut per = (single / threads).max(16 * 1024 * 1024);
+    let mut capped = false;
+    let cap_total = (ctx.total_ram / 4) as usize;
+    if per.saturating_mul(threads) > cap_total {
+        per = (cap_total / threads).max(8 * 1024);
+        capped = true;
+    }
+    (per & !(8 * 1024 - 1), capped)
 }
 
 pub struct MemoryBenchmark {
@@ -89,6 +104,12 @@ impl Benchmark for MemoryBenchmark {
                 direction: Hi,
             },
             SubtestSpec {
+                id: "bw_read_mt",
+                label: "Sequential read, all cores",
+                unit: "GiB/s",
+                direction: Hi,
+            },
+            SubtestSpec {
                 id: "latency",
                 label: "Random access latency",
                 unit: "ns",
@@ -122,6 +143,17 @@ impl Benchmark for MemoryBenchmark {
                 let mut dst = vec![0u64; words];
                 copy_bandwidth(&src, &mut dst, budget)
             }
+            "bw_read_mt" => {
+                let (per, mt_capped) = mt_read_bytes(ctx);
+                if mt_capped {
+                    self.note("all-core read working set reduced to fit within RAM/4");
+                }
+                let mt_words = per / 8;
+                let seed = ctx.seed ^ 0xB0;
+                parallel_sum(ctx.threads.max(1), || {
+                    read_bandwidth(&filled_words(mt_words, seed), budget)
+                })
+            }
             "latency" => {
                 // 4 bytes per node; size independent of the bandwidth working set.
                 let nodes = (bytes / 4).max(1 << 20);
@@ -136,9 +168,9 @@ impl Benchmark for MemoryBenchmark {
         self.notes.lock().unwrap().clone()
     }
 
-    /// Every memory subtest is single-threaded.
-    fn single_threaded(&self, _subtest_id: &str) -> bool {
-        true
+    /// Every memory subtest is single-threaded except the all-core read.
+    fn single_threaded(&self, subtest_id: &str) -> bool {
+        subtest_id != "bw_read_mt"
     }
 }
 
@@ -262,7 +294,8 @@ mod tests {
         assert!(copy_bandwidth(&src, &mut dst, short) > 0.0);
         let cyc = sattolo_cycle(1 << 16, 3);
         assert!(latency_ns(&cyc, short) > 0.0);
-        let _ = bench.run_subtest("bw_read", &ctx()).unwrap();
+        assert!(bench.run_subtest("bw_read", &ctx()).unwrap() > 0.0);
+        assert!(bench.run_subtest("bw_read_mt", &ctx()).unwrap() > 0.0);
     }
 
     #[test]

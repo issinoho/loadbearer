@@ -2,6 +2,21 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 0.4.0 - Thu, 28 Aug 2026
+
+- **Two new CPU subtests: AES-256-GCM and SHA-256 throughput.** These pick up
+  the CPU's AES-NI / CLMUL / SHA hardware where present (detected at runtime),
+  so a chip that lacks crypto acceleration — common before ~2019 — now shows up
+  in the grade. Adds the `aes-gcm` and `sha2` crates.
+- **New memory subtest: `Sequential read, all cores`.** The other bandwidth
+  subtests are single-threaded; this one runs the read kernel on every logical
+  CPU and sums the rates, capturing whether the memory subsystem scales past
+  one or two cores (many dual-channel laptops don't).
+- `reference-v1` gains `cpu/aes_gcm`, `cpu/sha256` and `memory/bw_read_mt`
+  anchors (provisional, like the rest).
+- Because these join the CPU and memory geometric means, scores shift for
+  machines that lack crypto acceleration or don't scale memory bandwidth.
+
 ## 0.3.1 - Thu, 28 Aug 2026
 
 - **Single-threaded subtests are pinned to one core** while they run, so the OS

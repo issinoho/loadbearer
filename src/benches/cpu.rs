@@ -72,6 +72,18 @@ impl Benchmark for CpuBenchmark {
                 unit: "MiB/s",
                 direction: HI,
             },
+            SubtestSpec {
+                id: "aes_gcm",
+                label: "AES-256-GCM encrypt",
+                unit: "MiB/s",
+                direction: HI,
+            },
+            SubtestSpec {
+                id: "sha256",
+                label: "SHA-256 hash",
+                unit: "MiB/s",
+                direction: HI,
+            },
         ]
     }
 
@@ -84,6 +96,8 @@ impl Benchmark for CpuBenchmark {
             "float_multi" => parallel_sum(ctx.threads, || float_rate(budget)),
             "hash" => hash_rate(budget, ctx.seed),
             "compress" => compress_rate(budget, ctx.seed),
+            "aes_gcm" => aes_gcm_rate(budget, ctx.seed),
+            "sha256" => sha256_rate(budget, ctx.seed),
             other => bail!("unknown cpu subtest: {other}"),
         })
     }
@@ -91,7 +105,7 @@ impl Benchmark for CpuBenchmark {
     fn single_threaded(&self, subtest_id: &str) -> bool {
         matches!(
             subtest_id,
-            "int_single" | "float_single" | "hash" | "compress"
+            "int_single" | "float_single" | "hash" | "compress" | "aes_gcm" | "sha256"
         )
     }
 }
@@ -190,6 +204,51 @@ fn compress_rate(budget: Duration, seed: u64) -> f64 {
     bytes / MIB
 }
 
+/// AES-256-GCM authenticated-encryption throughput in MiB/s of plaintext, over a
+/// 256 KiB buffer. RustCrypto uses AES-NI + CLMUL at runtime where the CPU has
+/// them, so this reflects the crypto-instruction generation, not just the clock.
+fn aes_gcm_rate(budget: Duration, seed: u64) -> f64 {
+    use aes_gcm::aead::AeadInPlace;
+    use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
+
+    const BUF: usize = 256 * 1024;
+    let mut key = [0u8; 32];
+    SplitMix64::new(seed ^ 0xA35F_1C2D_9B4E_7061).fill_bytes(&mut key);
+    let cipher = Aes256Gcm::new_from_slice(&key).expect("32-byte key");
+    let nonce = Nonce::from_slice(&[0u8; 12]);
+    let mut buf = vec![0u8; BUF];
+    SplitMix64::new(seed ^ 0x51E5_A2C3_44D9_0177).fill_bytes(&mut buf);
+
+    let bytes = throughput(budget, || {
+        // Encrypt in place, discard the tag. Re-encrypting the previous
+        // ciphertext costs the same AES + GHASH work.
+        let tag = cipher
+            .encrypt_in_place_detached(nonce, b"", &mut buf)
+            .expect("in-memory AES-GCM cannot fail");
+        black_box(tag[0]);
+        BUF as u64
+    });
+    bytes / MIB
+}
+
+/// SHA-256 throughput in MiB/s over a 256 KiB buffer. Uses the SHA extensions
+/// where the CPU has them.
+fn sha256_rate(budget: Duration, seed: u64) -> f64 {
+    use sha2::{Digest, Sha256};
+
+    const BUF: usize = 256 * 1024;
+    let mut buf = vec![0u8; BUF];
+    SplitMix64::new(seed ^ 0x9D2C_5680_C167_88F3).fill_bytes(&mut buf);
+
+    let bytes = throughput(budget, || {
+        let mut hasher = Sha256::new();
+        hasher.update(&buf);
+        black_box(hasher.finalize()[0]);
+        BUF as u64
+    });
+    bytes / MIB
+}
+
 fn seed_lanes() -> [u64; LANES] {
     let mut lanes = [0u64; LANES];
     for (i, lane) in lanes.iter_mut().enumerate() {
@@ -247,6 +306,8 @@ mod tests {
                 "float_multi" => parallel_sum(2, || float_rate(short)),
                 "hash" => hash_rate(short, 1),
                 "compress" => compress_rate(short, 1),
+                "aes_gcm" => aes_gcm_rate(short, 1),
+                "sha256" => sha256_rate(short, 1),
                 other => panic!("unhandled subtest {other}"),
             };
             assert!(value.is_finite() && value > 0.0, "{} -> {value}", spec.id);

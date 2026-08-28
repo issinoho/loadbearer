@@ -29,42 +29,41 @@ through, `compare` internals, and how to recalibrate the baseline — see the
 ## What a run looks like
 
 ```
-loadbearer 0.3.0 — assessment
+loadbearer 0.4.0 — assessment
 
   Machine   ThinkPad-X280 · Intel(R) Core(TM) i5-8350U CPU @ 1.70GHz · 8 threads · 7.0 GiB RAM
   Profile   general · curve k=0.5 · baseline reference-v1 · short preset
 
-  CPU         929  [B]   ███████████████░░░░░░░░░
-    Integer, single-core          9260.6 Mops/s     0.93x     962  high
-    Integer, all cores           37937.0 Mops/s     0.84x     918  high
-    Float, single-core            7132.9 MFLOP/s    0.89x     944  high
-    Float, all cores             54982.6 MFLOP/s    0.79x     886  high
-    BLAKE3 hash                   3637.5 MiB/s      0.87x     931  high
-    DEFLATE compress                59.1 MiB/s      0.87x     932  high
+  CPU         799  [C]   █████████████░░░░░░░░░░░
+    Integer, all cores           37713.2 Mops/s     0.84x     915  high
+    Float, all cores             53689.9 MFLOP/s    0.77x     876  medium
+    BLAKE3 hash                   3587.9 MiB/s      0.85x     924  high
+    DEFLATE compress                58.0 MiB/s      0.85x     924  high
+    AES-256-GCM encrypt           1107.0 MiB/s      0.62x     784  high
+    SHA-256 hash                   209.9 MiB/s      0.12x     342  high
 
-  MEMORY      820  [C]   █████████████░░░░░░░░░░░
-    Sequential read                 14.4 GiB/s      0.65x     809  high
-    Sequential write                10.2 GiB/s      0.64x     800  high
-    Copy (memcpy)                    9.5 GiB/s      0.68x     822  high
-    Random access latency          131.5 ns         0.72x     850  high
+  MEMORY      756  [C]   ████████████░░░░░░░░░░░░
+    Sequential read                 13.3 GiB/s      0.61x     778  high
+    Copy (memcpy)                    8.8 GiB/s      0.63x     791  high
+    Sequential read, all cores      12.1 GiB/s      0.43x     658  medium
+    Random access latency          151.2 ns         0.63x     793  medium
 
-  DISK        538  [D]   █████████░░░░░░░░░░░░░░░
-    Sequential write               374.7 MiB/s      0.25x     500  low
-    Sequential read                371.3 MiB/s      0.12x     352  high
-    Random 4K read               10386.3 IOPS       0.69x     832  medium
-    Random 4K write              13197.1 IOPS       0.33x     574  low
+  DISK        522  [D]   ████████░░░░░░░░░░░░░░░░
+    Sequential write               381.2 MiB/s      0.25x     504  high
+    Sequential read                374.9 MiB/s      0.12x     354  high
+    Random 4K read                8463.6 IOPS       0.56x     751  low
+    Random 4K write              12334.8 IOPS       0.31x     555  medium
 
-  NETWORK     761  [C]   ████████████░░░░░░░░░░░░   · measured, not in the overall (OS-dependent)
-    TCP throughput, single stream         5.0 GiB/s      0.72x     848  high
-    TCP throughput, all streams         6.8 GiB/s      0.34x     584  low
-    TCP round-trip latency          17.5 us         0.80x     893  medium
-    UDP send rate                  259.0 Kpps       0.58x     759  high
+  NETWORK     757  [C]   ████████████░░░░░░░░░░░░   · measured, not in the overall (OS-dependent)
+    TCP throughput, single stream         4.8 GiB/s      0.69x     832  high
+    TCP round-trip latency          18.5 us         0.76x     869  low
+    UDP send rate                  253.1 Kpps       0.56x     750  high
 
-  OVERALL     743  [C]   ████████████░░░░░░░░░░░░
+  OVERALL     680  [C]   ███████████░░░░░░░░░░░░░
 
   Why:
-    - held back by Disk (score 538)
-    - held back by Memory (score 820)
+    - held back by Disk (score 522)
+    - held back by Memory (score 756)
     - low measurement confidence in: Disk
 
   A score of 1000 = the reference-v1 baseline. Grades: S≥1400 A≥1150 B≥850 C≥600 D≥400.
@@ -72,9 +71,16 @@ loadbearer 0.3.0 — assessment
 ```
 
 Each subtest row is: raw measurement, its ratio to the baseline, its score, and a
-confidence flag derived from run-to-run spread. In a terminal this is a coloured,
-scrollable full-screen view with a live progress gauge while the run is in
-progress; the block above is the `--plain` rendering.
+confidence flag derived from run-to-run spread. (A few rows are trimmed above for
+length — a real run shows all six CPU and all five memory subtests.) In a
+terminal this is a coloured, scrollable full-screen view with a live progress
+gauge while the run is in progress; the block above is the `--plain` rendering.
+
+This X280 is a 2018 laptop, so against a 2021 baseline it lands at C across the
+board — the SHA-256 row (`0.12x`) is it lacking the SHA instruction extension,
+and `Sequential read, all cores` barely beating single-thread read is its
+dual-channel memory not scaling. Both are exactly the kind of thing the new
+subtests exist to surface.
 
 ## Requirements
 
@@ -299,8 +305,8 @@ flag among their subtests, and low-confidence components are called out in the
 
 | Component | Subtests |
 | --- | --- |
-| **CPU** | Integer throughput (single-core and all-core), floating-point throughput (single-core and all-core), BLAKE3 hashing, DEFLATE (level 6) compression. Integer and float kernels use eight independent accumulator lanes so they measure pipeline throughput, not dependency-chain latency. All-core subtests run the kernel on every logical CPU and sum the rates. |
-| **Memory** | Sequential read, write and copy bandwidth over a working set sized past any last-level cache (256 MiB at `normal`); random-access latency via a single-cycle pointer chase (Sattolo) that defeats the prefetcher. Single-threaded. |
+| **CPU** | Integer and floating-point throughput (single-core and all-core), BLAKE3 hashing, DEFLATE (level 6) compression, **AES-256-GCM** and **SHA-256** throughput. The integer/float kernels use eight independent accumulator lanes so they measure pipeline throughput, not dependency-chain latency. AES-GCM and SHA-256 pick up the CPU's AES-NI / CLMUL / SHA-extension hardware at runtime where it exists. All-core subtests run the kernel on every logical CPU and sum the rates. |
+| **Memory** | Sequential read, write and copy bandwidth over a working set sized past any last-level cache (256 MiB at `normal`), plus an **all-core** read that sums the read kernel across every logical CPU; random-access latency via a single-cycle pointer chase (Sattolo) that defeats the prefetcher. Single-threaded except the all-core read. |
 | **Disk** | Sequential write (each pass ends with `fsync`, so it's durable-write throughput) and read; random 4 KiB read and write IOPS at queue depth 1. Reads and random I/O use unbuffered I/O — `O_DIRECT` on Linux, `FILE_FLAG_NO_BUFFERING` on Windows — to bypass the page cache, with a buffered fallback (and a recorded note) where the filesystem refuses it. The scratch file (1 GiB at `normal`) is filled with random data to defeat filesystem compression, reused by every subtest, and deleted when the run ends. |
 | **Network** | Loopback (`127.0.0.1`) only — this measures the machine's network *stack* (syscall, TCP processing, scheduler wakeup latency), **not** a physical link, and makes no network calls. Single-stream and all-core TCP throughput, TCP request/response round-trip latency, and UDP small-packet send rate. **Scored and shown, but not in the overall grade** (see [Scoring model](#scoring-model)). For a real link test between two machines, run `loadbearer net-server` on one and `loadbearer run --net-target` on the other (reported separately, also not graded). |
 
