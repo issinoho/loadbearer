@@ -2,6 +2,16 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 0.5.1 - Thu, 28 Aug 2026
+
+- **The `--soak` phase now runs inside the TUI.** On an interactive `loadbearer
+  run --soak`, the sustained-load phase gets its own live screen — a progress
+  gauge, current throughput, current clock, retained-vs-peak-so-far, and a
+  throughput sparkline that grows a mark per sample — instead of running as a
+  plain stderr line after the TUI closed. `q` skips the soak and keeps the
+  graded result; a soak that produced at least a few samples is still embedded
+  in the result file. The results screen gains a one-line `SOAK` summary.
+
 ## 0.5.0 - Thu, 28 Aug 2026
 
 - **New sustained-load / thermal soak test.** The graded benchmarks are all

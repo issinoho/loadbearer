@@ -7,6 +7,7 @@ use std::time::Instant;
 
 use crate::engine::SubtestOutcome;
 use crate::scoring::ResultFile;
+use crate::soak::SoakSample;
 
 /// A message from the worker thread to the UI loop.
 pub enum Msg {
@@ -40,6 +41,13 @@ pub enum Ev {
     },
     BenchDone {
         bench: usize,
+    },
+    SoakStart {
+        duration_secs: f64,
+        threads: usize,
+    },
+    SoakSample {
+        sample: SoakSample,
     },
 }
 
@@ -86,6 +94,50 @@ pub struct BenchRow {
     pub done: bool,
 }
 
+/// Live state of the sustained-load phase, once it starts.
+pub struct SoakView {
+    pub duration_secs: f64,
+    pub threads: usize,
+    pub started: Instant,
+    pub samples: Vec<SoakSample>,
+}
+
+impl SoakView {
+    pub fn elapsed_frac(&self) -> f64 {
+        if self.duration_secs <= 0.0 {
+            return 0.0;
+        }
+        (self.started.elapsed().as_secs_f64() / self.duration_secs).clamp(0.0, 1.0)
+    }
+
+    pub fn latest_rate(&self) -> Option<f64> {
+        self.samples.last().map(|s| s.rate)
+    }
+
+    pub fn latest_mhz(&self) -> Option<u64> {
+        self.samples.last().map(|s| s.mhz).filter(|&m| m > 0)
+    }
+
+    /// Best rolling 3-sample throughput so far — matches `soak::derive`.
+    pub fn peak_so_far(&self) -> f64 {
+        let r: Vec<f64> = self.samples.iter().map(|s| s.rate).collect();
+        if r.is_empty() {
+            return 0.0;
+        }
+        let w = 3.min(r.len());
+        (0..=r.len() - w)
+            .map(|i| r[i..i + w].iter().sum::<f64>() / w as f64)
+            .fold(f64::MIN, f64::max)
+    }
+
+    /// Current throughput as a percentage of the peak seen so far.
+    pub fn retained_so_far(&self) -> Option<f64> {
+        let peak = self.peak_so_far();
+        let last = self.latest_rate()?;
+        (peak > 0.0).then_some(100.0 * last / peak)
+    }
+}
+
 pub enum Phase {
     Running,
     Done(Box<ResultFile>),
@@ -96,6 +148,7 @@ pub struct App {
     pub header: String,
     pub started: Instant,
     pub benches: Vec<BenchRow>,
+    pub soak: Option<SoakView>,
     pub phase: Phase,
     pub abort: Arc<AtomicBool>,
     pub cancelling: bool,
@@ -131,6 +184,7 @@ impl App {
             header,
             started: Instant::now(),
             benches,
+            soak: None,
             phase: Phase::Running,
             abort,
             cancelling: false,
@@ -186,6 +240,22 @@ impl App {
             Ev::BenchDone { bench } => {
                 if let Some(b) = self.benches.get_mut(bench) {
                     b.done = true;
+                }
+            }
+            Ev::SoakStart {
+                duration_secs,
+                threads,
+            } => {
+                self.soak = Some(SoakView {
+                    duration_secs,
+                    threads,
+                    started: Instant::now(),
+                    samples: Vec::new(),
+                });
+            }
+            Ev::SoakSample { sample } => {
+                if let Some(sv) = &mut self.soak {
+                    sv.samples.push(sample);
                 }
             }
         }

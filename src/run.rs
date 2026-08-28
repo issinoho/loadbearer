@@ -165,15 +165,12 @@ fn run_interactive(
         profile,
         machine,
         config,
+        soak: soak_config(args),
     };
 
     match tui::run(init)? {
         Some(mut result) => {
             result.link = probe_link(args)?;
-            result.soak = run_soak(args);
-            if let Some(soak) = &result.soak {
-                output::print_soak_block(soak);
-            }
             write_output(&result, args.output.as_deref())?;
             println!(
                 "Overall {:.0} [{}] · {} profile{}",
@@ -242,17 +239,20 @@ fn run_plain(
     Ok(())
 }
 
-/// Run the optional `--soak` sustained-load phase, if one was requested. Prints
-/// a live progress line to stderr unless `--json` was given.
-fn run_soak(args: &RunArgs) -> Option<crate::soak::SoakResult> {
-    if !args.soak {
-        return None;
-    }
-    let cfg = crate::soak::SoakConfig {
+/// The soak configuration implied by `--soak` / `--soak-duration`, or `None`.
+fn soak_config(args: &RunArgs) -> Option<crate::soak::SoakConfig> {
+    args.soak.then(|| crate::soak::SoakConfig {
         duration: crate::soak::resolve_duration(args.soak_duration),
         threads: std::thread::available_parallelism().map_or(1, |n| n.get()),
         seed: DEFAULT_SEED,
-    };
+    })
+}
+
+/// Run the optional `--soak` phase for the non-interactive paths, with a live
+/// stderr progress line (suppressed under `--json`). The interactive path runs
+/// the soak inside the TUI instead.
+fn run_soak(args: &RunArgs) -> Option<crate::soak::SoakResult> {
+    let cfg = soak_config(args)?;
     if !args.json {
         eprintln!();
     }

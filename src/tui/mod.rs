@@ -29,6 +29,8 @@ pub struct RunInit {
     pub curve_k: f64,
     pub machine: Inventory,
     pub config: RunConfig,
+    /// When set, a sustained-load phase runs after scoring and streams samples.
+    pub soak: Option<crate::soak::SoakConfig>,
 }
 
 /// Run the interactive session. `Ok(Some(result))` on completion, `Ok(None)` if
@@ -127,6 +129,7 @@ fn spawn_worker(init: RunInit, tx: Sender<Msg>) -> JoinHandle<()> {
             curve_k,
             machine,
             config,
+            soak,
             ..
         } = init;
 
@@ -142,15 +145,36 @@ fn spawn_worker(init: RunInit, tx: Sender<Msg>) -> JoinHandle<()> {
             }
         }
 
-        match score_run(&outcomes, &baseline, profile, curve_k) {
-            Ok(scored) => {
-                let result = ResultFile::assemble(machine, config, outcomes, scored, None);
-                let _ = tx.send(Msg::Done(Box::new(result)));
-            }
+        let scored = match score_run(&outcomes, &baseline, profile, curve_k) {
+            Ok(scored) => scored,
             Err(err) => {
                 let _ = tx.send(Msg::Failed(format!("{err:#}")));
+                return;
+            }
+        };
+        let mut result = ResultFile::assemble(machine, config, outcomes, scored, None);
+
+        // Sustained-load phase: stream a sample per second to the UI, then
+        // fold the analysed result into the result file. A cancel during the
+        // soak still keeps the completed grade — the partial soak is dropped.
+        let aborted = || ctx.abort.load(Ordering::Relaxed);
+        if let Some(cfg) = soak.filter(|_| !aborted()) {
+            let _ = tx.send(Msg::Progress(Ev::SoakStart {
+                duration_secs: cfg.duration.as_secs_f64(),
+                threads: cfg.threads,
+            }));
+            let tx_soak = tx.clone();
+            let sr = crate::soak::run(&cfg, ctx.abort.as_ref(), move |s| {
+                let _ = tx_soak.send(Msg::Progress(Ev::SoakSample { sample: *s }));
+            });
+            // Keep whatever ran (the user watched it live); only drop it if the
+            // soak was cancelled before it produced a usable series.
+            if sr.samples.len() >= 3 {
+                result.soak = Some(sr);
             }
         }
+
+        let _ = tx.send(Msg::Done(Box::new(result)));
     })
 }
 

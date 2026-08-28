@@ -8,7 +8,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Gauge, Paragraph, Wrap};
 
-use super::app::{App, Phase, SubRow, SubState};
+use super::app::{App, Phase, SoakView, SubRow, SubState};
 use crate::scoring::{Grade, ResultFile};
 
 const ACCENT: Color = Color::Cyan;
@@ -24,7 +24,10 @@ pub fn draw(f: &mut Frame, app: &App) {
         return;
     }
     match &app.phase {
-        Phase::Running => draw_running(f, app, area),
+        Phase::Running => match &app.soak {
+            Some(soak) => draw_soak(f, app, soak, area),
+            None => draw_running(f, app, area),
+        },
         Phase::Done(result) => draw_results(f, app, result, area),
         Phase::Failed(err) => draw_failed(f, err, area),
     }
@@ -170,6 +173,137 @@ fn subtest_line(s: &SubRow) -> Line<'static> {
     ])
 }
 
+// --- soak screen ----------------------------------------------------------
+
+fn draw_soak(f: &mut Frame, app: &App, soak: &SoakView, area: Rect) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(ACCENT))
+        .title(" loadbearer — soak (sustained load) ");
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    let rows = Layout::vertical([
+        Constraint::Length(1), // header
+        Constraint::Length(1), // spacer
+        Constraint::Length(1), // subtitle
+        Constraint::Length(1), // spacer
+        Constraint::Min(6),    // body
+        Constraint::Length(1), // gauge
+        Constraint::Length(1), // hint
+    ])
+    .split(inner);
+
+    f.render_widget(
+        Paragraph::new(Span::styled(&app.header, Style::default().fg(ACCENT))),
+        rows[0],
+    );
+    f.render_widget(
+        Paragraph::new(Span::styled(
+            format!(
+                "sustained all-core load · {} threads · not scored",
+                soak.threads
+            ),
+            Style::default().fg(DIM),
+        )),
+        rows[2],
+    );
+
+    let peak = soak.peak_so_far();
+    let latest = soak.latest_rate().unwrap_or(0.0);
+    let mut body: Vec<Line> = Vec::new();
+    body.push(kv_line(
+        "throughput",
+        format!("{:>10.0} Mops/s", latest),
+        if peak > 0.0 {
+            format!("   peak so far {peak:.0}")
+        } else {
+            String::new()
+        },
+    ));
+    body.push(kv_line(
+        "clock",
+        match soak.latest_mhz() {
+            Some(m) => format!("{:>10.2} GHz", m as f64 / 1000.0),
+            None => "         —".to_string(),
+        },
+        String::new(),
+    ));
+    body.push(kv_line(
+        "retained",
+        match soak.retained_so_far() {
+            Some(p) => format!("{p:>9.0}%"),
+            None => "         —".to_string(),
+        },
+        "   current vs peak so far".to_string(),
+    ));
+    body.push(Line::raw(""));
+    let spark = soak_spark(soak, inner.width.saturating_sub(6).min(72) as usize);
+    if !spark.is_empty() {
+        body.push(Line::from(Span::styled(
+            format!("  {spark}"),
+            Style::default().fg(ACCENT),
+        )));
+        body.push(Line::from(Span::styled(
+            "  throughput, one mark per sample",
+            Style::default().fg(DIM),
+        )));
+    }
+    f.render_widget(Paragraph::new(body), rows[4]);
+
+    let frac = soak.elapsed_frac();
+    let remaining = (soak.duration_secs * (1.0 - frac)).max(0.0);
+    f.render_widget(
+        Gauge::default()
+            .gauge_style(Style::default().fg(ACCENT))
+            .ratio(frac)
+            .label(format!(
+                "{:.0}% · {}s / {:.0}s",
+                frac * 100.0,
+                soak.started.elapsed().as_secs(),
+                soak.duration_secs,
+            )),
+        rows[5],
+    );
+
+    let hint = if app.cancelling {
+        "cancelling — keeping the graded result…".to_string()
+    } else {
+        format!("q  skip the soak (keeps the graded result) · ~{remaining:.0}s left")
+    };
+    f.render_widget(
+        Paragraph::new(Span::styled(hint, Style::default().fg(DIM))),
+        rows[6],
+    );
+}
+
+fn kv_line(key: &str, value: String, tail: String) -> Line<'static> {
+    Line::from(vec![
+        Span::raw(format!("  {key:<12} ")),
+        Span::styled(value, Style::default().add_modifier(Modifier::BOLD)),
+        Span::styled(tail, Style::default().fg(DIM)),
+    ])
+}
+
+/// A Unicode sparkline of the soak samples so far, tail-trimmed to `width`.
+fn soak_spark(soak: &SoakView, width: usize) -> String {
+    const TICKS: [char; 8] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+    if soak.samples.is_empty() || width == 0 {
+        return String::new();
+    }
+    let rates: Vec<f64> = soak.samples.iter().map(|s| s.rate).collect();
+    let tail = &rates[rates.len().saturating_sub(width)..];
+    let lo = tail.iter().copied().fold(f64::MAX, f64::min);
+    let hi = tail.iter().copied().fold(f64::MIN, f64::max);
+    let span = (hi - lo).max(1e-9);
+    tail.iter()
+        .map(|&v| {
+            let idx = (((v - lo) / span) * (TICKS.len() - 1) as f64).round() as usize;
+            TICKS[idx.min(TICKS.len() - 1)]
+        })
+        .collect()
+}
+
 // --- results screen --------------------------------------------------------
 
 fn draw_results(f: &mut Frame, app: &App, r: &ResultFile, area: Rect) {
@@ -245,6 +379,35 @@ fn draw_results(f: &mut Frame, app: &App, r: &ResultFile, area: Rect) {
     if r.components.iter().any(|c| !c.graded) {
         lines.push(Line::from(Span::styled(
             "  network reflects the OS network stack — shown, not in the overall",
+            Style::default().fg(DIM),
+        )));
+    }
+
+    if let Some(s) = &r.soak {
+        lines.push(Line::raw(""));
+        lines.push(Line::from(Span::styled(
+            format!("SOAK  ({:.0}s sustained · not graded)", s.duration_secs),
+            Style::default().add_modifier(Modifier::BOLD),
+        )));
+        lines.push(Line::raw(format!(
+            "  peak {:.0} · steady {:.0} {} · {:.0}% retained",
+            s.peak_rate, s.steady_rate, s.unit, s.retained_pct,
+        )));
+        let onset = match s.onset_secs {
+            Some(t) => format!("throttles from ~{t:.0}s"),
+            None => "no clear throttle onset".to_string(),
+        };
+        let clock = if s.mhz_peak > 0 {
+            format!(
+                " · clock {:.2}→{:.2} GHz",
+                s.mhz_peak as f64 / 1000.0,
+                s.mhz_steady as f64 / 1000.0,
+            )
+        } else {
+            String::new()
+        };
+        lines.push(Line::from(Span::styled(
+            format!("  {onset}{clock}"),
             Style::default().fg(DIM),
         )));
     }
