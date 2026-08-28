@@ -6,6 +6,7 @@ mod engine;
 mod inventory;
 mod output;
 mod run;
+mod score;
 mod scoring;
 mod soak;
 mod tui;
@@ -34,6 +35,7 @@ fn main() -> Result<()> {
         }
         Command::Run(args) => run::execute(args),
         Command::Compare(args) => compare::execute(args),
+        Command::Score(args) => score::execute(args),
         Command::Baseline(args) => {
             if args.files.is_empty() {
                 print!("{}", scoring::Baseline::embedded_toml());

@@ -2,6 +2,24 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 0.6.0 - Thu, 28 Aug 2026
+
+- **New `loadbearer score` command.** Re-score an existing result file against a
+  different baseline, profile or curve without re-running the benchmarks — the
+  file keeps every raw measurement, so the grade is just one view of it that can
+  be recomputed in a second.
+  - `loadbearer score result.json --baseline our-fleet.toml` scores against a
+    baseline you built with `loadbearer baseline`; `--profile` and `--curve-k`
+    override the values the file was scored with; `--output` writes a new
+    result file; `--json` emits it to stdout.
+  - A short banner shows what changed (baseline / profile / curve / tool
+    version) and the old → new overall.
+  - Subtests the baseline has no entry for are left out of the score with a
+    note, rather than being a hard error — a fleet baseline that omits the
+    OS-dependent network component is a normal thing to re-score against. The
+    file's full `raw` is preserved in the output.
+- `Baseline::load` reads a baseline TOML from a path (used by `score --baseline`).
+
 ## 0.5.1 - Thu, 28 Aug 2026
 
 - **The `--soak` phase now runs inside the TUI.** On an interactive `loadbearer

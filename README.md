@@ -168,6 +168,7 @@ that `loadbearer compare` can diff against another machine's.
 ```
 loadbearer run        [OPTIONS]
 loadbearer compare    FILE FILE [FILE ...] [--plain] [--json]
+loadbearer score      FILE [--baseline FILE] [--profile NAME] [--curve-k FLOAT] [--output FILE] [--json]
 loadbearer soak       [--duration SECS] [--threads N] [--output FILE] [--json]
 loadbearer info       [--json]
 loadbearer list
@@ -180,6 +181,12 @@ loadbearer net-server [--bind ADDR]
 - **`compare`** — head-to-head of two or more result files: per-metric deltas,
   per-component and overall verdict. Built from the **raw** metrics, so it does
   not depend on the baseline or curve the files were scored with.
+- **`score`** — recompute a result file's grade against a different baseline,
+  profile or curve, without re-running anything. Point it at a baseline you
+  built from your own hardware (`--baseline our-fleet.toml`) and the absolute
+  score starts meaning something for your context; try `--profile server` or
+  `--curve-k 0.7` to see how the knobs move it. Subtests the baseline doesn't
+  cover are left out with a note. `--output` writes the re-scored file.
 - **`soak`** — hold every core under sustained load (default 90 s) and report
   how much throughput the machine *retains* once the thermal mass saturates and
   the power limit bites: peak vs steady-state rate, percentage retained, when
@@ -252,6 +259,30 @@ When every result file carries `--soak` data, `compare` adds a `SUSTAINED LOAD`
 block: absolute steady-state throughput (with a delta to the reference machine)
 and each machine's steady-state as a percentage of *its own* peak. It is not
 folded into the verdict.
+
+### `score` options
+
+| Option | Description |
+| --- | --- |
+| `FILE` | A result file written by `loadbearer run --output`. |
+| `--baseline FILE` | Baseline TOML to score against (as written by `loadbearer baseline`). Default: the built-in `reference-v1`. |
+| `--profile NAME` | Scoring profile. Default: the profile recorded in the file. |
+| `--curve-k FLOAT` | Display-curve exponent, 0.05–3.0. Default: the value in the file. |
+| `--output FILE` | Write the re-scored result as a new JSON file. |
+| `--json` | Emit the re-scored result as JSON to stdout instead of a report. |
+
+```
+re-scoring thinkpad-x280 (2026-08-28T15:45:20Z)
+  tool      0.4.0  →  0.6.0
+  baseline  reference-v1  →  our-fleet
+  profile   general  →  server
+  curve k   0.5  →  0.7
+  overall   809 [C]  →  976 [B]
+```
+
+The scored `components` reflect only the subtests the baseline covers; the
+file's full `raw` is preserved in the `--output` file, so it can be re-scored
+again later.
 
 ### `soak` options
 
@@ -368,8 +399,9 @@ benchmark; use `--only cpu,memory,network` to skip it.
   per-second sample plus the derived peak / steady / retained / onset figures.
 
 Because the raw metrics are preserved, a result file can be re-scored later
-against a different baseline or curve, and `compare` can work from it without
-trusting the scores it was written with.
+against a different baseline, profile or curve with [`loadbearer
+score`](#score-options), and `compare` can work from it without trusting the
+scores it was written with.
 
 ### Recalibrating the baseline
 

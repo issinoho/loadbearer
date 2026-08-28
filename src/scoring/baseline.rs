@@ -3,8 +3,9 @@
 //! value gives the ratio the scoring curve is applied to.
 
 use std::collections::BTreeMap;
+use std::path::Path;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 
 const REFERENCE_V1: &str = include_str!("../../baseline/reference-v1.toml");
@@ -27,6 +28,20 @@ impl Baseline {
     /// The raw TOML source of the built-in baseline, comments and all.
     pub fn embedded_toml() -> &'static str {
         REFERENCE_V1
+    }
+
+    /// Load a baseline from a TOML file, as written by `loadbearer baseline`.
+    pub fn load(path: &Path) -> Result<Self> {
+        let text = std::fs::read_to_string(path)
+            .with_context(|| format!("reading baseline {}", path.display()))?;
+        let baseline: Baseline = toml::from_str(&text)
+            .with_context(|| format!("parsing {} as a baseline TOML", path.display()))?;
+        ensure!(
+            !baseline.components.is_empty(),
+            "baseline {} defines no components",
+            path.display()
+        );
+        Ok(baseline)
     }
 
     /// Reference raw value for `component/subtest`, or an error naming the gap.

@@ -36,6 +36,9 @@ pub enum Command {
     Run(RunArgs),
     /// Compare two or more result files and explain the winner.
     Compare(CompareArgs),
+    /// Re-score an existing result file against a different baseline, profile
+    /// or curve — no benchmarks are re-run.
+    Score(ScoreArgs),
     /// Print the built-in baseline, or generate one by averaging result files.
     Baseline(BaselineArgs),
     /// Hold every core under sustained load and report throughput retention
@@ -157,6 +160,34 @@ pub struct BaselineArgs {
     /// One-line description for the generated baseline.
     #[arg(long, value_name = "TEXT")]
     pub description: Option<String>,
+}
+
+#[derive(Args, Debug)]
+pub struct ScoreArgs {
+    /// A result file written by `loadbearer run --output`.
+    #[arg(value_name = "FILE")]
+    pub file: PathBuf,
+
+    /// Baseline TOML to score against (as written by `loadbearer baseline`).
+    /// Default: the built-in `reference-v1`.
+    #[arg(long, value_name = "FILE")]
+    pub baseline: Option<PathBuf>,
+
+    /// Scoring profile. Default: the profile recorded in the result file.
+    #[arg(long, value_name = "NAME")]
+    pub profile: Option<String>,
+
+    /// Display-curve exponent, 0.05–3.0. Default: the value in the file.
+    #[arg(long = "curve-k", value_name = "FLOAT")]
+    pub curve_k: Option<f64>,
+
+    /// Write the re-scored result as a new JSON file.
+    #[arg(long, value_name = "FILE")]
+    pub output: Option<PathBuf>,
+
+    /// Emit the re-scored result as JSON to stdout instead of a report.
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(Args, Debug)]
