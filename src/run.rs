@@ -282,15 +282,28 @@ fn write_output(result: &ResultFile, path: Option<&Path>) -> Result<()> {
 
 fn select_benchmarks(only: &[String]) -> Result<Vec<Box<dyn Benchmark>>> {
     let all = benches::all();
+    let gpu_ok = benches::gpu_probe().is_some();
+
+    // Default set: everything, minus `gpu` when there's no GPU to test.
     if only.is_empty() {
-        return Ok(all);
+        return Ok(all
+            .into_iter()
+            .filter(|b| b.id() != "gpu" || gpu_ok)
+            .collect());
     }
+
     let wanted: Vec<String> = only.iter().map(|s| s.trim().to_lowercase()).collect();
     let known = benches::known_ids();
     for id in &wanted {
         if !known.contains(&id.as_str()) {
             bail!("unknown benchmark {id:?} (known: {})", known.join(", "));
         }
+    }
+    if wanted.iter().any(|w| w == "gpu") && !gpu_ok {
+        bail!(
+            "no GPU compute device available — the OpenCL loader or a GPU was not \
+             found. Drop `gpu` from --only."
+        );
     }
     Ok(all
         .into_iter()

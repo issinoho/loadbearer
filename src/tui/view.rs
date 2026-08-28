@@ -392,9 +392,15 @@ fn draw_results(f: &mut Frame, scroll: &mut u16, r: &ResultFile, area: Rect) {
     for w in &r.overall.why {
         lines.push(Line::raw(format!("  - {w}")));
     }
-    if r.components.iter().any(|c| !c.graded) {
+    let ungraded: Vec<&str> = r
+        .components
+        .iter()
+        .filter(|c| !c.graded)
+        .map(|c| c.label.as_str())
+        .collect();
+    if !ungraded.is_empty() {
         lines.push(Line::from(Span::styled(
-            "  network reflects the OS network stack — shown, not in the overall",
+            format!("  {} — shown, not in the overall", ungraded.join(" and ")),
             Style::default().fg(DIM),
         )));
     }

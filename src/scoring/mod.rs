@@ -89,7 +89,7 @@ fn yes() -> bool {
 /// Component ids that are scored and shown but kept out of the overall grade —
 /// their result is too dependent on the host OS (and any security tooling) to
 /// fold into a hardware grade. `compare` still uses their raw metrics.
-pub const UNGRADED_COMPONENTS: &[&str] = &["network"];
+pub const UNGRADED_COMPONENTS: &[&str] = &["network", "gpu"];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScoredComponent {
@@ -448,6 +448,7 @@ mod tests {
             ram_bytes: 16 << 30,
             swap_bytes: 0,
             disks: vec![],
+            gpu: None,
         }
     }
 

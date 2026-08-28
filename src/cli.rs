@@ -87,7 +87,7 @@ pub struct InfoArgs {
 
 #[derive(Args, Debug)]
 pub struct RunArgs {
-    /// Restrict to a subset of benchmarks (comma-separated: cpu,memory,disk).
+    /// Restrict to a subset of benchmarks (comma-separated: cpu,memory,disk,network,gpu).
     #[arg(long, value_delimiter = ',', value_name = "LIST")]
     pub only: Vec<String>,
 

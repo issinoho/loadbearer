@@ -44,3 +44,10 @@ tcp_stream   = 7.0       # GiB/s   (single stream)
 tcp_parallel = 20.0      # GiB/s   (all logical CPUs)
 tcp_rtt      = 14.0      # us      (lower is better)
 udp_pps      = 450.0     # Kpps    (successful sends/sec)
+
+[components.gpu]
+# Integrated-GPU class (Iris Xe 96EU / Vega 8): shared-memory bandwidth, ~1.5
+# TFLOP/s FP32. A discrete GPU scores well above 1000 here — that's expected;
+# GPU is not folded into the overall grade.
+compute_fp32 = 1500.0    # GFLOP/s (FP32 FMA)
+bandwidth    = 40.0      # GiB/s   (VRAM read)

@@ -101,6 +101,7 @@ mod tests {
                 "network",
                 ["tcp_stream", "tcp_parallel", "tcp_rtt", "udp_pps"].as_slice(),
             ),
+            ("gpu", ["compute_fp32", "bandwidth"].as_slice()),
         ] {
             for st in subtests {
                 assert!(b.lookup(component, st).unwrap() > 0.0, "{component}/{st}");

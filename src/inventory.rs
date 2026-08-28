@@ -20,6 +20,9 @@ pub struct Inventory {
     pub ram_bytes: u64,
     pub swap_bytes: u64,
     pub disks: Vec<DiskInfo>,
+    /// The GPU `loadbearer` would benchmark via OpenCL, if any was found.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gpu: Option<crate::benches::GpuInfo>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,5 +90,6 @@ pub fn collect() -> Inventory {
         ram_bytes: sys.total_memory(),
         swap_bytes: sys.total_swap(),
         disks,
+        gpu: crate::benches::gpu_probe().cloned(),
     }
 }

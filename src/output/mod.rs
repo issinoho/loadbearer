@@ -65,6 +65,31 @@ pub fn print_inventory(inv: &Inventory) {
     row("RAM", human_bytes(inv.ram_bytes));
     row("Swap", human_bytes(inv.swap_bytes));
 
+    if let Some(g) = &inv.gpu {
+        section("GPU");
+        row("Model", &g.name);
+        row(
+            "Type",
+            if g.integrated {
+                "integrated"
+            } else {
+                "discrete"
+            },
+        );
+        if g.vram_bytes > 0 {
+            row("Memory", human_bytes(g.vram_bytes));
+        }
+        if !g.opencl_version.is_empty() {
+            row("OpenCL", &g.opencl_version);
+        }
+        if g.compute_units > 0 {
+            row(
+                "Compute units",
+                format!("{} @ {} MHz", g.compute_units, g.clock_mhz),
+            );
+        }
+    }
+
     section("Disks");
     if inv.disks.is_empty() {
         row("", "none detected");
@@ -135,7 +160,7 @@ pub fn print_scored_report(result: &ResultFile) {
         let tail = if c.graded {
             String::new()
         } else {
-            "   · measured, not in the overall (OS-dependent)".to_string()
+            "   · measured, not in the overall".to_string()
         };
         println!(
             "\n  {:<8} {:>6.0}  {}   {}{}",
@@ -176,10 +201,18 @@ pub fn print_scored_report(result: &ResultFile) {
         "\n  A score of 1000 = the {} baseline. Grades: S≥1400 A≥1150 B≥850 C≥600 D≥400.",
         cfg.baseline,
     );
-    if result.components.iter().any(|c| !c.graded) {
+    let ungraded: Vec<&str> = result
+        .components
+        .iter()
+        .filter(|c| !c.graded)
+        .map(|c| c.label.as_str())
+        .collect();
+    if !ungraded.is_empty() {
         println!(
-            "  The network score reflects the OS network stack (and any security tooling), \
-             so it is shown but kept out of the overall grade."
+            "  {} {} measured and shown, but kept out of the overall grade \
+             (OS-dependent / optional hardware).",
+            ungraded.join(" and "),
+            if ungraded.len() == 1 { "is" } else { "are" },
         );
     }
 

@@ -3,10 +3,10 @@
 # loadbearer
 
 A command-line system-assessment tool. It benchmarks a host machine's **CPU**,
-**memory**, **disk** and **network stack**, scores every measurement against an
-embedded reference baseline, and grades each component — and the machine as a
-whole — on an S-to-F scale. Run the same build on two laptops and it will tell
-you which one is stronger, by how much, and *why*.
+**memory**, **disk** and **network stack** — and its **GPU** where there is one —
+scores every measurement against an embedded reference baseline, and grades each
+component and the machine as a whole on an S-to-F scale. Run the same build on
+two laptops and it will tell you which one is stronger, by how much, and *why*.
 
 It also runs a **sustained-load test** that shows how much speed a machine keeps
 once it heats up, and can **re-grade** a saved result against a different
@@ -72,7 +72,7 @@ loadbearer 0.6.4 — assessment
     - low measurement confidence in: Disk
 
   A score of 1000 = the reference-v1 baseline. Grades: S≥1400 A≥1150 B≥850 C≥600 D≥400.
-  The network score reflects the OS network stack (and any security tooling), so it is shown but kept out of the overall grade.
+  Network is measured and shown, but kept out of the overall grade (OS-dependent / optional hardware).
 ```
 
 Each subtest row is: raw measurement, its ratio to the baseline, its score, and a
@@ -354,13 +354,15 @@ score = geometric mean of the **CPU, memory and disk** component scores,
 weighted by the profile. The geometric mean means one very strong component
 can't paper over a weak one, and ratios stay meaningful.
 
-**Network is not in the overall.** It is scored and displayed like the others,
-and `compare` uses its raw metrics, but it is excluded from the overall grade:
-loopback throughput and latency depend heavily on the host OS (Windows has no
-in-kernel loopback fast path) and on any security tooling — an EDR inspecting
-loopback packets can add tens of microseconds per syscall — which has nothing to
-do with the hardware. `compare` warns when two result files are from different
-operating systems for the same reason.
+**Network and GPU are not in the overall.** Both are scored and displayed like
+the others, and `compare` uses their raw metrics, but neither counts toward the
+grade. Loopback network depends heavily on the host OS (Windows has no in-kernel
+loopback fast path) and on any security tooling — an EDR inspecting loopback
+packets can add tens of microseconds per syscall — so it's not a hardware
+signal. GPU is optional hardware: folding a discrete card vs an iGPU into the
+grade would drown out the CPU/memory/disk answer most comparisons are actually
+after. `compare` warns when two result files are from different operating
+systems, for the network reason.
 
 **The `--net-target` link probe and the `--soak` sustained-load test are not
 scored at all** — the link probe measures the path between two hosts, and the
@@ -393,6 +395,7 @@ flag among their subtests, and low-confidence components are called out in the
 | **Memory** | Sequential read, write and copy bandwidth over a working set sized past any last-level cache (256 MiB at `normal`), plus an **all-core** read that sums the read kernel across every logical CPU; random-access latency via a single-cycle pointer chase (Sattolo) that defeats the prefetcher. Single-threaded except the all-core read. |
 | **Disk** | Sequential write (each pass ends with `fsync`, so it's durable-write throughput) and read; random 4 KiB read and write IOPS at queue depth 1. Reads and random I/O use unbuffered I/O — `O_DIRECT` on Linux, `FILE_FLAG_NO_BUFFERING` on Windows — to bypass the page cache, with a buffered fallback (and a recorded note) where the filesystem refuses it. The scratch file (1 GiB at `normal`) is filled with random data to defeat filesystem compression, reused by every subtest, and deleted when the run ends. |
 | **Network** | Loopback (`127.0.0.1`) only — this measures the machine's network *stack* (syscall, TCP processing, scheduler wakeup latency), **not** a physical link, and makes no network calls. Single-stream and all-core TCP throughput, TCP request/response round-trip latency, and UDP small-packet send rate. **Scored and shown, but not in the overall grade** (see [Scoring model](#scoring-model)). For a real link test between two machines, run `loadbearer net-server` on one and `loadbearer run --net-target` on the other (reported separately, also not graded). |
+| **GPU** | FP32 fused-multiply-add throughput (GFLOP/s) and VRAM read bandwidth (GiB/s), via OpenCL. The strongest GPU is picked automatically (discrete beats integrated). The OpenCL loader is opened at runtime, not linked — no GPU or no OpenCL means no `gpu` component, and the binary is unaffected. **Scored and shown, but not in the overall grade**: GPU is optional hardware and a discrete-vs-integrated gap would swamp the "faster for my work" question. Runs only when a GPU is present, or on explicit `--only gpu`. |
 | **Sustained load** *(opt-in: `soak` / `run --soak`)* | Holds every logical CPU under a blended integer + floating-point kernel for a fixed stretch (default 90 s), sampling aggregate throughput and CPU clock once a second. Reports the unthrottled peak, the steady-state rate, the percentage retained, when throttling set in, and steady-window stability. **Not scored** — it's a measure of how well a machine holds up under a long workload once it heats up, not of raw speed. |
 
 A single `run` writes on the order of a few GiB to `--target-dir` for the disk

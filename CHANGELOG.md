@@ -2,6 +2,25 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 0.7.0 - Fri, 29 Aug 2026
+
+- **New GPU compute component.** Two figures via OpenCL: FP32 fused-multiply-add
+  throughput (`GFLOP/s`) and VRAM read bandwidth (`GiB/s`). The strongest GPU is
+  picked automatically (a discrete device beats an integrated one).
+  - The OpenCL ICD loader (`OpenCL.dll` / `libOpenCL.so.1`) is loaded at
+    runtime, not linked — a machine with no OpenCL, or no GPU, simply has no
+    `gpu` component and the binary is unaffected. `--only gpu` on such a machine
+    is a clear error rather than a silent no-op.
+  - **Not folded into the overall grade**, like `network`: GPU is optional
+    hardware, and a discrete-vs-integrated gap would swamp the "which machine is
+    faster for my work" question. It is scored, shown, recorded in the result
+    JSON, and used by `compare`.
+  - `loadbearer info` gains a GPU section (model, type, memory, OpenCL version,
+    compute units); the result file's `machine` inventory records it too.
+  - `reference-v1` gains `[components.gpu]` anchors (integrated-GPU class —
+    a discrete card scores well above 1000, which is fine for an ungraded
+    component). Adds the `libloading` crate.
+
 ## 0.6.6 - Thu, 28 Aug 2026
 
 - The `compare` TUI's machine columns now widen from 15 up to whatever
