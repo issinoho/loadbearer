@@ -131,12 +131,18 @@ pub fn print_scored_report(result: &ResultFile) {
     );
 
     for c in &result.components {
+        let tail = if c.graded {
+            String::new()
+        } else {
+            "   · measured, not in the overall (OS-dependent)".to_string()
+        };
         println!(
-            "\n  {:<8} {:>6.0}  {}   {}",
+            "\n  {:<8} {:>6.0}  {}   {}{}",
             c.label.to_uppercase(),
             c.score,
             grade_tag(c.grade),
             score_bar(c.score),
+            tail,
         );
         for st in &c.subtests {
             println!(
@@ -169,6 +175,12 @@ pub fn print_scored_report(result: &ResultFile) {
         "\n  A score of 1000 = the {} baseline. Grades: S≥1400 A≥1150 B≥850 C≥600 D≥400.",
         cfg.baseline,
     );
+    if result.components.iter().any(|c| !c.graded) {
+        println!(
+            "  The network score reflects the OS network stack (and any security tooling), \
+             so it is shown but kept out of the overall grade."
+        );
+    }
 
     if let Some(link) = &result.link {
         println!("\n  Link to {} (measured, not graded)", link.target);

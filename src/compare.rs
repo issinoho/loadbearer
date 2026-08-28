@@ -322,6 +322,17 @@ fn config_warnings(machines: &[Machine]) -> Vec<String> {
             ks.join(", ")
         ));
     }
+    let oses: Vec<String> = distinct(&|m| m.file.machine.os.clone().unwrap_or_default())
+        .into_iter()
+        .filter(|s| !s.is_empty())
+        .collect();
+    if oses.len() > 1 {
+        w.push(format!(
+            "files are from different operating systems ({}); the network component in \
+             particular is not comparable across OSes",
+            oses.join(", ")
+        ));
+    }
     w
 }
 

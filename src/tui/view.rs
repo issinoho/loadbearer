@@ -204,7 +204,7 @@ fn draw_results(f: &mut Frame, app: &App, r: &ResultFile, area: Rect) {
     lines.push(Line::raw(""));
 
     for c in &r.components {
-        lines.push(component_line(&c.label, c.score, c.grade));
+        lines.push(component_line(&c.label, c.score, c.grade, c.graded));
         for st in &c.subtests {
             lines.push(Line::from(Span::styled(
                 format!(
@@ -228,7 +228,12 @@ fn draw_results(f: &mut Frame, app: &App, r: &ResultFile, area: Rect) {
         lines.push(Line::raw(""));
     }
 
-    lines.push(component_line("OVERALL", r.overall.score, r.overall.grade));
+    lines.push(component_line(
+        "OVERALL",
+        r.overall.score,
+        r.overall.grade,
+        true,
+    ));
     lines.push(Line::raw(""));
     lines.push(Line::from(Span::styled(
         "Why:",
@@ -236,6 +241,12 @@ fn draw_results(f: &mut Frame, app: &App, r: &ResultFile, area: Rect) {
     )));
     for w in &r.overall.why {
         lines.push(Line::raw(format!("  - {w}")));
+    }
+    if r.components.iter().any(|c| !c.graded) {
+        lines.push(Line::from(Span::styled(
+            "  network reflects the OS network stack — shown, not in the overall",
+            Style::default().fg(DIM),
+        )));
     }
 
     let viewport = rows[0].height as usize;
@@ -259,8 +270,8 @@ fn draw_results(f: &mut Frame, app: &App, r: &ResultFile, area: Rect) {
     );
 }
 
-fn component_line(label: &str, score: f64, grade: Grade) -> Line<'static> {
-    Line::from(vec![
+fn component_line(label: &str, score: f64, grade: Grade, graded: bool) -> Line<'static> {
+    let mut spans = vec![
         Span::styled(
             format!("  {:<9}", label.to_uppercase()),
             Style::default().add_modifier(Modifier::BOLD),
@@ -277,7 +288,11 @@ fn component_line(label: &str, score: f64, grade: Grade) -> Line<'static> {
             bar(score / 1500.0, 22),
             Style::default().fg(grade_color(grade)),
         ),
-    ])
+    ];
+    if !graded {
+        spans.push(Span::styled("  · not in overall", Style::default().fg(DIM)));
+    }
+    Line::from(spans)
 }
 
 fn draw_failed(f: &mut Frame, err: &str, area: Rect) {

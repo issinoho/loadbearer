@@ -2,6 +2,21 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 0.3.0 - Thu, 28 Aug 2026
+
+- **The network component is no longer folded into the overall grade.** It is
+  still a first-class component — measured, scored, shown, and used by
+  `compare` — but `OVERALL` is now the geometric mean of CPU, memory and disk
+  only. The loopback network figures depend heavily on the host OS and any
+  security tooling (an EDR's packet inspection can add tens of microseconds per
+  syscall), so folding them into a *hardware* grade produced misleading results
+  — e.g. a fast Windows laptop grading F on network and dragging its overall
+  down two letters. The result JSON gains a `graded` flag per component.
+- `compare` now warns when result files are from different operating systems,
+  since the network component in particular is not comparable across OSes.
+- Scoring profiles no longer carry a `network` weight (it had no effect on the
+  overall); `server`'s description no longer claims to favour it.
+
 ## 0.2.1 - Thu, 28 Aug 2026
 
 - `loadbearer --version` / `-V` now report a full build version: the crate

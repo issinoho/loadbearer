@@ -78,34 +78,34 @@
 
     <div class="term term-hero">
       <div class="term-bar"><i></i><i></i><i></i><em>loadbearer run</em></div>
-<pre>loadbearer 0.2.1 — assessment
+<pre>loadbearer 0.3.0 — assessment
 
   Machine   ThinkPad-X280 · i5-8350U · 8 threads · 7.0 GiB RAM
   Profile   general · curve k=0.5 · baseline reference-v1
 
-  CPU       <b class="g-b">921  [B]</b>  <span class="bar">███████████████░░░░░░░░</span>
-    Integer, all cores     36932.6 Mops/s   0.82x   906  high
-    Float, all cores       55029.9 MFLOP/s  0.79x   887  high
-    BLAKE3 hash             3602.4 MiB/s    0.86x   926  high
+  CPU       <b class="g-b">929  [B]</b>  <span class="bar">██████████████░░░░░░░░░</span>
+    Integer, all cores     37937.0 Mops/s   0.84x   918  high
+    Float, all cores       54982.6 MFLOP/s  0.79x   886  high
+    BLAKE3 hash             3637.5 MiB/s    0.87x   931  high
 
-  MEMORY    <b class="g-c">759  [C]</b>  <span class="bar">████████████░░░░░░░░░░░░</span>
-    Sequential read           13.9 GiB/s    0.63x   796  medium
-    Random access latency    116.3 ns       0.82x   904  high
+  MEMORY    <b class="g-c">820  [C]</b>  <span class="bar">████████████░░░░░░░░░░░</span>
+    Sequential read           14.4 GiB/s    0.65x   809  high
+    Random access latency    131.5 ns       0.72x   850  high
 
-  DISK      <b class="g-d">514  [D]</b>  <span class="bar">████████░░░░░░░░░░░░░░░░</span>
-    Sequential read          407.3 MiB/s    0.14x   368  high
-    Random 4K write         9996.1 IOPS     0.25x   500  low
+  DISK      <b class="g-d">538  [D]</b>  <span class="bar">████████░░░░░░░░░░░░░░░</span>
+    Sequential read          371.3 MiB/s    0.12x   352  high
+    Random 4K write        13197.1 IOPS     0.33x   574  low
 
-  NETWORK   <b class="g-c">727  [C]</b>  <span class="bar">████████████░░░░░░░░░░░░</span>
-    TCP round-trip latency    19.7 us       0.71x   844  medium
-    UDP send rate            252.0 Kpps     0.56x   748  high
+  NETWORK   <b class="g-c">761  [C]</b>  <span class="bar">███████████░░░░░░░░░░░░</span>  <span class="dim">· not in overall</span>
+    TCP round-trip latency    17.5 us       0.80x   893  medium
+    UDP send rate            259.0 Kpps     0.58x   759  high
 
-  <b>OVERALL   <span class="g-c">715  [C]</span></b>  <span class="bar">███████████░░░░░░░░░░░░░</span>
+  <b>OVERALL   <span class="g-c">743  [C]</span></b>  <span class="bar">███████████░░░░░░░░░░░</span>
 
   Why:
-    - held back by Disk (score 514)
-    - held back by Network (score 727)
-    - low measurement confidence in: Memory, Disk</pre>
+    - held back by Disk (score 538)
+    - held back by Memory (score 820)
+    - low measurement confidence in: Disk</pre>
     </div>
   </div>
 </header>
@@ -127,8 +127,10 @@
         <h3>One graded answer per machine</h3>
         <p>CPU, memory, disk and network each get a score against the baseline
         (1000 = a mid-range 2021 laptop) and a letter grade. A profile-weighted
-        geometric mean rolls them into one <b>overall grade</b>, with a
-        plain-language note on what moved it.</p>
+        geometric mean of CPU, memory and disk becomes one <b>overall grade</b>,
+        with a plain-language note on what moved it. Network is shown alongside —
+        it's more about your OS than your hardware — so it doesn't skew the
+        grade.</p>
       </article>
 
       <article class="card">

@@ -82,12 +82,24 @@ pub struct ScoredSubtest {
     pub confidence: Confidence,
 }
 
+fn yes() -> bool {
+    true
+}
+
+/// Component ids that are scored and shown but kept out of the overall grade —
+/// their result is too dependent on the host OS (and any security tooling) to
+/// fold into a hardware grade. `compare` still uses their raw metrics.
+pub const UNGRADED_COMPONENTS: &[&str] = &["network"];
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScoredComponent {
     pub id: String,
     pub label: String,
     pub score: f64,
     pub grade: Grade,
+    /// Whether this component counts toward the overall grade.
+    #[serde(default = "yes")]
+    pub graded: bool,
     /// Weakest confidence among the component's subtests.
     pub confidence: Confidence,
     pub subtests: Vec<ScoredSubtest>,
@@ -225,6 +237,7 @@ pub fn score_run(
             label: bench.label.clone(),
             score,
             grade: Grade::from_score(score),
+            graded: !UNGRADED_COMPONENTS.contains(&bench.id.as_str()),
             confidence,
             subtests,
             notes: bench.notes.clone(),
@@ -233,6 +246,7 @@ pub fn score_run(
 
     let weighted: Vec<(f64, f64)> = components
         .iter()
+        .filter(|c| c.graded)
         .map(|c| (c.score, profile.weight(&c.id)))
         .collect();
     let overall_score = weighted_geomean(&weighted);
@@ -249,9 +263,10 @@ pub fn score_run(
     })
 }
 
-/// Rank components by distance from the baseline and phrase the outliers.
+/// Rank the graded components by distance from the baseline and phrase the
+/// outliers. Ungraded components (e.g. network) are left out of the "why".
 fn explain(components: &[ScoredComponent]) -> Vec<String> {
-    let mut by_score: Vec<&ScoredComponent> = components.iter().collect();
+    let mut by_score: Vec<&ScoredComponent> = components.iter().filter(|c| c.graded).collect();
     by_score.sort_by(|a, b| a.score.total_cmp(&b.score));
 
     let mut why = Vec::new();
@@ -271,7 +286,7 @@ fn explain(components: &[ScoredComponent]) -> Vec<String> {
 
     let low: Vec<&str> = components
         .iter()
-        .filter(|c| c.confidence == Confidence::Low)
+        .filter(|c| c.graded && c.confidence == Confidence::Low)
         .map(|c| c.label.as_str())
         .collect();
     if !low.is_empty() {
@@ -506,6 +521,50 @@ mod tests {
         }
         assert!((scored.overall.score - 1000.0).abs() < 1.0);
         assert_eq!(scored.overall.grade, Grade::B);
+    }
+
+    #[test]
+    fn network_is_scored_but_excluded_from_the_overall() {
+        let b = Baseline::reference_v1();
+        let mut outcomes = baseline_matching_outcomes(&b);
+        // Tank the network component only.
+        for bench in &mut outcomes {
+            if bench.id == "network" {
+                for st in &mut bench.subtests {
+                    st.value = match st.direction {
+                        Direction::HigherIsBetter => st.value / 20.0,
+                        Direction::LowerIsBetter => st.value * 20.0,
+                    };
+                }
+            }
+        }
+        let scored = score_run(&outcomes, &b, GENERAL_FOR_TEST(), 0.5).unwrap();
+
+        let net = scored
+            .components
+            .iter()
+            .find(|c| c.id == "network")
+            .unwrap();
+        assert!(!net.graded);
+        assert!(
+            net.score < 400.0,
+            "network should still be scored low: {}",
+            net.score
+        );
+
+        // CPU/memory/disk still match the baseline, so the overall is unmoved.
+        assert!(
+            (scored.overall.score - 1000.0).abs() < 1.0,
+            "overall moved with network: {}",
+            scored.overall.score
+        );
+        assert!(
+            !scored
+                .overall
+                .why
+                .iter()
+                .any(|w| w.to_lowercase().contains("network"))
+        );
     }
 
     #[test]

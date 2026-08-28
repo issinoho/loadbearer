@@ -29,45 +29,46 @@ through, `compare` internals, and how to recalibrate the baseline — see the
 ## What a run looks like
 
 ```
-loadbearer 0.2.0 — assessment
+loadbearer 0.3.0 — assessment
 
   Machine   ThinkPad-X280 · Intel(R) Core(TM) i5-8350U CPU @ 1.70GHz · 8 threads · 7.0 GiB RAM
   Profile   general · curve k=0.5 · baseline reference-v1 · short preset
 
   CPU         929  [B]   ███████████████░░░░░░░░░
-    Integer, single-core          9204.6 Mops/s     0.92x     959  high
-    Integer, all cores           38246.0 Mops/s     0.85x     922  high
-    Float, single-core            7131.9 MFLOP/s    0.89x     944  high
-    Float, all cores             55798.3 MFLOP/s    0.80x     893  high
-    BLAKE3 hash                   3618.8 MiB/s      0.86x     928  high
-    DEFLATE compress                58.4 MiB/s      0.86x     927  high
+    Integer, single-core          9260.6 Mops/s     0.93x     962  high
+    Integer, all cores           37937.0 Mops/s     0.84x     918  high
+    Float, single-core            7132.9 MFLOP/s    0.89x     944  high
+    Float, all cores             54982.6 MFLOP/s    0.79x     886  high
+    BLAKE3 hash                   3637.5 MiB/s      0.87x     931  high
+    DEFLATE compress                59.1 MiB/s      0.87x     932  high
 
-  MEMORY      814  [C]   █████████████░░░░░░░░░░░
-    Sequential read                 14.1 GiB/s      0.64x     800  high
-    Sequential write                 9.8 GiB/s      0.61x     781  medium
-    Copy (memcpy)                    9.1 GiB/s      0.65x     808  medium
-    Random access latency          125.4 ns         0.76x     870  high
+  MEMORY      820  [C]   █████████████░░░░░░░░░░░
+    Sequential read                 14.4 GiB/s      0.65x     809  high
+    Sequential write                10.2 GiB/s      0.64x     800  high
+    Copy (memcpy)                    9.5 GiB/s      0.68x     822  high
+    Random access latency          131.5 ns         0.72x     850  high
 
-  DISK        517  [D]   ████████░░░░░░░░░░░░░░░░
-    Sequential write               319.7 MiB/s      0.21x     462  low
-    Sequential read                349.1 MiB/s      0.12x     341  high
-    Random 4K read               10461.7 IOPS       0.70x     835  high
-    Random 4K write              11859.8 IOPS       0.30x     545  low
+  DISK        538  [D]   █████████░░░░░░░░░░░░░░░
+    Sequential write               374.7 MiB/s      0.25x     500  low
+    Sequential read                371.3 MiB/s      0.12x     352  high
+    Random 4K read               10386.3 IOPS       0.69x     832  medium
+    Random 4K write              13197.1 IOPS       0.33x     574  low
 
-  NETWORK     755  [C]   ████████████░░░░░░░░░░░░
-    TCP throughput, single stream         5.0 GiB/s      0.71x     841  high
-    TCP throughput, all streams         7.0 GiB/s      0.35x     593  low
-    TCP round-trip latency          18.8 us         0.74x     863  low
-    UDP send rate                  256.9 Kpps       0.57x     756  high
+  NETWORK     761  [C]   ████████████░░░░░░░░░░░░   · measured, not in the overall (OS-dependent)
+    TCP throughput, single stream         5.0 GiB/s      0.72x     848  high
+    TCP throughput, all streams         6.8 GiB/s      0.34x     584  low
+    TCP round-trip latency          17.5 us         0.80x     893  medium
+    UDP send rate                  259.0 Kpps       0.58x     759  high
 
-  OVERALL     737  [C]   ████████████░░░░░░░░░░░░
+  OVERALL     743  [C]   ████████████░░░░░░░░░░░░
 
   Why:
-    - held back by Disk (score 517)
-    - held back by Network (score 755)
-    - low measurement confidence in: Disk, Network
+    - held back by Disk (score 538)
+    - held back by Memory (score 820)
+    - low measurement confidence in: Disk
 
   A score of 1000 = the reference-v1 baseline. Grades: S≥1400 A≥1150 B≥850 C≥600 D≥400.
+  The network score reflects the OS network stack (and any security tooling), so it is shown but kept out of the overall grade.
 ```
 
 Each subtest row is: raw measurement, its ratio to the baseline, its score, and a
@@ -147,8 +148,11 @@ inverted first) to give a **ratio**. The ratio goes through a display curve,
 `score = 1000 · ratio^k` (`k` defaults to 0.5), so a machine that matches the
 baseline everywhere scores **1000**. Component scores are the geometric mean of
 their subtests; the overall score is a profile-weighted geometric mean of the
-components. A letter grade is assigned from the score, and a short "why" names
-the components that moved it and any low-confidence measurements.
+**CPU, memory and disk** components. Network is scored and shown but kept out of
+the overall — its loopback figures depend too much on the host OS and any
+security tooling to belong in a hardware grade. A letter grade is assigned from
+the score, and a short "why" names the components that moved it and any
+low-confidence measurements.
 
 The result is printed, and — with `--output` — written as a versioned JSON file
 that `loadbearer compare` can diff against another machine's.
@@ -262,9 +266,17 @@ twice as fast as the baseline scores ~1414, half as fast ~707. Lower `k` is more
 forgiving of a weak component; higher `k` rewards a strong one harder.
 
 **Aggregation.** Component score = geometric mean of its subtest scores. Overall
-score = geometric mean of the component scores, weighted by the profile. The
-geometric mean means one very strong component can't paper over a weak one, and
-ratios stay meaningful.
+score = geometric mean of the **CPU, memory and disk** component scores,
+weighted by the profile. The geometric mean means one very strong component
+can't paper over a weak one, and ratios stay meaningful.
+
+**Network is not in the overall.** It is scored and displayed like the others,
+and `compare` uses its raw metrics, but it is excluded from the overall grade:
+loopback throughput and latency depend heavily on the host OS (Windows has no
+in-kernel loopback fast path) and on any security tooling — an EDR inspecting
+loopback packets can add tens of microseconds per syscall — which has nothing to
+do with the hardware. `compare` warns when two result files are from different
+operating systems for the same reason.
 
 **Grades.** `S ≥ 1400`, `A ≥ 1150`, `B ≥ 850`, `C ≥ 600`, `D ≥ 400`, else `F` —
 centred so the baseline (1000) lands in the middle of B.
@@ -290,7 +302,7 @@ flag among their subtests, and low-confidence components are called out in the
 | **CPU** | Integer throughput (single-core and all-core), floating-point throughput (single-core and all-core), BLAKE3 hashing, DEFLATE (level 6) compression. Integer and float kernels use eight independent accumulator lanes so they measure pipeline throughput, not dependency-chain latency. All-core subtests run the kernel on every logical CPU and sum the rates. |
 | **Memory** | Sequential read, write and copy bandwidth over a working set sized past any last-level cache (256 MiB at `normal`); random-access latency via a single-cycle pointer chase (Sattolo) that defeats the prefetcher. Single-threaded. |
 | **Disk** | Sequential write (each pass ends with `fsync`, so it's durable-write throughput) and read; random 4 KiB read and write IOPS at queue depth 1. Reads and random I/O use unbuffered I/O — `O_DIRECT` on Linux, `FILE_FLAG_NO_BUFFERING` on Windows — to bypass the page cache, with a buffered fallback (and a recorded note) where the filesystem refuses it. The scratch file (1 GiB at `normal`) is filled with random data to defeat filesystem compression, reused by every subtest, and deleted when the run ends. |
-| **Network** | Loopback (`127.0.0.1`) only — this measures the machine's network *stack* (syscall, TCP processing, scheduler wakeup latency), **not** a physical link, and makes no network calls. Single-stream and all-core TCP throughput, TCP request/response round-trip latency, and UDP small-packet send rate. For a real link test between two machines, run `loadbearer net-server` on one and `loadbearer run --net-target` on the other (reported separately, not graded). |
+| **Network** | Loopback (`127.0.0.1`) only — this measures the machine's network *stack* (syscall, TCP processing, scheduler wakeup latency), **not** a physical link, and makes no network calls. Single-stream and all-core TCP throughput, TCP request/response round-trip latency, and UDP small-packet send rate. **Scored and shown, but not in the overall grade** (see [Scoring model](#scoring-model)). For a real link test between two machines, run `loadbearer net-server` on one and `loadbearer run --net-target` on the other (reported separately, also not graded). |
 
 A single `run` writes on the order of a few GiB to `--target-dir` for the disk
 benchmark; use `--only cpu,memory,network` to skip it.
@@ -338,8 +350,15 @@ inputs; subtests missing from some inputs are flagged on stderr.
   number, run on mains power, let it cool between runs, and close other work. The
   confidence flags exist to tell you when a result was jittery.
 - **Windows `O_DIRECT`-equivalent** (`FILE_FLAG_NO_BUFFERING`) is honoured by
-  NTFS and ReFS; on other filesystems the read numbers may be cache-influenced,
-  which `compare` and the report will note.
+  NTFS and ReFS (verified — the disk numbers are real device speed, not cache);
+  on other filesystems the read numbers may be cache-influenced, which the report
+  will note.
+- **Security tooling / EDR** (CrowdStrike, SentinelOne, Defender ATP, …) inspects
+  every loopback packet, which adds tens of microseconds per network syscall and
+  noticeable jitter across the board. This is the main reason the **network
+  component is not in the overall grade**. Expect a low network score and
+  `medium`/`low` confidence on managed machines; `--duration thorough` and
+  repeated runs help, and the confidence flags will flag it.
 
 ## Building and testing
 
