@@ -2,6 +2,16 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 0.3.1 - Thu, 28 Aug 2026
+
+- **Single-threaded subtests are pinned to one core** while they run, so the OS
+  scheduler can't bounce the measurement between core types (P/E cores on Intel
+  hybrid CPUs, big.LITTLE on ARM) part-way through. On a 13th-gen Intel laptop
+  this cut single-threaded memory-bandwidth run-to-run variance from `±40–60%`
+  to a few percent. Each such iteration runs on a throwaway thread pinned to the
+  fastest core (highest rated frequency on Linux; the first reported core
+  elsewhere). All-core subtests are unaffected. Adds the `core_affinity` crate.
+
 ## 0.3.0 - Thu, 28 Aug 2026
 
 - **The network component is no longer folded into the overall grade.** It is

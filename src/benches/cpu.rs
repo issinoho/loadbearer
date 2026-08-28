@@ -87,6 +87,13 @@ impl Benchmark for CpuBenchmark {
             other => bail!("unknown cpu subtest: {other}"),
         })
     }
+
+    fn single_threaded(&self, subtest_id: &str) -> bool {
+        matches!(
+            subtest_id,
+            "int_single" | "float_single" | "hash" | "compress"
+        )
+    }
 }
 
 const LANES: usize = 8;

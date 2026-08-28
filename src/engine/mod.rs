@@ -134,6 +134,13 @@ pub trait Benchmark: Send + Sync {
     fn notes(&self) -> Vec<String> {
         Vec::new()
     }
+
+    /// True for subtests that run on one thread and should therefore be pinned
+    /// to a single core, so the scheduler can't bounce the measurement between
+    /// core types (P/E cores, big.LITTLE) mid-run. Default: false.
+    fn single_threaded(&self, _subtest_id: &str) -> bool {
+        false
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -183,14 +190,15 @@ pub fn run_benchmark(
             timed_runs: timed,
         });
 
+        let pinned = bench.single_threaded(spec.id);
         for _ in 0..ctx.preset.warmup_runs() {
             progress.on_event(ProgressEvent::Warmup { id: spec.id });
-            bench.run_subtest(spec.id, ctx)?;
+            run_one(bench, spec.id, ctx, pinned)?;
         }
 
         let mut runs = Vec::with_capacity(timed as usize);
         for r in 1..=timed {
-            let value = bench.run_subtest(spec.id, ctx)?;
+            let value = run_one(bench, spec.id, ctx, pinned)?;
             runs.push(value);
             progress.on_event(ProgressEvent::Run {
                 id: spec.id,
@@ -226,6 +234,74 @@ pub fn run_benchmark(
         subtests,
         notes: bench.notes(),
     })
+}
+
+/// Run one iteration of a subtest. A `pinned` (single-threaded) subtest runs on
+/// a throwaway thread pinned to one consistent core, so the OS scheduler can't
+/// move the measurement between core types (P/E cores, big.LITTLE) part-way
+/// through and wreck its run-to-run stability. The thread is disposable, so
+/// there is nothing to un-pin afterwards.
+fn run_one(bench: &dyn Benchmark, id: &str, ctx: &RunContext, pinned: bool) -> Result<f64> {
+    if !pinned {
+        return bench.run_subtest(id, ctx);
+    }
+    std::thread::scope(|scope| {
+        let handle = scope.spawn(|| {
+            if let Some(core) = measurement_core() {
+                core_affinity::set_for_current(core);
+            }
+            bench.run_subtest(id, ctx)
+        });
+        match handle.join() {
+            Ok(result) => result,
+            Err(_) => bail!("measurement thread for {id} panicked"),
+        }
+    })
+}
+
+/// The core to pin single-threaded measurements to — chosen once. On Linux this
+/// is the CPU with the highest rated frequency (a performance core on hybrid
+/// parts); elsewhere it's simply the first core the OS reports. The point is
+/// consistency: every iteration of a subtest runs on the *same* core.
+fn measurement_core() -> Option<core_affinity::CoreId> {
+    use std::sync::OnceLock;
+    static CORE: OnceLock<Option<core_affinity::CoreId>> = OnceLock::new();
+    *CORE.get_or_init(|| {
+        let ids = core_affinity::get_core_ids()?;
+        #[cfg(target_os = "linux")]
+        if let Some(best) = linux_fastest_cpu()
+            && let Some(id) = ids.iter().copied().find(|c| c.id == best)
+        {
+            return Some(id);
+        }
+        ids.into_iter().next()
+    })
+}
+
+#[cfg(target_os = "linux")]
+fn linux_fastest_cpu() -> Option<usize> {
+    let mut best: Option<(usize, u64)> = None;
+    for entry in std::fs::read_dir("/sys/devices/system/cpu").ok()?.flatten() {
+        let name = entry.file_name();
+        let Some(idx) = name
+            .to_string_lossy()
+            .strip_prefix("cpu")
+            .and_then(|s| s.parse::<usize>().ok())
+        else {
+            continue;
+        };
+        let Ok(text) = std::fs::read_to_string(entry.path().join("cpufreq/cpuinfo_max_freq"))
+        else {
+            continue;
+        };
+        let Ok(khz) = text.trim().parse::<u64>() else {
+            continue;
+        };
+        if best.is_none_or(|(_, b)| khz > b) {
+            best = Some((idx, khz));
+        }
+    }
+    best.map(|(idx, _)| idx)
 }
 
 /// Repeatedly invoke `unit_work` until `budget` elapses, then return the number

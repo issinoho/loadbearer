@@ -135,6 +135,11 @@ impl Benchmark for MemoryBenchmark {
     fn notes(&self) -> Vec<String> {
         self.notes.lock().unwrap().clone()
     }
+
+    /// Every memory subtest is single-threaded.
+    fn single_threaded(&self, _subtest_id: &str) -> bool {
+        true
+    }
 }
 
 fn filled_words(words: usize, seed: u64) -> Vec<u64> {
