@@ -96,6 +96,22 @@ fn drain_tcp(mut conn: TcpStream) {
     while matches!(conn.read(&mut buf), Ok(n) if n > 0) {}
 }
 
+/// Blast `STREAM_CHUNK` writes down `stream` for `budget`; return GiB/s. A write
+/// failing near the boundary (the peer tearing the connection down as time runs
+/// out) is tolerated — the loop just stops.
+fn blast(mut stream: TcpStream, budget: Duration) -> f64 {
+    let payload = vec![0xA5u8; STREAM_CHUNK];
+    let start = std::time::Instant::now();
+    let mut bytes = 0u64;
+    while start.elapsed() < budget {
+        match stream.write_all(&payload) {
+            Ok(()) => bytes += STREAM_CHUNK as u64,
+            Err(_) => break,
+        }
+    }
+    bytes as f64 / start.elapsed().as_secs_f64() / GIB
+}
+
 fn tcp_stream(budget: Duration) -> Result<f64> {
     let listener = TcpListener::bind(LOCALHOST)?;
     let addr = listener.local_addr()?;
@@ -105,35 +121,26 @@ fn tcp_stream(budget: Duration) -> Result<f64> {
         }
     });
 
-    let mut stream = TcpStream::connect(addr)?;
+    let stream = TcpStream::connect(addr)?;
     stream.set_nodelay(true)?;
-    let payload = vec![0xA5u8; STREAM_CHUNK];
-    let bytes_per_sec = throughput(budget, || {
-        stream.write_all(&payload).expect("loopback write");
-        STREAM_CHUNK as u64
-    });
+    let gibps = blast(stream, budget);
 
-    drop(stream);
     let _ = server.join();
-    Ok(bytes_per_sec / GIB)
+    Ok(gibps)
 }
 
 fn tcp_parallel(budget: Duration, streams: usize) -> Result<f64> {
     let streams = streams.max(1);
     let listener = TcpListener::bind(LOCALHOST)?;
     let addr = listener.local_addr()?;
-    listener.set_nonblocking(true)?;
 
-    let stop = Arc::new(AtomicBool::new(false));
-    let acc_stop = stop.clone();
+    // The acceptor knows exactly how many connections to expect, so a plain
+    // blocking accept loop is enough — no nonblocking / stop-flag dance.
     let acceptor = thread::spawn(move || {
-        let mut drains = Vec::new();
-        while !acc_stop.load(Ordering::Relaxed) {
+        let mut drains = Vec::with_capacity(streams);
+        for _ in 0..streams {
             match listener.accept() {
                 Ok((conn, _)) => drains.push(thread::spawn(move || drain_tcp(conn))),
-                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    thread::sleep(Duration::from_millis(1));
-                }
                 Err(_) => break,
             }
         }
@@ -143,19 +150,15 @@ fn tcp_parallel(budget: Duration, streams: usize) -> Result<f64> {
     });
 
     let total = parallel_sum(streams, || {
-        let mut stream = TcpStream::connect(addr).expect("loopback connect");
+        let Ok(stream) = TcpStream::connect(addr) else {
+            return 0.0;
+        };
         stream.set_nodelay(true).ok();
-        let payload = vec![0xA5u8; STREAM_CHUNK];
-        throughput(budget, || {
-            stream.write_all(&payload).expect("loopback write");
-            STREAM_CHUNK as u64
-        })
-        // stream drops here; its drain thread then ends
+        blast(stream, budget)
     });
 
-    stop.store(true, Ordering::Relaxed);
     let _ = acceptor.join();
-    Ok(total / GIB)
+    Ok(total)
 }
 
 fn tcp_rtt(budget: Duration) -> Result<f64> {
@@ -177,13 +180,17 @@ fn tcp_rtt(budget: Duration) -> Result<f64> {
     stream.set_nodelay(true)?;
     let mut buf = [0u8; MSG];
     let round_trips_per_sec = throughput(budget, || {
-        stream.write_all(&buf).expect("loopback write");
-        stream.read_exact(&mut buf).expect("loopback read");
-        1
+        match (stream.write_all(&buf), stream.read_exact(&mut buf)) {
+            (Ok(()), Ok(())) => 1,
+            _ => 0,
+        }
     });
 
     drop(stream);
     let _ = server.join();
+    if round_trips_per_sec <= 0.0 {
+        anyhow::bail!("no TCP round trips completed on loopback");
+    }
     Ok(1_000_000.0 / round_trips_per_sec)
 }
 
@@ -238,12 +245,7 @@ pub fn link_probe(target: &str, budget: Duration) -> Result<LinkResult> {
     let mut up = TcpStream::connect(target)?;
     up.set_nodelay(true)?;
     up.write_all(&[MODE_SINK])?;
-    let payload = vec![0xA5u8; STREAM_CHUNK];
-    let up_bps = throughput(budget, || {
-        up.write_all(&payload).expect("link write");
-        STREAM_CHUNK as u64
-    });
-    drop(up);
+    let up_gibps = blast(up, budget);
 
     // Round-trip latency.
     let mut rt = TcpStream::connect(target)?;
@@ -251,9 +253,10 @@ pub fn link_probe(target: &str, budget: Duration) -> Result<LinkResult> {
     rt.write_all(&[MODE_ECHO])?;
     let mut buf = [0u8; MSG];
     let rtts = throughput(budget, || {
-        rt.write_all(&buf).expect("link write");
-        rt.read_exact(&mut buf).expect("link read");
-        1
+        match (rt.write_all(&buf), rt.read_exact(&mut buf)) {
+            (Ok(()), Ok(())) => 1,
+            _ => 0,
+        }
     });
     drop(rt);
 
@@ -271,9 +274,10 @@ pub fn link_probe(target: &str, budget: Duration) -> Result<LinkResult> {
         ok
     });
 
+    anyhow::ensure!(rtts > 0.0, "no round trips completed to {target}");
     Ok(LinkResult {
         target: target.to_string(),
-        tcp_upload_gibps: up_bps / GIB,
+        tcp_upload_gibps: up_gibps,
         tcp_rtt_us: 1_000_000.0 / rtts,
         udp_send_kpps: sends / 1000.0,
     })
