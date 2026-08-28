@@ -2,6 +2,16 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 0.6.4 - Thu, 28 Aug 2026
+
+- The live run screen now sizes its subtest-label column from the
+  terminal width too (bounded 22–46), so names like `Sequential read,
+  all cores` and `TCP throughput, single stream` show in full on a
+  normal terminal instead of truncating at a fixed 22. The value column
+  is now a fixed field — number right-aligned, unit left-aligned — so
+  the values and confidence flags line up straight down the list
+  regardless of magnitude or unit length.
+
 ## 0.6.3 - Thu, 28 Aug 2026
 
 Carries the `compare`-TUI fixes back to the `run` TUI:

@@ -92,6 +92,10 @@ fn draw_running(f: &mut Frame, app: &App, area: Rect) {
         rows[0],
     );
 
+    // Label column: what's left after the fixed bar / status / value / conf
+    // columns and their gaps, within bounds.
+    let name_w = (inner.width as usize).saturating_sub(48).clamp(22, 46);
+
     let mut lines: Vec<Line> = Vec::new();
     for b in &app.benches {
         let tick = if b.done { " ✓" } else { "" };
@@ -100,7 +104,7 @@ fn draw_running(f: &mut Frame, app: &App, area: Rect) {
             Style::default().add_modifier(Modifier::BOLD),
         )));
         for s in &b.subs {
-            lines.push(subtest_line(s));
+            lines.push(subtest_line(s, name_w));
         }
     }
 
@@ -146,32 +150,35 @@ fn draw_running(f: &mut Frame, app: &App, area: Rect) {
     );
 }
 
-fn subtest_line(s: &SubRow) -> Line<'static> {
+fn subtest_line(s: &SubRow, name_w: usize) -> Line<'static> {
+    // 7-wide status field so the columns after it stay aligned across states.
     let (status, style) = match s.state {
-        SubState::Pending => ("        ".to_string(), Style::default().fg(DIM)),
-        SubState::Warmup => ("warmup  ".to_string(), Style::default().fg(Color::Yellow)),
+        SubState::Pending => ("       ".to_string(), Style::default().fg(DIM)),
+        SubState::Warmup => ("warmup ".to_string(), Style::default().fg(Color::Yellow)),
         SubState::Running => (
             format!("{:>3}/{:<3}", s.runs_done, s.timed),
             Style::default().fg(Color::Yellow),
         ),
-        SubState::Done => ("done    ".to_string(), Style::default().fg(Color::Green)),
+        SubState::Done => ("done   ".to_string(), Style::default().fg(Color::Green)),
     };
 
+    // Number right-aligned, unit left-aligned, so both columns line up down
+    // the list regardless of magnitude or unit length.
     let value = match s.display_value() {
-        Some(v) => format!("{:>10} {}", fmt_val(v), s.unit),
+        Some(v) => format!("{:>7} {:<7}", fmt_val(v), s.unit),
         None => String::new(),
     };
     let conf = match (&s.state, &s.outcome) {
-        (SubState::Done, Some(o)) => format!("  {}", o.confidence.as_str()),
-        _ => String::new(),
+        (SubState::Done, Some(o)) => o.confidence.as_str(),
+        _ => "",
     };
 
     Line::from(vec![
-        Span::raw(format!("  {:<22} ", truncate(&s.label, 22))),
+        Span::raw(format!("  {:<name_w$}  ", truncate(&s.label, name_w))),
         Span::styled(bar(s.fraction(), 10), style),
-        Span::styled(format!(" {status} "), style),
-        Span::raw(value),
-        Span::styled(conf, Style::default().fg(DIM)),
+        Span::styled(format!("  {status}  "), style),
+        Span::raw(format!("{value:<15}")),
+        Span::styled(format!("  {conf}"), Style::default().fg(DIM)),
     ])
 }
 
@@ -495,5 +502,98 @@ fn truncate(s: &str, max: usize) -> String {
     } else {
         let keep: String = s.chars().take(max.saturating_sub(1)).collect();
         format!("{keep}…")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
+
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+
+    use super::*;
+    use crate::engine::stats::{Confidence, Stats};
+    use crate::engine::{Direction, SubtestOutcome};
+    use crate::tui::app::{App, Ev, Msg};
+
+    /// Render `draw_running` at `width` with the given `(label, unit)` subtests,
+    /// each marked done with `value`. Returns the screen as one row per line.
+    fn render(width: u16, subs: &[(&str, &str, f64)]) -> Vec<String> {
+        let specs = vec![(
+            "CPU".to_string(),
+            subs.iter()
+                .map(|(l, u, _)| (l.to_string(), u.to_string()))
+                .collect(),
+        )];
+        let mut app = App::new("host".into(), specs, Arc::new(AtomicBool::new(false)));
+        for (i, (label, unit, value)) in subs.iter().enumerate() {
+            app.apply(Msg::Progress(Ev::SubtestDone {
+                bench: 0,
+                sub: i,
+                outcome: Box::new(SubtestOutcome {
+                    id: (*label).into(),
+                    label: (*label).into(),
+                    unit: (*unit).into(),
+                    direction: Direction::HigherIsBetter,
+                    value: *value,
+                    stats: Stats::from_runs(vec![*value]),
+                    confidence: Confidence::Medium,
+                }),
+            }));
+        }
+        let mut term = Terminal::new(TestBackend::new(width, 20)).unwrap();
+        term.draw(|f| draw_running(f, &app, f.area())).unwrap();
+        let buf = term.backend().buffer().clone();
+        let a = buf.area();
+        (0..a.height)
+            .map(|y| (0..a.width).map(|x| buf[(x, y)].symbol()).collect())
+            .collect()
+    }
+
+    #[test]
+    fn wide_terminal_shows_long_labels_in_full() {
+        let rows = render(
+            110,
+            &[
+                ("TCP throughput, single stream", "GiB/s", 3.01),
+                ("Sequential read, all cores", "GiB/s", 12.6),
+            ],
+        );
+        let screen = rows.join("\n");
+        assert!(screen.contains("TCP throughput, single stream"), "{screen}");
+        assert!(screen.contains("Sequential read, all cores"), "{screen}");
+        assert!(!screen.contains('…'));
+    }
+
+    #[test]
+    fn narrow_terminal_truncates_with_an_ellipsis() {
+        let rows = render(60, &[("TCP throughput, single stream", "GiB/s", 3.01)]);
+        let screen = rows.join("\n");
+        assert!(screen.contains('…'), "{screen}");
+        assert!(!screen.contains("TCP throughput, single stream"));
+    }
+
+    #[test]
+    fn value_and_confidence_columns_align_regardless_of_label_or_magnitude() {
+        let rows = render(
+            100,
+            &[
+                ("SHA-256 hash", "MiB/s", 130.1),
+                ("Sequential read, all cores", "GiB/s", 9.4),
+            ],
+        );
+        let a = rows.iter().find(|r| r.contains("SHA-256 hash")).unwrap();
+        let b = rows
+            .iter()
+            .find(|r| r.contains("Sequential read, all cores"))
+            .unwrap();
+        assert_eq!(a.find("done"), b.find("done"), "status column\n{a}\n{b}");
+        assert_eq!(
+            a.rfind("medium"),
+            b.rfind("medium"),
+            "confidence column\n{a}\n{b}"
+        );
     }
 }
