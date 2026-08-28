@@ -20,6 +20,10 @@ All notable changes to loadbearer are documented in this file.
   - `reference-v1` gains `[components.gpu]` anchors (integrated-GPU class —
     a discrete card scores well above 1000, which is fine for an ungraded
     component). Adds the `libloading` crate.
+- `compare` now sets the totals off from the subtests: a rule under each
+  component's rows before its `<component> total`, a heavier rule before
+  `OVERALL`, and (in the TUI) both rendered bold. When two machines are close
+  overall it was easy to lose the headline delta among the per-subtest rows.
 
 ## 0.6.6 - Thu, 28 Aug 2026
 

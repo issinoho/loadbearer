@@ -200,9 +200,10 @@ fn build_lines(c: &Comparison, name_w: usize, col_w: usize, wrap_w: usize) -> Ve
                 col_w,
             ));
         }
+        out.push(rule('\u{2500}', name_w + n * (col_w + 1)));
         out.push(metric_row(
             c,
-            "  → component",
+            &format!("{} total", comp.label),
             &vec![f64::NAN; n],
             &comp.rel,
             comp.best,
@@ -213,6 +214,7 @@ fn build_lines(c: &Comparison, name_w: usize, col_w: usize, wrap_w: usize) -> Ve
     }
 
     out.push(Line::raw(""));
+    out.push(rule('\u{2550}', name_w + n * (col_w + 1)));
     out.push(metric_row(
         c,
         "OVERALL",
@@ -339,7 +341,17 @@ fn metric_row(
     name_w: usize,
     col_w: usize,
 ) -> Line<'static> {
-    let mut spans = vec![Span::raw(format!("  {:<name_w$}", truncate(label, name_w)))];
+    // Rollup rows (component totals, OVERALL) are bold so they stand out from
+    // the subtest rows they summarise.
+    let emph = if aggregate {
+        Modifier::BOLD
+    } else {
+        Modifier::empty()
+    };
+    let mut spans = vec![Span::styled(
+        format!("  {:<name_w$}", truncate(label, name_w)),
+        Style::default().add_modifier(emph),
+    )];
     for (i, r) in rel.iter().enumerate() {
         let cell = if i == 0 {
             if aggregate {
@@ -365,7 +377,10 @@ fn metric_row(
         } else {
             Style::default()
         };
-        spans.push(Span::styled(format!(" {cell:>col_w$}"), style));
+        spans.push(Span::styled(
+            format!(" {cell:>col_w$}"),
+            style.add_modifier(emph),
+        ));
     }
     spans.push(winner_span(c, rel, best));
     Line::from(spans)
@@ -386,6 +401,14 @@ fn winner_span(c: &Comparison, rel: &[f64], best: usize) -> Span<'static> {
                 .add_modifier(Modifier::BOLD),
         )
     }
+}
+
+/// A dim horizontal rule, indented to line up with the table body.
+fn rule(ch: char, width: usize) -> Line<'static> {
+    Line::from(Span::styled(
+        format!("  {}", ch.to_string().repeat(width)),
+        Style::default().fg(DIM),
+    ))
 }
 
 fn fmt_val(v: f64) -> String {
@@ -484,11 +507,28 @@ mod tests {
         assert!(joined.contains("! files used different duration presets"));
         assert!(joined.contains("CPU"));
         assert!(joined.contains("Integer, single-core (Mops/s)"));
-        assert!(joined.contains("→ component"));
+        assert!(joined.contains("CPU total"));
         assert!(joined.contains("OVERALL"));
         assert!(joined.contains("SUSTAINED LOAD (not graded)"));
         assert!(joined.contains("retained vs own peak"));
         assert!(joined.contains("Verdict: bravo leads by 33% overall"));
+    }
+
+    #[test]
+    fn totals_are_set_off_by_rules_from_the_subtests() {
+        let lines: Vec<String> = build_lines(&two_machine_comparison(false), 40, 16, 120)
+            .iter()
+            .map(text)
+            .collect();
+        // A light rule sits directly above each component total…
+        let ct = lines.iter().position(|l| l.contains("CPU total")).unwrap();
+        assert!(lines[ct - 1].contains('\u{2500}'), "{:?}", lines[ct - 1]);
+        // …and a heavy rule directly above OVERALL.
+        let ov = lines
+            .iter()
+            .position(|l| l.trim_start().starts_with("OVERALL"))
+            .unwrap();
+        assert!(lines[ov - 1].contains('\u{2550}'), "{:?}", lines[ov - 1]);
     }
 
     #[test]

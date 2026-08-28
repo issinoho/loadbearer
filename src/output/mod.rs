@@ -365,6 +365,8 @@ pub fn print_comparison(c: &Comparison) {
     }
     println!();
 
+    let body_w = CMP_NAME_W + c.machines.len() * (CMP_COL_W + 1);
+
     for comp in &c.components {
         println!("\n  {}", comp.label.to_uppercase());
         for st in &comp.subtests {
@@ -382,14 +384,16 @@ pub fn print_comparison(c: &Comparison) {
             }
             println!("  {}", winner_tag(c, &st.rel, st.best));
         }
-        print!("  {:<CMP_NAME_W$}", "  \u{2192} component");
+        println!("  {}", "\u{2500}".repeat(body_w));
+        print!("  {:<CMP_NAME_W$}", format!("{} total", comp.label));
         for (mi, rel) in comp.rel.iter().enumerate() {
             print!(" {:>CMP_COL_W$}", rel_cell(mi, *rel));
         }
         println!("  {}", winner_tag(c, &comp.rel, comp.best));
     }
 
-    print!("\n  {:<CMP_NAME_W$}", "OVERALL");
+    println!("\n  {}", "\u{2550}".repeat(body_w));
+    print!("  {:<CMP_NAME_W$}", "OVERALL");
     for (mi, rel) in c.overall.rel.iter().enumerate() {
         print!(" {:>CMP_COL_W$}", rel_cell(mi, *rel));
     }
