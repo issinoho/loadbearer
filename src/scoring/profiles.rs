@@ -23,25 +23,45 @@ impl Profile {
 pub const GENERAL: Profile = Profile {
     name: "general",
     description: "balanced — every component counts equally",
-    weights: &[("cpu", 1.0), ("memory", 1.0), ("disk", 1.0)],
+    weights: &[
+        ("cpu", 1.0),
+        ("memory", 1.0),
+        ("disk", 1.0),
+        ("network", 1.0),
+    ],
 };
 
 pub const DEV_WORKSTATION: Profile = Profile {
     name: "dev-workstation",
     description: "favours CPU and disk (builds, containers, VCS)",
-    weights: &[("cpu", 1.4), ("memory", 1.0), ("disk", 1.3)],
+    weights: &[
+        ("cpu", 1.4),
+        ("memory", 1.0),
+        ("disk", 1.3),
+        ("network", 0.8),
+    ],
 };
 
 pub const CONTENT_CREATION: Profile = Profile {
     name: "content-creation",
     description: "favours CPU and memory bandwidth (encode, render)",
-    weights: &[("cpu", 1.4), ("memory", 1.3), ("disk", 0.8)],
+    weights: &[
+        ("cpu", 1.4),
+        ("memory", 1.3),
+        ("disk", 0.8),
+        ("network", 0.5),
+    ],
 };
 
 pub const SERVER: Profile = Profile {
     name: "server",
-    description: "favours disk I/O and CPU (throughput under load)",
-    weights: &[("cpu", 1.3), ("memory", 1.0), ("disk", 1.4)],
+    description: "favours disk I/O, network and CPU (throughput under load)",
+    weights: &[
+        ("cpu", 1.3),
+        ("memory", 1.0),
+        ("disk", 1.4),
+        ("network", 1.4),
+    ],
 };
 
 pub const ALL: &[Profile] = &[GENERAL, DEV_WORKSTATION, CONTENT_CREATION, SERVER];
@@ -60,7 +80,7 @@ mod tests {
 
     #[test]
     fn general_is_uniform() {
-        for c in ["cpu", "memory", "disk"] {
+        for c in ["cpu", "memory", "disk", "network"] {
             assert_eq!(GENERAL.weight(c), 1.0);
         }
     }

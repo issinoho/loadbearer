@@ -168,7 +168,8 @@ fn run_interactive(
     };
 
     match tui::run(init)? {
-        Some(result) => {
+        Some(mut result) => {
+            result.link = probe_link(args)?;
             write_output(&result, args.output.as_deref())?;
             println!(
                 "Overall {:.0} [{}] · {} profile{}",
@@ -215,7 +216,8 @@ fn run_plain(
     }
 
     let scored = score_run(&outcomes, baseline, profile, curve_k)?;
-    let result = ResultFile::assemble(machine, config, outcomes, scored);
+    let link = probe_link(args)?;
+    let result = ResultFile::assemble(machine, config, outcomes, scored, link);
 
     if args.json {
         println!("{}", serde_json::to_string_pretty(&result)?);
@@ -229,6 +231,19 @@ fn run_plain(
         }
     }
     Ok(())
+}
+
+/// Run the optional `--net-target` link probe, if one was requested.
+fn probe_link(args: &RunArgs) -> Result<Option<crate::scoring::LinkResult>> {
+    let Some(target) = &args.net_target else {
+        return Ok(None);
+    };
+    eprintln!("probing link to {target} …");
+    let link =
+        benches::link_probe(target, std::time::Duration::from_secs(1)).with_context(|| {
+            format!("probing link to {target} (is `loadbearer net-server` running there?)")
+        })?;
+    Ok(Some(link))
 }
 
 fn write_output(result: &ResultFile, path: Option<&Path>) -> Result<()> {

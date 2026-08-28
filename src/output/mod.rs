@@ -169,6 +169,19 @@ pub fn print_scored_report(result: &ResultFile) {
         "\n  A score of 1000 = the {} baseline. Grades: S≥1400 A≥1150 B≥850 C≥600 D≥400.",
         cfg.baseline,
     );
+
+    if let Some(link) = &result.link {
+        println!("\n  Link to {} (measured, not graded)", link.target);
+        println!(
+            "    {:<20} {:>10.2} GiB/s",
+            "TCP upload", link.tcp_upload_gibps
+        );
+        println!("    {:<20} {:>10.1} us", "TCP round-trip", link.tcp_rtt_us);
+        println!(
+            "    {:<20} {:>10.1} Kpps",
+            "UDP send rate", link.udp_send_kpps
+        );
+    }
 }
 
 fn grade_tag(g: Grade) -> String {

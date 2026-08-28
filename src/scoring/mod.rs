@@ -116,6 +116,16 @@ pub struct RunConfig {
     pub only: Vec<String>,
 }
 
+/// Result of an optional `--net-target` link probe. Not scored — it measures
+/// the path between two machines, not either host.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LinkResult {
+    pub target: String,
+    pub tcp_upload_gibps: f64,
+    pub tcp_rtt_us: f64,
+    pub udp_send_kpps: f64,
+}
+
 /// The full, versioned result artifact written by `loadbearer run`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResultFile {
@@ -128,15 +138,18 @@ pub struct ResultFile {
     pub raw: Vec<BenchmarkOutcome>,
     pub components: Vec<ScoredComponent>,
     pub overall: Overall,
+    /// Present only when `--net-target` was given.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub link: Option<LinkResult>,
 }
 
 impl ResultFile {
-    #[allow(clippy::too_many_arguments)]
     pub fn assemble(
         machine: Inventory,
         config: RunConfig,
         raw: Vec<BenchmarkOutcome>,
         scored: ScoredRun,
+        link: Option<LinkResult>,
     ) -> Self {
         Self {
             schema: SCHEMA.to_string(),
@@ -149,6 +162,7 @@ impl ResultFile {
             raw,
             components: scored.components,
             overall: scored.overall,
+            link,
         }
     }
 }
@@ -382,7 +396,7 @@ mod tests {
             let subtests = subs
                 .iter()
                 .map(|(id, &v)| {
-                    let d = if id == "latency" {
+                    let d = if id == "latency" || id == "tcp_rtt" {
                         Direction::LowerIsBetter
                     } else {
                         Direction::HigherIsBetter
@@ -431,7 +445,7 @@ mod tests {
             baseline: b.name.clone(),
             only: vec![],
         };
-        let result = ResultFile::assemble(fake_inventory(), config, outcomes, scored);
+        let result = ResultFile::assemble(fake_inventory(), config, outcomes, scored, None);
 
         let json = serde_json::to_string(&result).unwrap();
         let back: ResultFile = serde_json::from_str(&json).unwrap();
@@ -457,7 +471,7 @@ mod tests {
             baseline: b.name.clone(),
             only: vec![],
         };
-        ResultFile::assemble(fake_inventory(), config, outcomes, scored)
+        ResultFile::assemble(fake_inventory(), config, outcomes, scored, None)
     }
 
     #[test]

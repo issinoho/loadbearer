@@ -26,37 +26,43 @@ through, `compare` internals, and how to recalibrate the baseline — see the
 ## What a run looks like
 
 ```
-loadbearer 0.1.0 — assessment
+loadbearer 0.2.0 — assessment
 
   Machine   ThinkPad-X280 · Intel(R) Core(TM) i5-8350U CPU @ 1.70GHz · 8 threads · 7.0 GiB RAM
   Profile   general · curve k=0.5 · baseline reference-v1 · short preset
 
-  CPU         921  [B]   ███████████████░░░░░░░░░
-    Integer, single-core          9110.9 Mops/s     0.91x     955  high
-    Integer, all cores           37325.3 Mops/s     0.83x     911  high
-    Float, single-core            7126.1 MFLOP/s    0.89x     944  high
-    Float, all cores             55021.1 MFLOP/s    0.79x     887  high
-    BLAKE3 hash                   3557.7 MiB/s      0.85x     920  medium
-    DEFLATE compress                56.4 MiB/s      0.83x     911  high
+  CPU         929  [B]   ███████████████░░░░░░░░░
+    Integer, single-core          9204.6 Mops/s     0.92x     959  high
+    Integer, all cores           38246.0 Mops/s     0.85x     922  high
+    Float, single-core            7131.9 MFLOP/s    0.89x     944  high
+    Float, all cores             55798.3 MFLOP/s    0.80x     893  high
+    BLAKE3 hash                   3618.8 MiB/s      0.86x     928  high
+    DEFLATE compress                58.4 MiB/s      0.86x     927  high
 
-  MEMORY      798  [C]   █████████████░░░░░░░░░░░
-    Sequential read                 13.5 GiB/s      0.61x     782  high
-    Sequential write                 9.2 GiB/s      0.57x     756  high
-    Copy (memcpy)                    9.2 GiB/s      0.66x     810  high
-    Random access latency          132.0 ns         0.72x     848  low
+  MEMORY      814  [C]   █████████████░░░░░░░░░░░
+    Sequential read                 14.1 GiB/s      0.64x     800  high
+    Sequential write                 9.8 GiB/s      0.61x     781  medium
+    Copy (memcpy)                    9.1 GiB/s      0.65x     808  medium
+    Random access latency          125.4 ns         0.76x     870  high
 
-  DISK        532  [D]   █████████░░░░░░░░░░░░░░░
-    Sequential write               406.4 MiB/s      0.27x     520  high
-    Sequential read                399.6 MiB/s      0.13x     365  high
-    Random 4K read                9373.3 IOPS       0.62x     790  medium
-    Random 4K write              11308.7 IOPS       0.28x     532  medium
+  DISK        517  [D]   ████████░░░░░░░░░░░░░░░░
+    Sequential write               319.7 MiB/s      0.21x     462  low
+    Sequential read                349.1 MiB/s      0.12x     341  high
+    Random 4K read               10461.7 IOPS       0.70x     835  high
+    Random 4K write              11859.8 IOPS       0.30x     545  low
 
-  OVERALL     731  [C]   ████████████░░░░░░░░░░░░
+  NETWORK     755  [C]   ████████████░░░░░░░░░░░░
+    TCP throughput, single stream         5.0 GiB/s      0.71x     841  high
+    TCP throughput, all streams         7.0 GiB/s      0.35x     593  low
+    TCP round-trip latency          18.8 us         0.74x     863  low
+    UDP send rate                  256.9 Kpps       0.57x     756  high
+
+  OVERALL     737  [C]   ████████████░░░░░░░░░░░░
 
   Why:
-    - held back by Disk (score 532)
-    - held back by Memory (score 798)
-    - low measurement confidence in: Memory
+    - held back by Disk (score 517)
+    - held back by Network (score 755)
+    - low measurement confidence in: Disk, Network
 
   A score of 1000 = the reference-v1 baseline. Grades: S≥1400 A≥1150 B≥850 C≥600 D≥400.
 ```
@@ -73,7 +79,9 @@ progress; the block above is the `--plain` rendering.
   stable Rust toolchain (1.88+). `O_DIRECT` on the target filesystem gets you
   device-accurate disk numbers; loadbearer falls back to buffered I/O and says so
   when it can't.
-- No network access, no admin/root privileges, no config required to run.
+- No admin/root privileges and no config required to run. Nothing leaves the
+  machine unless you explicitly pass `--net-target`; the network benchmark itself
+  is loopback only.
 
 ## Install
 
@@ -145,11 +153,12 @@ that `loadbearer compare` can diff against another machine's.
 ## Usage
 
 ```
-loadbearer run       [OPTIONS]
-loadbearer compare   FILE FILE [FILE ...] [--plain] [--json]
-loadbearer info      [--json]
+loadbearer run        [OPTIONS]
+loadbearer compare    FILE FILE [FILE ...] [--plain] [--json]
+loadbearer info       [--json]
 loadbearer list
-loadbearer baseline  [FILE ...] [--name NAME] [--description TEXT]
+loadbearer baseline   [FILE ...] [--name NAME] [--description TEXT]
+loadbearer net-server [--bind ADDR]
 ```
 
 - **`run`** — benchmark this machine, score it, print a graded assessment. TUI in
@@ -163,18 +172,22 @@ loadbearer baseline  [FILE ...] [--name NAME] [--description TEXT]
 - **`baseline`** — with no arguments, prints the built-in baseline. Given result
   files, emits a new baseline TOML whose values are the geometric mean of each
   metric across those files (see [Recalibrating](#recalibrating-the-baseline)).
+- **`net-server`** — runs the server side of the optional `--net-target` link
+  test; leave it running on one machine and point another machine's
+  `loadbearer run --net-target` at it. Listens on `0.0.0.0:47913` by default.
 
 ### `run` options
 
 | Option | Description |
 | --- | --- |
-| `--only LIST` | Restrict the run to a comma-separated subset of benchmarks: `cpu`, `memory`, `disk`. Default: all three. |
+| `--only LIST` | Restrict the run to a comma-separated subset of benchmarks: `cpu`, `memory`, `disk`, `network`. Default: all four. |
 | `--profile NAME` | Scoring profile that weights the overall grade: `general` (default), `dev-workstation`, `content-creation`, `server`. See [Profiles](#profiles). |
 | `--duration PRESET` | Thoroughness: `short` (~10 s/benchmark, for quick checks and CI), `normal` (~30 s, default), `thorough` (~2 min, for a considered assessment). Trades wall-clock time for lower measurement variance. |
 | `--curve-k FLOAT` | Display-curve exponent, 0.05–3.0 (default 0.5). Lower values compress the extremes toward 1000; higher values spread scores out. |
 | `--target-dir PATH` | Directory for the disk benchmark's scratch file (default: the working directory). Point this at the disk you actually want to measure — **not** a `tmpfs`/RAM disk, where the numbers reflect memory, not storage (loadbearer detects this on Linux and says so). |
 | `--runs N` | Override the number of timed iterations per subtest (default: 3 / 5 / 9 for short / normal / thorough). |
 | `--seed N` | Seed for the pseudo-random workload data, for bit-for-bit reproducible inputs. |
+| `--net-target HOST:PORT` | After the graded run, probe a real link (TCP upload, round-trip, UDP send rate) to a `loadbearer net-server` at this address. Reported in its own block and the result JSON's `link` field; **not graded** — it measures the network, not the machine. |
 | `--output FILE` | Write the full result as a versioned JSON file. Works alongside the TUI or plain output. |
 | `--plain` | Disable the TUI and emit the plain-text report. Implied automatically when stdout is not a terminal. |
 | `--json` | Disable the TUI and emit only the result JSON to stdout. |
@@ -264,8 +277,8 @@ flag among their subtests, and low-confidence components are called out in the
 | --- | --- |
 | `general` | CPU, memory and disk count equally (default). |
 | `dev-workstation` | Favours CPU and disk — builds, containers, version control. |
-| `content-creation` | Favours CPU and memory bandwidth — encode, render. |
-| `server` | Favours disk I/O and CPU — sustained throughput under load. |
+| `content-creation` | Favours CPU and memory bandwidth — encode, render; de-emphasises network. |
+| `server` | Favours disk I/O, network and CPU — sustained throughput under load. |
 
 ## The benchmarks
 
@@ -274,9 +287,10 @@ flag among their subtests, and low-confidence components are called out in the
 | **CPU** | Integer throughput (single-core and all-core), floating-point throughput (single-core and all-core), BLAKE3 hashing, DEFLATE (level 6) compression. Integer and float kernels use eight independent accumulator lanes so they measure pipeline throughput, not dependency-chain latency. All-core subtests run the kernel on every logical CPU and sum the rates. |
 | **Memory** | Sequential read, write and copy bandwidth over a working set sized past any last-level cache (256 MiB at `normal`); random-access latency via a single-cycle pointer chase (Sattolo) that defeats the prefetcher. Single-threaded. |
 | **Disk** | Sequential write (each pass ends with `fsync`, so it's durable-write throughput) and read; random 4 KiB read and write IOPS at queue depth 1. Reads and random I/O use unbuffered I/O — `O_DIRECT` on Linux, `FILE_FLAG_NO_BUFFERING` on Windows — to bypass the page cache, with a buffered fallback (and a recorded note) where the filesystem refuses it. The scratch file (1 GiB at `normal`) is filled with random data to defeat filesystem compression, reused by every subtest, and deleted when the run ends. |
+| **Network** | Loopback (`127.0.0.1`) only — this measures the machine's network *stack* (syscall, TCP processing, scheduler wakeup latency), **not** a physical link, and makes no network calls. Single-stream and all-core TCP throughput, TCP request/response round-trip latency, and UDP small-packet send rate. For a real link test between two machines, run `loadbearer net-server` on one and `loadbearer run --net-target` on the other (reported separately, not graded). |
 
-A single `run` writes on the order of a few GiB to `--target-dir`; use
-`--only cpu,memory` to skip disk entirely.
+A single `run` writes on the order of a few GiB to `--target-dir` for the disk
+benchmark; use `--only cpu,memory,network` to skip it.
 
 ## Result files
 

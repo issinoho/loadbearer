@@ -46,5 +46,6 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
+        Command::NetServer(args) => benches::net_serve(&args.bind),
     }
 }

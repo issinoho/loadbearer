@@ -38,6 +38,15 @@ pub enum Command {
     Compare(CompareArgs),
     /// Print the built-in baseline, or generate one by averaging result files.
     Baseline(BaselineArgs),
+    /// Run the server side of the `--net-target` link test until stopped.
+    NetServer(NetServerArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct NetServerArgs {
+    /// Address to listen on for both TCP and UDP.
+    #[arg(long, default_value = "0.0.0.0:47913", value_name = "ADDR")]
+    pub bind: String,
 }
 
 #[derive(Args, Debug)]
@@ -76,6 +85,11 @@ pub struct RunArgs {
     /// Seed for reproducible workload generation.
     #[arg(long, value_name = "N")]
     pub seed: Option<u64>,
+
+    /// After the graded run, probe a real link to a `loadbearer net-server` at
+    /// this `host:port`. Reported separately and not graded.
+    #[arg(long, value_name = "HOST:PORT")]
+    pub net_target: Option<String>,
 
     /// Write the result JSON to a file.
     #[arg(long, value_name = "FILE")]

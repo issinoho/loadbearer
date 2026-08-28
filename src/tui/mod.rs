@@ -144,7 +144,7 @@ fn spawn_worker(init: RunInit, tx: Sender<Msg>) -> JoinHandle<()> {
 
         match score_run(&outcomes, &baseline, profile, curve_k) {
             Ok(scored) => {
-                let result = ResultFile::assemble(machine, config, outcomes, scored);
+                let result = ResultFile::assemble(machine, config, outcomes, scored, None);
                 let _ = tx.send(Msg::Done(Box::new(result)));
             }
             Err(err) => {

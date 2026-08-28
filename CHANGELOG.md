@@ -2,6 +2,23 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 0.2.0 - Thu, 28 Aug 2026
+
+- **Network is now a first-class graded component.** Four loopback subtests over
+  `127.0.0.1` measuring the machine's network *stack*, not any physical link:
+  single-stream and all-core TCP throughput, TCP request/response round-trip
+  latency, and UDP small-packet send rate. No packets leave the machine; it
+  needs no network access and no target.
+- `loadbearer run --net-target HOST:PORT` optionally probes a real link (TCP
+  upload, round-trip, UDP send rate) to a `loadbearer net-server` running on
+  another machine. Reported in its own block and in the result JSON's `link`
+  field — it measures the path, not either host, so it is deliberately **not
+  graded**.
+- `loadbearer net-server [--bind ADDR]` runs the server side of that link test.
+- Scoring profiles gained a `network` weight: `server` now favours it (1.4),
+  `content-creation` de-emphasises it (0.5).
+- `reference-v1` baseline gained `[components.network]` anchors.
+
 ## 0.1.0 - Thu, 28 Aug 2026
 
 First release.

@@ -32,3 +32,10 @@ seq_write  = 1500.0      # MiB/s   (with fsync)
 seq_read   = 3000.0      # MiB/s
 rand_read  = 15000.0     # IOPS    (QD1, 4 KiB)
 rand_write = 40000.0     # IOPS    (QD1, 4 KiB)
+
+[components.network]
+# Loopback (127.0.0.1) network-stack figures, not a physical link.
+tcp_stream   = 7.0       # GiB/s   (single stream)
+tcp_parallel = 20.0      # GiB/s   (all logical CPUs)
+tcp_rtt      = 14.0      # us      (lower is better)
+udp_pps      = 450.0     # Kpps    (successful sends/sec)
