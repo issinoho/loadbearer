@@ -18,7 +18,7 @@ Primarily built for and released on **Windows** (a self-contained `.exe`, no
 runtime to install — see [Install](#install)); Linux is supported as a
 first-class runtime target and is what most development happens on.
 
-**Website:** <https://issinoho.github.io/loadbearer/> — the short version, with
+**Website:** <https://loadbearer.issinoho.com/> — the short version, with
 screenshots.
 
 This README covers install, usage and the scoring model at a working level. For

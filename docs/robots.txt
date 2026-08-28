@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://issinoho.github.io/loadbearer/sitemap.xml
+Sitemap: https://loadbearer.issinoho.com/sitemap.xml
