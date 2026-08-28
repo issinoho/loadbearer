@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>loadbearer — grade any machine, and know which one is faster</title>
-<meta name="description" content="loadbearer is a single-binary command-line tool that benchmarks a machine's CPU, memory, disk and network stack, scores every measurement against a shared reference baseline, and grades each component — and the whole machine — on an S-to-F scale. Its compare mode reads two result files and tells you which machine wins, by how much, and why. No GUI, no network calls, no runtime. Windows and Linux.">
+<meta name="description" content="loadbearer is a single-binary command-line tool that benchmarks a machine's CPU, memory, disk and network stack, scores every measurement against a shared reference baseline, and grades each component — and the whole machine — on an S-to-F scale. Its compare mode reads two result files and tells you which machine wins, by how much, and why; a sustained-load test shows how much speed a machine keeps once it throttles. No GUI, no network calls, no runtime. Windows and Linux.">
 
 <link rel="canonical" href="https://loadbearer.issinoho.com/">
 <link rel="icon" type="image/svg+xml" href="assets/logo-mark.svg">
 
 <meta property="og:type" content="website">
 <meta property="og:title" content="loadbearer — grade any machine, and know which one is faster">
-<meta property="og:description" content="Benchmarks CPU, memory, disk and network, scores every metric against a shared baseline, and grades the machine on an S-to-F scale. compare mode: which of two machines wins, by how much, and why. Single binary, no network calls, Windows + Linux.">
+<meta property="og:description" content="Benchmarks CPU, memory, disk and network, scores every metric against a shared baseline, and grades the machine on an S-to-F scale. compare mode: which of two machines wins, by how much, and why. Plus a sustained-load throttle test. Single binary, no network calls, Windows + Linux.">
 <meta property="og:url" content="https://loadbearer.issinoho.com/">
 <meta property="og:image" content="https://loadbearer.issinoho.com/assets/og-image.svg">
 <meta property="og:image:type" content="image/svg+xml">
@@ -63,7 +63,9 @@
         network stack, scores every measurement against a shared reference
         baseline, and grades each component — and the whole machine — on an
         S&#8209;to&#8209;F scale. Point it at two laptops and it tells you which
-        one wins, by how much, and what's holding the other back.
+        one wins, by how much, and what's holding the other back. A
+        sustained&#8209;load test shows how much speed each one keeps once it
+        heats up.
       </p>
       <div class="hero-ctas">
         <a class="btn btn-primary" data-dl="windows" id="dl-hero" href="https://github.com/issinoho/loadbearer/releases/latest">Download for Windows</a>
@@ -78,7 +80,7 @@
 
     <div class="term term-hero">
       <div class="term-bar"><i></i><i></i><i></i><em>loadbearer run</em></div>
-<pre>loadbearer 0.3.0 — assessment
+<pre>loadbearer 0.6.1 — assessment
 
   Machine   ThinkPad-X280 · i5-8350U · 8 threads · 7.0 GiB RAM
   Profile   general · curve k=0.5 · baseline reference-v1
@@ -128,9 +130,9 @@
         <p>CPU, memory, disk and network each get a score against the baseline
         (1000 = a mid-range 2021 laptop) and a letter grade. A profile-weighted
         geometric mean of CPU, memory and disk becomes one <b>overall grade</b>,
-        with a plain-language note on what moved it. Network is shown alongside —
-        it's more about your OS than your hardware — so it doesn't skew the
-        grade.</p>
+        with a plain-language note on what moved it. Network and the
+        sustained-load test are shown alongside — more about your OS and cooling
+        than your silicon — so they don't skew the grade.</p>
       </article>
 
       <article class="card">
@@ -140,8 +142,9 @@
         <h3>Head-to-head, in one sentence</h3>
         <p><code>loadbearer compare a.json b.json</code> reads the raw metrics
         from two runs and says: <em>"dev-desktop leads by 68% overall (ahead on
-        cpu +90%, memory +55%, network +60%)."</em> Baseline-independent, so it
-        holds even across tool versions.</p>
+        cpu +90%, memory +55%)."</em> Baseline-independent, so it holds even
+        across tool versions — and <code>loadbearer score</code> re-grades an old
+        run against a new baseline without re-running it.</p>
       </article>
 
       <article class="card">
@@ -174,14 +177,15 @@
     <div class="section-head">
       <span class="eyebrow">See it</span>
       <h2>The whole thing is a terminal</h2>
-      <p>An interactive run shows a live TUI; piped or scripted, it's plain text
-      or JSON. Here's the plain output.</p>
+      <p>An interactive <code>run</code> shows a live TUI, and <code>compare</code>
+      opens a scrollable coloured view; piped or scripted, both fall back to
+      plain text or JSON. Here's the plain output.</p>
     </div>
 
     <div class="gallery">
       <figure class="term">
-        <figcaption class="term-bar"><i></i><i></i><i></i><em>loadbearer compare x280.json desktop.json</em></figcaption>
-<pre>loadbearer 0.2.1 — compare (2 machines)
+        <figcaption class="term-bar"><i></i><i></i><i></i><em>loadbearer compare x280.json desktop.json --plain</em></figcaption>
+<pre>loadbearer 0.6.1 — compare (2 machines)
 
   A  ThinkPad-X280   Intel(R) Core(TM) i5-8350U
   B  dev-desktop     AMD Ryzen 9 7900X
@@ -208,7 +212,7 @@
       <div class="gallery-col">
         <figure class="term">
           <figcaption class="term-bar"><i></i><i></i><i></i><em>loadbearer info</em></figcaption>
-<pre>loadbearer 0.2.1 — machine inventory
+<pre>loadbearer 0.6.1 — machine inventory
 
 Host
   Hostname        ThinkPad-X280
@@ -243,6 +247,18 @@ Disks
   <span class="acc">████████░░░░░░░░░░░░░░░</span> 38% · elapsed 0:41 · eta 1:06
   q  quit</pre>
         </figure>
+
+        <figure class="term">
+          <figcaption class="term-bar"><i></i><i></i><i></i><em>loadbearer soak</em></figcaption>
+<pre>  SOAK      90s · 8 threads · not graded
+    Peak               19140 Mops/s   (2–5s)
+    Steady             17620 Mops/s   (68–90s)   <b class="g-b">92.1% retained</b>
+    Throttle     onset ~14s (drop below 95% of peak)
+    Stability    steady-window CV 1.6%
+    Clock        3.60 GHz peak <span class="dim">→</span> 3.28 GHz steady
+    Trace        <span class="acc">██▇█████▇▇▇▆▆▅▅▄▄▄▄▄▄</span>  (≈1s/mark)
+    <span class="dim">→ throttles from ~14s; settles at 92% of peak</span></pre>
+        </figure>
       </div>
     </div>
   </div>
@@ -252,21 +268,25 @@ Disks
   <div class="container">
     <div class="section-head">
       <span class="eyebrow">Examples</span>
-      <h2>Six things you'd actually type</h2>
+      <h2>A few things you'd actually type</h2>
     </div>
     <div class="term term-wide">
       <div class="term-bar"><i></i><i></i><i></i><em>bash</em></div>
-<pre><span class="p">$</span> loadbearer run                        <span class="c"># grade this machine (TUI)</span>
-<span class="p">$</span> loadbearer run --output me.json       <span class="c"># ...and save the result</span>
-<span class="p">$</span> loadbearer compare me.json them.json  <span class="c"># which machine wins, and why</span>
-<span class="p">$</span> loadbearer run --json | jq .overall   <span class="c"># for scripts and CI gates</span>
-<span class="p">$</span> loadbearer run --only cpu,memory      <span class="c"># skip the disk write</span>
+<pre><span class="p">$</span> loadbearer run                         <span class="c"># grade this machine (TUI)</span>
+<span class="p">$</span> loadbearer run --output me.json        <span class="c"># ...and save the result</span>
+<span class="p">$</span> loadbearer compare me.json them.json   <span class="c"># which machine wins, and why</span>
+<span class="p">$</span> loadbearer soak                        <span class="c"># does it throttle under a long load?</span>
+<span class="p">$</span> loadbearer score me.json --baseline ref.toml  <span class="c"># re-grade, no re-run</span>
+<span class="p">$</span> loadbearer run --json | jq .overall    <span class="c"># for scripts and CI gates</span>
+<span class="p">$</span> loadbearer run --only cpu,memory       <span class="c"># skip the disk write</span>
 <span class="p">$</span> loadbearer baseline runs/*.json &gt; ref.toml  <span class="c"># recalibrate to your fleet</span></pre>
     </div>
     <p class="muted-note">
       Profiles (<code>--profile dev-workstation</code>, <code>content-creation</code>,
-      <code>server</code>) reweight the components for a workload. A real link test
-      between two machines: <code>loadbearer net-server</code> on one,
+      <code>server</code>) reweight the components for a workload.
+      <code>loadbearer run --soak</code> folds the sustained-load test into a full
+      assessment. A real link test between two machines:
+      <code>loadbearer net-server</code> on one,
       <code>loadbearer run --net-target HOST:PORT</code> on the other.
     </p>
   </div>

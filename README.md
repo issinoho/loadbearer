@@ -8,6 +8,10 @@ embedded reference baseline, and grades each component — and the machine as a
 whole — on an S-to-F scale. Run the same build on two laptops and it will tell
 you which one is stronger, by how much, and *why*.
 
+It also runs a **sustained-load test** that shows how much speed a machine keeps
+once it heats up, and can **re-grade** a saved result against a different
+baseline without re-running anything.
+
 There is no GUI. Everything is driven by switches or a config file. In an
 interactive terminal `loadbearer run` shows a TUI — live per-subtest progress, a
 running overall gauge with an ETA, then a scrollable graded results screen — and
@@ -30,7 +34,7 @@ through, `compare` internals, and how to recalibrate the baseline — see the
 ## What a run looks like
 
 ```
-loadbearer 0.4.0 — assessment
+loadbearer 0.6.1 — assessment
 
   Machine   ThinkPad-X280 · Intel(R) Core(TM) i5-8350U CPU @ 1.70GHz · 8 threads · 7.0 GiB RAM
   Profile   general · curve k=0.5 · baseline reference-v1 · short preset
@@ -357,6 +361,12 @@ loopback packets can add tens of microseconds per syscall — which has nothing 
 do with the hardware. `compare` warns when two result files are from different
 operating systems for the same reason.
 
+**The `--net-target` link probe and the `--soak` sustained-load test are not
+scored at all** — the link probe measures the path between two hosts, and the
+soak test reports throughput *retention* (a property, not a speed). Both are
+shown in their own block, stored in the result JSON, and used by `compare` in a
+separate block, but neither touches a grade.
+
 **Grades.** `S ≥ 1400`, `A ≥ 1150`, `B ≥ 850`, `C ≥ 600`, `D ≥ 400`, else `F` —
 centred so the baseline (1000) lands in the middle of B.
 
@@ -382,6 +392,7 @@ flag among their subtests, and low-confidence components are called out in the
 | **Memory** | Sequential read, write and copy bandwidth over a working set sized past any last-level cache (256 MiB at `normal`), plus an **all-core** read that sums the read kernel across every logical CPU; random-access latency via a single-cycle pointer chase (Sattolo) that defeats the prefetcher. Single-threaded except the all-core read. |
 | **Disk** | Sequential write (each pass ends with `fsync`, so it's durable-write throughput) and read; random 4 KiB read and write IOPS at queue depth 1. Reads and random I/O use unbuffered I/O — `O_DIRECT` on Linux, `FILE_FLAG_NO_BUFFERING` on Windows — to bypass the page cache, with a buffered fallback (and a recorded note) where the filesystem refuses it. The scratch file (1 GiB at `normal`) is filled with random data to defeat filesystem compression, reused by every subtest, and deleted when the run ends. |
 | **Network** | Loopback (`127.0.0.1`) only — this measures the machine's network *stack* (syscall, TCP processing, scheduler wakeup latency), **not** a physical link, and makes no network calls. Single-stream and all-core TCP throughput, TCP request/response round-trip latency, and UDP small-packet send rate. **Scored and shown, but not in the overall grade** (see [Scoring model](#scoring-model)). For a real link test between two machines, run `loadbearer net-server` on one and `loadbearer run --net-target` on the other (reported separately, also not graded). |
+| **Sustained load** *(opt-in: `soak` / `run --soak`)* | Holds every logical CPU under a blended integer + floating-point kernel for a fixed stretch (default 90 s), sampling aggregate throughput and CPU clock once a second. Reports the unthrottled peak, the steady-state rate, the percentage retained, when throttling set in, and steady-window stability. **Not scored** — it's a measure of how well a machine holds up under a long workload once it heats up, not of raw speed. |
 
 A single `run` writes on the order of a few GiB to `--target-dir` for the disk
 benchmark; use `--only cpu,memory,network` to skip it.
