@@ -18,6 +18,11 @@ Primarily built for and released on **Windows** (a self-contained `.exe`, no
 runtime to install — see [Install](#install)); Linux is supported as a
 first-class runtime target and is what most development happens on.
 
+This README covers install, usage and the scoring model at a working level. For
+the deep dive — exactly what each benchmark kernel does, the scoring maths worked
+through, `compare` internals, and how to recalibrate the baseline — see the
+**[wiki](https://github.com/issinoho/loadbearer/wiki)**.
+
 ## What a run looks like
 
 ```
