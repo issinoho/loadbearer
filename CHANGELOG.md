@@ -2,6 +2,14 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 0.6.2 - Thu, 28 Aug 2026
+
+- The `compare` TUI now sizes its label column from the terminal width
+  (bounded 22–48) instead of a fixed 30, so subtest names like
+  `Sequential read, all cores (GiB/s)` stop losing their unit to
+  truncation on a wide terminal. The reference column also highlights
+  green on rows it wins, matching the other columns.
+
 ## 0.6.1 - Thu, 28 Aug 2026
 
 - **`loadbearer compare` now has a TUI.** In an interactive terminal it opens a

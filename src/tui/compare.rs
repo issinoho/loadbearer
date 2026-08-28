@@ -17,17 +17,17 @@ use crate::compare::Comparison;
 
 const ACCENT: Color = Color::Cyan;
 const DIM: Color = Color::DarkGray;
-const NAME_W: usize = 30;
 const COL_W: usize = 15;
+/// Label-column width bounds; the actual width is picked from the terminal.
+const NAME_MIN: usize = 22;
+const NAME_MAX: usize = 48;
 
 /// Show the comparison in an alternate screen until the user quits.
 pub fn run(c: &Comparison) -> Result<()> {
-    let lines = build_lines(c);
-
     let mut terminal = ratatui::init();
     let mut scroll: u16 = 0;
     let outcome = loop {
-        if let Err(e) = terminal.draw(|f| draw(f, &lines, &mut scroll)) {
+        if let Err(e) = terminal.draw(|f| draw(f, c, &mut scroll)) {
             break Err(e.into());
         }
         match event::poll(Duration::from_millis(200)) {
@@ -59,7 +59,7 @@ pub fn run(c: &Comparison) -> Result<()> {
     outcome
 }
 
-fn draw(f: &mut Frame, lines: &[Line<'static>], scroll: &mut u16) {
+fn draw(f: &mut Frame, c: &Comparison, scroll: &mut u16) {
     let area = f.area();
     if area.width < 40 || area.height < 8 {
         f.render_widget(
@@ -78,11 +78,19 @@ fn draw(f: &mut Frame, lines: &[Line<'static>], scroll: &mut u16) {
 
     let rows = Layout::vertical([Constraint::Min(3), Constraint::Length(1)]).split(inner);
 
+    // Give the label column whatever width is left after the value columns and
+    // the winner tag, within bounds.
+    let n = c.machines.len();
+    let name_w = (inner.width as usize)
+        .saturating_sub(2 + n * (COL_W + 1) + 4)
+        .clamp(NAME_MIN, NAME_MAX);
+    let lines = build_lines(c, name_w);
+
     let viewport = rows[0].height as usize;
     let max_scroll = lines.len().saturating_sub(viewport) as u16;
     *scroll = (*scroll).min(max_scroll);
 
-    f.render_widget(Paragraph::new(lines.to_vec()).scroll((*scroll, 0)), rows[0]);
+    f.render_widget(Paragraph::new(lines).scroll((*scroll, 0)), rows[0]);
 
     let hint = if max_scroll > 0 {
         format!("↑/↓ scroll · {}/{} · q exit", *scroll, max_scroll)
@@ -97,7 +105,7 @@ fn draw(f: &mut Frame, lines: &[Line<'static>], scroll: &mut u16) {
 
 // --- line building --------------------------------------------------------
 
-fn build_lines(c: &Comparison) -> Vec<Line<'static>> {
+fn build_lines(c: &Comparison, name_w: usize) -> Vec<Line<'static>> {
     let mut out: Vec<Line<'static>> = Vec::new();
     let n = c.machines.len();
 
@@ -137,7 +145,7 @@ fn build_lines(c: &Comparison) -> Vec<Line<'static>> {
     }
 
     out.push(Line::raw(""));
-    let mut hdr = vec![Span::raw(format!("  {:<NAME_W$}", "metric"))];
+    let mut hdr = vec![Span::raw(format!("  {:<name_w$}", "metric"))];
     for m in &c.machines {
         hdr.push(Span::styled(
             format!(
@@ -163,6 +171,7 @@ fn build_lines(c: &Comparison) -> Vec<Line<'static>> {
                 &st.rel,
                 st.best,
                 false,
+                name_w,
             ));
         }
         out.push(metric_row(
@@ -172,6 +181,7 @@ fn build_lines(c: &Comparison) -> Vec<Line<'static>> {
             &comp.rel,
             comp.best,
             true,
+            name_w,
         ));
     }
 
@@ -183,6 +193,7 @@ fn build_lines(c: &Comparison) -> Vec<Line<'static>> {
         &c.overall.rel,
         c.overall.ranking[0],
         true,
+        name_w,
     ));
 
     if let Some(sk) = &c.soak {
@@ -198,9 +209,10 @@ fn build_lines(c: &Comparison) -> Vec<Line<'static>> {
             &sk.rel_steady,
             sk.best_sustained,
             false,
+            name_w,
         ));
         let mut row = vec![Span::raw(format!(
-            "  {:<NAME_W$}",
+            "  {:<name_w$}",
             "  retained vs own peak"
         ))];
         for (i, v) in sk.retained_pct.iter().enumerate() {
@@ -234,6 +246,7 @@ fn build_lines(c: &Comparison) -> Vec<Line<'static>> {
 
 /// One metric row: a label, one cell per machine (value + delta, or just the
 /// delta for aggregate rows where `values` is all-NaN), and a winner tag.
+#[allow(clippy::too_many_arguments)]
 fn metric_row(
     c: &Comparison,
     label: &str,
@@ -241,8 +254,9 @@ fn metric_row(
     rel: &[f64],
     best: usize,
     aggregate: bool,
+    name_w: usize,
 ) -> Line<'static> {
-    let mut spans = vec![Span::raw(format!("  {:<NAME_W$}", truncate(label, NAME_W)))];
+    let mut spans = vec![Span::raw(format!("  {:<name_w$}", truncate(label, name_w)))];
     for (i, r) in rel.iter().enumerate() {
         let cell = if i == 0 {
             if aggregate {
@@ -258,11 +272,15 @@ fn metric_row(
                 format!("{} {pct:+.0}%", fmt_val(values[i]))
             }
         };
-        let style = match () {
-            _ if i == 0 => Style::default().fg(DIM),
-            _ if i == best && rel.len() > 1 => Style::default().fg(Color::Green),
-            _ if *r < 0.98 => Style::default().fg(Color::Red),
-            _ => Style::default(),
+        let winner = rel.len() > 1 && i == best;
+        let style = if winner {
+            Style::default().fg(Color::Green)
+        } else if i == 0 {
+            Style::default().fg(DIM)
+        } else if *r < 0.98 {
+            Style::default().fg(Color::Red)
+        } else {
+            Style::default()
         };
         spans.push(Span::styled(format!(" {cell:>COL_W$}"), style));
     }
@@ -375,7 +393,7 @@ mod tests {
 
     #[test]
     fn build_lines_covers_every_section() {
-        let lines = build_lines(&two_machine_comparison(true));
+        let lines = build_lines(&two_machine_comparison(true), 30);
         let joined = lines.iter().map(text).collect::<Vec<_>>().join("\n");
 
         assert!(joined.contains("2 machines"));
@@ -392,7 +410,7 @@ mod tests {
 
     #[test]
     fn winner_and_reference_cells_render() {
-        let lines = build_lines(&two_machine_comparison(false));
+        let lines = build_lines(&two_machine_comparison(false), 30);
         let joined = lines.iter().map(text).collect::<Vec<_>>().join("\n");
         // Machine A is the reference; the delta column shows the winner tag B.
         let overall = lines
@@ -410,6 +428,6 @@ mod tests {
     fn no_panic_with_the_minimum_two_machines_and_no_warnings_or_soak() {
         let mut c = two_machine_comparison(false);
         c.warnings.clear();
-        let _ = build_lines(&c);
+        let _ = build_lines(&c, 30);
     }
 }
