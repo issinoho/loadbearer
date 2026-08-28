@@ -1,0 +1,104 @@
+name: Bug report
+description: Something isn't working the way it should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. The more of the fields
+        below you can fill in, the faster it is to track down.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Exact command
+      description: The full command line you ran.
+      placeholder: loadbearer run --duration thorough --target-dir D:\lb-scratch
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: loadbearer --version
+      description: Paste its output. It includes the git commit, target and profile.
+      placeholder: loadbearer 0.3.1 (abc123def 2026-08-28, x86_64-pc-windows-msvc, release)
+    validations:
+      required: true
+
+  - type: textarea
+    id: info
+    attributes:
+      label: loadbearer info
+      description: >
+        Paste the output. This identifies the CPU, RAM and disks, which is
+        usually what a benchmark bug hinges on.
+      render: text
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      options:
+        - Release binary — Windows (.zip)
+        - Release binary — Linux (.tar.gz)
+        - cargo install --git
+        - Built from a source checkout
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part?
+      options:
+        - CPU benchmark
+        - Memory benchmark
+        - Disk benchmark
+        - Network benchmark
+        - Scoring / grades
+        - compare
+        - baseline
+        - The TUI (interactive run screen)
+        - info / list
+        - Config file (--config)
+        - Something else / unsure
+    validations:
+      required: true
+
+  - type: input
+    id: fs
+    attributes:
+      label: Filesystem of --target-dir (disk bugs only)
+      description: e.g. NTFS, ReFS, ext4, xfs, btrfs, APFS, tmpfs
+      placeholder: NTFS
+
+  - type: dropdown
+    id: managed
+    attributes:
+      label: Is this a corporate / EDR-managed machine?
+      description: >
+        Endpoint-security agents (CrowdStrike, SentinelOne, Defender for
+        Endpoint, …) heavily affect the network numbers and add variance —
+        knowing this up front saves a round trip.
+      options:
+        - "No / not that I know of"
+        - "Yes"
+        - "Unsure"
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else?
+      description: A screenshot of the TUI, the full `--plain` output with its confidence flags, anything else relevant.

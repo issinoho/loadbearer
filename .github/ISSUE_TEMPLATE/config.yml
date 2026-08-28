@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: How does X work? / methodology questions
+    url: https://github.com/issinoho/loadbearer/wiki
+    about: The wiki covers every benchmark kernel, the scoring maths, and compare internals in depth. Still unclear? Open a blank issue.
+  - name: Security vulnerability
+    url: https://github.com/issinoho/loadbearer/security/policy
+    about: Please don't file a public issue for a security report — see the security policy.

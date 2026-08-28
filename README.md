@@ -372,6 +372,14 @@ CI runs all three on Linux and Windows for every push and pull request. Tagged
 `v*` pushes build release binaries for both and attach them to a GitHub Release
 (see [`.github/workflows`](.github/workflows)).
 
+## Contributing
+
+Bug reports, small fixes and well-scoped features are welcome — see
+[CONTRIBUTING.md](CONTRIBUTING.md) for the project layout, the checks CI
+enforces, and how to add a benchmark. All participants follow the
+[Code of Conduct](CODE_OF_CONDUCT.md). Security reports go through
+[SECURITY.md](SECURITY.md), not the public tracker.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

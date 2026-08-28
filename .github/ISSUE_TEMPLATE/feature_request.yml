@@ -1,0 +1,49 @@
+name: Feature request
+description: Suggest something loadbearer doesn't do yet
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: What are you trying to learn about a machine that loadbearer can't currently tell you, or can only tell you awkwardly?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: What would this look like — a new subtest, a new flag, a different way of reporting something that exists?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part is this about?
+      multiple: true
+      options:
+        - CPU benchmark
+        - Memory benchmark
+        - Disk benchmark
+        - Network benchmark
+        - A new component (GPU, thermals, …)
+        - Scoring / grades / profiles
+        - compare
+        - baseline / calibration
+        - The TUI
+        - Output formats (JSON, report export, …)
+        - Platform support (macOS, ARM, …)
+        - Not specific to one part
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any workaround you're using today, or another approach you thought about.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else?
