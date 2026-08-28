@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b0f14"/>
+      <stop offset="1" stop-color="#111a24"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="6" fill="#22d3ee"/>
+
+  <!-- logo mark -->
+  <g transform="translate(96,220) scale(0.72)">
+    <rect width="256" height="256" rx="56" fill="#0f1720" stroke="#232c38" stroke-width="2"/>
+    <rect x="40" y="60" width="176" height="22" rx="10" fill="#22d3ee"/>
+    <rect x="58"  y="86" width="30" height="118" rx="7" fill="#22d3ee"/>
+    <rect x="113" y="86" width="30" height="118" rx="7" fill="#22d3ee" opacity="0.78"/>
+    <rect x="168" y="86" width="30" height="118" rx="7" fill="#22d3ee" opacity="0.55"/>
+    <rect x="40" y="204" width="176" height="18" rx="9" fill="#22d3ee"/>
+  </g>
+
+  <text x="330" y="250" font-family="Inter, 'Segoe UI', sans-serif" font-size="104" font-weight="800" fill="#e8ecf1">loadbearer</text>
+  <text x="332" y="330" font-family="Inter, 'Segoe UI', sans-serif" font-size="40" font-weight="500" fill="#9aa7b4">Benchmark CPU, memory, disk &amp; network.</text>
+  <text x="332" y="386" font-family="Inter, 'Segoe UI', sans-serif" font-size="40" font-weight="500" fill="#9aa7b4">Grade any machine — and know which one is faster.</text>
+
+  <g font-family="'JetBrains Mono', ui-monospace, monospace" font-size="30">
+    <text x="332" y="470" fill="#6b7887">$</text>
+    <text x="366" y="470" fill="#e8ecf1">loadbearer run</text>
+    <text x="332" y="516" fill="#9aa7b4">OVERALL   784  </text>
+    <text x="596" y="516" fill="#22d3ee" font-weight="700">[B]</text>
+  </g>
+</svg>

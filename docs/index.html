@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>loadbearer — grade any machine, and know which one is faster</title>
+<meta name="description" content="loadbearer is a single-binary command-line tool that benchmarks a machine's CPU, memory, disk and network stack, scores every measurement against a shared reference baseline, and grades each component — and the whole machine — on an S-to-F scale. Its compare mode reads two result files and tells you which machine wins, by how much, and why. No GUI, no network calls, no runtime. Windows and Linux.">
+
+<link rel="canonical" href="https://issinoho.github.io/loadbearer/">
+<link rel="icon" type="image/svg+xml" href="assets/logo-mark.svg">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="loadbearer — grade any machine, and know which one is faster">
+<meta property="og:description" content="Benchmarks CPU, memory, disk and network, scores every metric against a shared baseline, and grades the machine on an S-to-F scale. compare mode: which of two machines wins, by how much, and why. Single binary, no network calls, Windows + Linux.">
+<meta property="og:url" content="https://issinoho.github.io/loadbearer/">
+<meta property="og:image" content="https://issinoho.github.io/loadbearer/assets/og-image.svg">
+<meta property="og:image:type" content="image/svg+xml">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="preload" href="assets/fonts/Inter-Variable.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="styles.css">
+<style>
+@font-face {
+  font-family: "Inter";
+  src: url("assets/fonts/Inter-Variable.woff2") format("woff2-variations");
+  font-weight: 100 900; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("assets/fonts/JetBrainsMono-Variable.woff2") format("woff2-variations");
+  font-weight: 100 900; font-style: normal; font-display: swap;
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="container">
+    <a class="brand" href="#top">
+      <img src="assets/logo-mark.svg" alt="" width="30" height="30">
+      loadbearer
+    </a>
+    <div class="nav-links">
+      <a href="#what">What it does</a>
+      <a href="#see">See it</a>
+      <a href="#examples">Examples</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/issinoho/loadbearer">GitHub</a>
+    </div>
+    <a class="nav-cta" data-dl="windows" href="https://github.com/issinoho/loadbearer/releases/latest">Download</a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="container hero-grid">
+    <div>
+      <span class="eyebrow">Free &amp; open source · MIT · Windows + Linux</span>
+      <h1>Know which machine is faster&nbsp;— <span>and why</span>.</h1>
+      <p class="lead">
+        <strong>loadbearer</strong> benchmarks a machine's CPU, memory, disk and
+        network stack, scores every measurement against a shared reference
+        baseline, and grades each component — and the whole machine — on an
+        S&#8209;to&#8209;F scale. Point it at two laptops and it tells you which
+        one wins, by how much, and what's holding the other back.
+      </p>
+      <div class="hero-ctas">
+        <a class="btn btn-primary" data-dl="windows" id="dl-hero" href="https://github.com/issinoho/loadbearer/releases/latest">Download for Windows</a>
+        <a class="btn btn-ghost" data-dl="linux" href="https://github.com/issinoho/loadbearer/releases/latest">Linux tarball</a>
+        <a class="btn btn-ghost" href="https://github.com/issinoho/loadbearer">View on GitHub</a>
+      </div>
+      <p class="hero-meta">
+        Latest release <span class="mono rel-tag">—</span> ·
+        one self-contained binary · no runtime, no network access
+      </p>
+    </div>
+
+    <div class="term term-hero">
+      <div class="term-bar"><i></i><i></i><i></i><em>loadbearer run</em></div>
+<pre>loadbearer 0.2.1 — assessment
+
+  Machine   ThinkPad-X280 · i5-8350U · 8 threads · 7.0 GiB RAM
+  Profile   general · curve k=0.5 · baseline reference-v1
+
+  CPU       <b class="g-b">921  [B]</b>  <span class="bar">███████████████░░░░░░░░</span>
+    Integer, all cores     36932.6 Mops/s   0.82x   906  high
+    Float, all cores       55029.9 MFLOP/s  0.79x   887  high
+    BLAKE3 hash             3602.4 MiB/s    0.86x   926  high
+
+  MEMORY    <b class="g-c">759  [C]</b>  <span class="bar">████████████░░░░░░░░░░░░</span>
+    Sequential read           13.9 GiB/s    0.63x   796  medium
+    Random access latency    116.3 ns       0.82x   904  high
+
+  DISK      <b class="g-d">514  [D]</b>  <span class="bar">████████░░░░░░░░░░░░░░░░</span>
+    Sequential read          407.3 MiB/s    0.14x   368  high
+    Random 4K write         9996.1 IOPS     0.25x   500  low
+
+  NETWORK   <b class="g-c">727  [C]</b>  <span class="bar">████████████░░░░░░░░░░░░</span>
+    TCP round-trip latency    19.7 us       0.71x   844  medium
+    UDP send rate            252.0 Kpps     0.56x   748  high
+
+  <b>OVERALL   <span class="g-c">715  [C]</span></b>  <span class="bar">███████████░░░░░░░░░░░░░</span>
+
+  Why:
+    - held back by Disk (score 514)
+    - held back by Network (score 727)
+    - low measurement confidence in: Memory, Disk</pre>
+    </div>
+  </div>
+</header>
+
+<section id="what">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">What it does</span>
+      <h2>A benchmark that answers a question, not just prints numbers</h2>
+      <p>Raw MiB/s and Mops/s don't tell you whether laptop A beats laptop B.
+      loadbearer turns them into a grade, a verdict, and a reason.</p>
+    </div>
+
+    <div class="cards">
+      <article class="card">
+        <div class="card-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16M6 19V9m4 10V5m4 14v-7m4 7V8"/></svg>
+        </div>
+        <h3>One graded answer per machine</h3>
+        <p>CPU, memory, disk and network each get a score against the baseline
+        (1000 = a mid-range 2021 laptop) and a letter grade. A profile-weighted
+        geometric mean rolls them into one <b>overall grade</b>, with a
+        plain-language note on what moved it.</p>
+      </article>
+
+      <article class="card">
+        <div class="card-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7H4v10h4M16 7h4v10h-4M8 12h8M8 12l2-2M16 12l-2 2"/></svg>
+        </div>
+        <h3>Head-to-head, in one sentence</h3>
+        <p><code>loadbearer compare a.json b.json</code> reads the raw metrics
+        from two runs and says: <em>"dev-desktop leads by 68% overall (ahead on
+        cpu +90%, memory +55%, network +60%)."</em> Baseline-independent, so it
+        holds even across tool versions.</p>
+      </article>
+
+      <article class="card">
+        <div class="card-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v4M15 3v4M4 8h16M6 8v11a2 2 0 002 2h8a2 2 0 002-2V8M9 13l2 2 4-4"/></svg>
+        </div>
+        <h3>A method you can check</h3>
+        <p>Fixed-time throughput measurement, medians with <b>confidence flags</b>
+        from run-to-run spread, geometric means throughout, and a documented
+        baseline you can regenerate from your own hardware. No hidden weighting —
+        it's a few constants in the source.</p>
+      </article>
+
+      <article class="card">
+        <div class="card-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg>
+        </div>
+        <h3>Honest and self-contained</h3>
+        <p>One static binary, no runtime. No network calls — the network test is
+        loopback only. Disk reads bypass the OS page cache
+        (<code>O_DIRECT</code> / <code>FILE_FLAG_NO_BUFFERING</code>). Workloads
+        are reproducible with <code>--seed</code>.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="see" class="alt">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">See it</span>
+      <h2>The whole thing is a terminal</h2>
+      <p>An interactive run shows a live TUI; piped or scripted, it's plain text
+      or JSON. Here's the plain output.</p>
+    </div>
+
+    <div class="gallery">
+      <figure class="term">
+        <figcaption class="term-bar"><i></i><i></i><i></i><em>loadbearer compare x280.json desktop.json</em></figcaption>
+<pre>loadbearer 0.2.1 — compare (2 machines)
+
+  A  ThinkPad-X280   Intel(R) Core(TM) i5-8350U
+  B  dev-desktop     AMD Ryzen 9 7900X
+
+  metric                          A: ThinkPad-X2…  B: dev-desktop
+  CPU
+  Integer, all cores (Mops/s)             37305   70879 +90%  <b class="g-b">B</b>
+  BLAKE3 hash (MiB/s)                       3563    6769 +90%  <b class="g-b">B</b>
+    → component                              ref         +90%  <b class="g-b">B</b>
+  MEMORY
+  Sequential read (GiB/s)                   13.1    20.2 +55%  <b class="g-b">B</b>
+  Random access latency (ns)              136.7    88.2 +55%  <b class="g-b">B</b>
+    → component                              ref         +55%  <b class="g-b">B</b>
+  NETWORK
+  TCP round-trip latency (us)               19.8    12.4 +60%  <b class="g-b">B</b>
+    → component                              ref         +60%  <b class="g-b">B</b>
+
+  OVERALL                                    ref         +68%  <b class="g-b">B</b>
+
+  Verdict: dev-desktop leads by 68% overall
+           (ahead on cpu +90%, memory +55%, network +60%).</pre>
+      </figure>
+
+      <div class="gallery-col">
+        <figure class="term">
+          <figcaption class="term-bar"><i></i><i></i><i></i><em>loadbearer info</em></figcaption>
+<pre>loadbearer 0.2.1 — machine inventory
+
+Host
+  Hostname        ThinkPad-X280
+  OS              Linux (Ubuntu 26.04)
+  Architecture    x86_64
+
+CPU
+  Model           Intel(R) Core(TM) i5-8350U CPU @ 1.70GHz
+  Cores           4 physical / 8 logical
+
+Memory
+  RAM             7.0 GiB
+
+Disks
+  /               ext4   SSD   232.6 GiB total,  47.3 GiB free</pre>
+        </figure>
+
+        <figure class="term">
+          <figcaption class="term-bar"><i></i><i></i><i></i><em>loadbearer run &nbsp;·&nbsp; live</em></figcaption>
+<pre>loadbearer — running          <span class="dim">elapsed 0:41</span>
+
+  CPU
+    Integer, single-core   <span class="acc">██████████</span> done   9153 Mops/s <span class="g-b">✓</span>
+    Integer, all cores     <span class="acc">██████████</span> done  36932 Mops/s <span class="g-b">✓</span>
+    Float, single-core     <span class="acc">██████░░░░</span> 3/5    7101 MFLOP/s
+    Float, all cores       <span class="dim">░░░░░░░░░░</span>
+  Memory
+    Sequential read        <span class="dim">░░░░░░░░░░</span>
+  Disk
+    Sequential write       <span class="dim">░░░░░░░░░░</span>
+
+  <span class="acc">████████░░░░░░░░░░░░░░░</span> 38% · elapsed 0:41 · eta 1:06
+  q  quit</pre>
+        </figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="examples">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Examples</span>
+      <h2>Six things you'd actually type</h2>
+    </div>
+    <div class="term term-wide">
+      <div class="term-bar"><i></i><i></i><i></i><em>bash</em></div>
+<pre><span class="p">$</span> loadbearer run                        <span class="c"># grade this machine (TUI)</span>
+<span class="p">$</span> loadbearer run --output me.json       <span class="c"># ...and save the result</span>
+<span class="p">$</span> loadbearer compare me.json them.json  <span class="c"># which machine wins, and why</span>
+<span class="p">$</span> loadbearer run --json | jq .overall   <span class="c"># for scripts and CI gates</span>
+<span class="p">$</span> loadbearer run --only cpu,memory      <span class="c"># skip the disk write</span>
+<span class="p">$</span> loadbearer baseline runs/*.json &gt; ref.toml  <span class="c"># recalibrate to your fleet</span></pre>
+    </div>
+    <p class="muted-note">
+      Profiles (<code>--profile dev-workstation</code>, <code>content-creation</code>,
+      <code>server</code>) reweight the components for a workload. A real link test
+      between two machines: <code>loadbearer net-server</code> on one,
+      <code>loadbearer run --net-target HOST:PORT</code> on the other.
+    </p>
+  </div>
+</section>
+
+<section id="install" class="alt">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Install</span>
+      <h2>Download a binary, or build it</h2>
+      <p>Every tagged release ships a self-contained <code>loadbearer.exe</code>
+      for Windows and a Linux tarball, built from
+      <a href="https://github.com/issinoho/loadbearer">the same source</a> by CI.</p>
+    </div>
+
+    <div class="install-grid">
+      <div class="install-card">
+        <h3>🪟 Windows (x86-64)</h3>
+        <p>Unzip and run <code>loadbearer.exe</code> from a terminal. Unsigned,
+        so SmartScreen shows an "unrecognized app" warning the first time —
+        <em>More info → Run anyway</em>.</p>
+        <a class="btn btn-primary" data-dl="windows" href="https://github.com/issinoho/loadbearer/releases/latest">Download .zip</a>
+      </div>
+
+      <div class="install-card">
+        <h3>🐧 Linux (x86-64)</h3>
+        <p>Extract the tarball and run <code>./loadbearer</code>, or install from
+        source:</p>
+        <pre>cargo install --git https://github.com/issinoho/loadbearer --locked</pre>
+        <a class="btn btn-ghost" data-dl="linux" href="https://github.com/issinoho/loadbearer/releases/latest">Download .tar.gz</a>
+      </div>
+
+      <div class="install-card">
+        <h3>🛠️ From source</h3>
+        <p>Needs a recent stable Rust toolchain. For CPU kernels that use your
+        machine's widest vectors:</p>
+        <pre>RUSTFLAGS="-C target-cpu=native" \
+  cargo build --release</pre>
+        <a class="btn btn-ghost" href="https://github.com/issinoho/loadbearer#readme">Build guide</a>
+      </div>
+    </div>
+
+    <p class="install-note">
+      Full flag reference is in the
+      <a href="https://github.com/issinoho/loadbearer#readme">README</a>; the
+      <a href="https://github.com/issinoho/loadbearer/wiki">wiki</a> is the deep
+      dive — every benchmark kernel, the scoring maths worked through,
+      <code>compare</code> internals, and recalibrating the baseline.
+    </p>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <span>© 2026 Iain Smith · MIT licensed</span>
+    <div class="footer-links">
+      <a href="https://github.com/issinoho/loadbearer">GitHub</a>
+      <a href="https://github.com/issinoho/loadbearer/wiki">Wiki</a>
+      <a href="https://github.com/issinoho/loadbearer/releases">Releases</a>
+      <a href="https://github.com/issinoho/loadbearer/blob/main/LICENSE">License</a>
+    </div>
+  </div>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
