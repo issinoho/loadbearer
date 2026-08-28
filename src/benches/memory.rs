@@ -151,14 +151,14 @@ fn read_bandwidth(buf: &[u64], budget: Duration) -> f64 {
     let bytes_per_pass = (buf.len() * 8) as u64;
     let rate = throughput(budget, || {
         let mut acc = [0u64; 8];
-        let mut chunks = buf.chunks_exact(8);
-        for c in &mut chunks {
+        let (lanes, remainder) = buf.as_chunks::<8>();
+        for c in lanes {
             for i in 0..8 {
                 acc[i] = acc[i].wrapping_add(c[i]);
             }
         }
         let mut tail = 0u64;
-        for &x in chunks.remainder() {
+        for &x in remainder {
             tail = tail.wrapping_add(x);
         }
         black_box((acc, tail));
