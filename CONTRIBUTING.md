@@ -43,6 +43,64 @@ Match the style of the surrounding code — comment density, naming,
 idiom. Comments should explain *why*, especially for a platform quirk or
 a deliberate trade-off, not restate what the code already says.
 
+## Building, testing, releasing
+
+### Build
+
+```
+cargo build                 # debug
+cargo build --release        # what the release workflow ships
+RUSTFLAGS="-C target-cpu=native" cargo build --release   # widest vectors for local runs
+```
+
+`build.rs` stamps the version string (`--version` output) from the Cargo
+version plus the git commit, date, target and profile. It honours
+`SOURCE_DATE_EPOCH` and falls back to `unknown` outside a git checkout —
+nothing to configure.
+
+### Test
+
+The three commands under [The checks](#the-checks) are the whole suite;
+run them before every PR. `--locked` is deliberate — if you change
+dependencies, commit the updated `Cargo.lock`. A fast inner loop while
+working on one area:
+
+```
+cargo test <module>          # e.g. cargo test scoring
+cargo test --quiet
+```
+
+See [Testing conventions](#testing-conventions) for what to add. TUI
+rendering is covered with `ratatui::backend::TestBackend` (render into a
+fixed-size buffer, assert on the text) — see the `tests` modules in
+`src/tui/view.rs` and `src/tui/compare.rs`.
+
+### Release (maintainer only)
+
+Contributors should **not** bump the version or edit `CHANGELOG.md`;
+that happens here at release time:
+
+1. Bump `version` in `Cargo.toml`, then `cargo build` once so
+   `Cargo.lock` picks up the new version (or `--locked` checks fail).
+2. Add a `## X.Y.Z - <date>` section at the top of `CHANGELOG.md`. The
+   release workflow extracts this section verbatim as the GitHub Release
+   body, so write it for a reader.
+3. Update `README.md`, `docs/` (the website), and the
+   [wiki](https://github.com/issinoho/loadbearer/wiki) for anything
+   user-visible. The wiki is a separate git repo — `git pull --rebase`
+   before pushing it.
+4. Run the checks, commit, then tag: `git tag -a vX.Y.Z -m "…"`.
+5. `git push origin main --follow-tags`.
+
+The `v*` tag triggers `.github/workflows/release.yml`, which builds the
+Windows `.zip` and Linux `.tar.gz`, extracts the changelog section, and
+publishes the GitHub Release. A `workflow_dispatch` run builds the same
+artifacts without publishing — for verifying an experimental build on
+real hardware.
+
+Version bumps: a new subcommand or capability is a **minor** bump; a
+fix or UX refinement is a **patch**.
+
 ## Project layout
 
 | Path | What |
@@ -77,8 +135,9 @@ a deliberate trade-off, not restate what the code already says.
   tiny (~20 ms) budget" smoke test — see `benches/cpu.rs`.
 - Scoring is tested deterministically (curve exponent, geometric means,
   grade bands, baseline round-trip, JSON round-trip).
-- The TUI's state machine (`tui/app.rs`) is unit-tested; the rendering is
-  not.
+- The TUI's state machine (`tui/app.rs`) is unit-tested; screen rendering
+  is checked with `ratatui`'s `TestBackend` (column widths, wrapping,
+  no truncation of long labels on a wide terminal).
 - **Anything touching real disk I/O, sockets, or the terminal is
   validated by running `loadbearer run` on the target OS**, not by a
   unit test. If your change touches the disk or network benchmark, the
@@ -94,8 +153,8 @@ a deliberate trade-off, not restate what the code already says.
 4. Open a PR describing what changed and why. Reference any related
    issue (`Fixes #123`).
 
-Don't touch the version in `Cargo.toml`, `CHANGELOG.md`, or cut a
-release — that's a maintainer step done at release time.
+Leave `Cargo.toml`'s version and `CHANGELOG.md` alone — see
+[Release](#release-maintainer-only).
 
 ## Reporting bugs / requesting features
 
