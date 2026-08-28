@@ -2,6 +2,16 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 0.6.1 - Thu, 28 Aug 2026
+
+- **`loadbearer compare` now has a TUI.** In an interactive terminal it opens a
+  scrollable, colour-coded view of the head-to-head — winning cells and deltas
+  in green, regressions in red, the reference column dimmed, plus the warnings,
+  the `SUSTAINED LOAD` block and the verdict. `--plain` forces the old text
+  table (still the default when stdout is not a terminal); `--json` is
+  unchanged. `↑`/`↓`/`PgUp`/`PgDn`/`Home`/`End` (or `j`/`k`/`space`/`g`/`G`)
+  scroll; `q` / `Esc` / `Enter` exits.
+
 ## 0.6.0 - Thu, 28 Aug 2026
 
 - **New `loadbearer score` command.** Re-score an existing result file against a

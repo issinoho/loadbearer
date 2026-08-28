@@ -3,7 +3,10 @@
 //! draws frames, and handles input.
 
 mod app;
+mod compare;
 mod view;
+
+pub use compare::run as run_compare;
 
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::{self, Receiver, Sender};

@@ -7,6 +7,7 @@
 //! are geometric means of those ratios, each component weighted equally.
 
 use std::collections::BTreeSet;
+use std::io::IsTerminal;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
@@ -24,8 +25,10 @@ pub fn execute(args: CompareArgs) -> Result<()> {
     let comparison = compare(&machines)?;
     if args.json {
         println!("{}", serde_json::to_string_pretty(&comparison)?);
-    } else {
+    } else if args.plain || !std::io::stdout().is_terminal() {
         output::print_comparison(&comparison);
+    } else {
+        crate::tui::run_compare(&comparison)?;
     }
     Ok(())
 }

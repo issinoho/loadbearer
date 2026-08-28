@@ -10,7 +10,8 @@ you which one is stronger, by how much, and *why*.
 
 There is no GUI. Everything is driven by switches or a config file. In an
 interactive terminal `loadbearer run` shows a TUI — live per-subtest progress, a
-running overall gauge with an ETA, then a scrollable graded results screen. Piped
+running overall gauge with an ETA, then a scrollable graded results screen — and
+`loadbearer compare` shows the head-to-head in a scrollable coloured view. Piped
 output, `--plain`, or `--json` fall back to plain text / machine-readable JSON, so
 it works just as well from a script or CI job.
 
@@ -231,7 +232,7 @@ scroll, `q` or `Enter` exits.
 | Option | Description |
 | --- | --- |
 | `FILE ...` | Two or more result files written by `loadbearer run --output`. |
-| `--plain` | Plain-text table (currently the default; a TUI view is planned). |
+| `--plain` | Force the plain-text table. The default is a scrollable TUI when stdout is a terminal, the plain table otherwise. |
 | `--json` | Emit the comparison as structured JSON. |
 
 The first file is the reference; every other machine's metrics are shown as a
