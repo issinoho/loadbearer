@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>loadbearer — grade any machine, and know which one is faster</title>
-<meta name="description" content="loadbearer is a single-binary command-line tool that benchmarks a machine's CPU, memory, disk and network stack, scores every measurement against a shared reference baseline, and grades each component — and the whole machine — on an S-to-F scale. Its compare mode reads two result files and tells you which machine wins, by how much, and why; a sustained-load test shows how much speed a machine keeps once it throttles. No GUI, no network calls, no runtime. Windows and Linux.">
+<meta name="description" content="loadbearer is a single-binary command-line tool that benchmarks a machine's CPU, memory, disk, network stack and GPU, scores every measurement against a shared reference baseline, and grades each component — and the whole machine — on an S-to-F scale. Its compare mode reads two result files and tells you which machine wins, by how much, and why; a sustained-load test shows how much speed a machine keeps once it throttles. No GUI, no network calls, no runtime. Windows and Linux.">
 
 <link rel="canonical" href="https://loadbearer.issinoho.com/">
 <link rel="icon" type="image/svg+xml" href="assets/logo-mark.svg">
 
 <meta property="og:type" content="website">
 <meta property="og:title" content="loadbearer — grade any machine, and know which one is faster">
-<meta property="og:description" content="Benchmarks CPU, memory, disk and network, scores every metric against a shared baseline, and grades the machine on an S-to-F scale. compare mode: which of two machines wins, by how much, and why. Plus a sustained-load throttle test. Single binary, no network calls, Windows + Linux.">
+<meta property="og:description" content="Benchmarks CPU, memory, disk, network and GPU, scores every metric against a shared baseline, and grades the machine on an S-to-F scale. compare mode: which of two machines wins, by how much, and why. Plus a sustained-load throttle test. Single binary, no network calls, Windows + Linux.">
 <meta property="og:url" content="https://loadbearer.issinoho.com/">
 <meta property="og:image" content="https://loadbearer.issinoho.com/assets/og-image.svg">
 <meta property="og:image:type" content="image/svg+xml">
@@ -60,12 +60,12 @@
       <h1>Know which machine is faster&nbsp;— <span>and why</span>.</h1>
       <p class="lead">
         <strong>loadbearer</strong> benchmarks a machine's CPU, memory, disk and
-        network stack, scores every measurement against a shared reference
-        baseline, and grades each component — and the whole machine — on an
-        S&#8209;to&#8209;F scale. Point it at two laptops and it tells you which
-        one wins, by how much, and what's holding the other back. A
-        sustained&#8209;load test shows how much speed each one keeps once it
-        heats up.
+        network stack — and its GPU where there is one — scores every measurement
+        against a shared reference baseline, and grades each component and the
+        whole machine on an S&#8209;to&#8209;F scale. Point it at two laptops and
+        it tells you which one wins, by how much, and what's holding the other
+        back. A sustained&#8209;load test shows how much speed each one keeps
+        once it heats up.
       </p>
       <div class="hero-ctas">
         <a class="btn btn-primary" data-dl="windows" id="dl-hero" href="https://github.com/issinoho/loadbearer/releases/latest">Download for Windows</a>
@@ -80,7 +80,7 @@
 
     <div class="term term-hero">
       <div class="term-bar"><i></i><i></i><i></i><em>loadbearer run</em></div>
-<pre>loadbearer 0.6.4 — assessment
+<pre>loadbearer 0.7.0 — assessment
 
   Machine   ThinkPad-X280 · i5-8350U · 8 threads · 7.0 GiB RAM
   Profile   general · curve k=0.5 · baseline reference-v1
@@ -130,9 +130,10 @@
         <p>CPU, memory, disk and network each get a score against the baseline
         (1000 = a mid-range 2021 laptop) and a letter grade. A profile-weighted
         geometric mean of CPU, memory and disk becomes one <b>overall grade</b>,
-        with a plain-language note on what moved it. Network and the
-        sustained-load test are shown alongside — more about your OS and cooling
-        than your silicon — so they don't skew the grade.</p>
+        with a plain-language note on what moved it. Network, the GPU (FP32 +
+        VRAM bandwidth, via OpenCL), and the sustained-load test are shown
+        alongside — OS, optional hardware, cooling — so they don't skew the
+        grade.</p>
       </article>
 
       <article class="card">
@@ -185,7 +186,7 @@
     <div class="gallery">
       <figure class="term">
         <figcaption class="term-bar"><i></i><i></i><i></i><em>loadbearer compare x280.json desktop.json --plain</em></figcaption>
-<pre>loadbearer 0.6.4 — compare (2 machines)
+<pre>loadbearer 0.7.0 — compare (2 machines)
 
   A  ThinkPad-X280   Intel(R) Core(TM) i5-8350U
   B  dev-desktop     AMD Ryzen 9 7900X
@@ -212,7 +213,7 @@
       <div class="gallery-col">
         <figure class="term">
           <figcaption class="term-bar"><i></i><i></i><i></i><em>loadbearer info</em></figcaption>
-<pre>loadbearer 0.6.4 — machine inventory
+<pre>loadbearer 0.7.0 — machine inventory
 
 Host
   Hostname        ThinkPad-X280
