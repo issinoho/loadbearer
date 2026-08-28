@@ -2,6 +2,12 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 0.7.1 - Fri, 29 Aug 2026
+
+- `compare`: widen the gap between the last machine's value column and the
+  winner tag (`A` / `B` / `=`) from 2 spaces to 5, in both the TUI and the
+  plain table — the tag was crowding the number.
+
 ## 0.7.0 - Fri, 29 Aug 2026
 
 - **New GPU compute component.** Two figures via OpenCL: FP32 fused-multiply-add

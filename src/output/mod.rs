@@ -382,14 +382,14 @@ pub fn print_comparison(c: &Comparison) {
                 };
                 print!(" {cell:>CMP_COL_W$}");
             }
-            println!("  {}", winner_tag(c, &st.rel, st.best));
+            println!("     {}", winner_tag(c, &st.rel, st.best));
         }
         println!("  {}", "\u{2500}".repeat(body_w));
         print!("  {:<CMP_NAME_W$}", format!("{} total", comp.label));
         for (mi, rel) in comp.rel.iter().enumerate() {
             print!(" {:>CMP_COL_W$}", rel_cell(mi, *rel));
         }
-        println!("  {}", winner_tag(c, &comp.rel, comp.best));
+        println!("     {}", winner_tag(c, &comp.rel, comp.best));
     }
 
     println!("\n  {}", "\u{2550}".repeat(body_w));
@@ -397,7 +397,10 @@ pub fn print_comparison(c: &Comparison) {
     for (mi, rel) in c.overall.rel.iter().enumerate() {
         print!(" {:>CMP_COL_W$}", rel_cell(mi, *rel));
     }
-    println!("  {}", winner_tag(c, &c.overall.rel, c.overall.ranking[0]));
+    println!(
+        "     {}",
+        winner_tag(c, &c.overall.rel, c.overall.ranking[0])
+    );
 
     if let Some(sk) = &c.soak {
         println!("\n  SUSTAINED LOAD (not graded)");

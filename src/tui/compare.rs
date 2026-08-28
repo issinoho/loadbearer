@@ -258,7 +258,7 @@ fn build_lines(c: &Comparison, name_w: usize, col_w: usize, wrap_w: usize) -> Ve
             ));
         }
         row.push(Span::styled(
-            format!("  {}", c.machines[sk.best_retention].tag),
+            format!("{TAG_GAP}{}", c.machines[sk.best_retention].tag),
             Style::default()
                 .fg(Color::Green)
                 .add_modifier(Modifier::BOLD),
@@ -386,16 +386,19 @@ fn metric_row(
     Line::from(spans)
 }
 
+/// Gap between the last value column and the winner-tag column.
+const TAG_GAP: &str = "     ";
+
 /// The winning machine's tag, or `=` when the top two are within 2 %.
 fn winner_span(c: &Comparison, rel: &[f64], best: usize) -> Span<'static> {
     let mut sorted: Vec<f64> = rel.to_vec();
     sorted.sort_by(|a, b| b.total_cmp(a));
     let ambiguous = sorted.len() < 2 || sorted[1] <= 0.0 || sorted[0] / sorted[1] - 1.0 < 0.02;
     if ambiguous {
-        Span::styled("  =".to_string(), Style::default().fg(DIM))
+        Span::styled(format!("{TAG_GAP}="), Style::default().fg(DIM))
     } else {
         Span::styled(
-            format!("  {}", c.machines[best].tag),
+            format!("{TAG_GAP}{}", c.machines[best].tag),
             Style::default()
                 .fg(Color::Green)
                 .add_modifier(Modifier::BOLD),
