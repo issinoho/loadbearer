@@ -5,6 +5,7 @@ use crate::compare::Comparison;
 use crate::engine::Benchmark;
 use crate::inventory::Inventory;
 use crate::scoring::{Baseline, Grade, PROFILES, ResultFile};
+use crate::soak::SoakResult;
 
 const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -194,6 +195,100 @@ pub fn print_scored_report(result: &ResultFile) {
             "UDP send rate", link.udp_send_kpps
         );
     }
+
+    if let Some(soak) = &result.soak {
+        print_soak_block(soak);
+    }
+}
+
+/// Standalone `loadbearer soak` report: a machine line and the soak block.
+pub fn print_soak_report(m: &Inventory, s: &SoakResult) {
+    println!("\nloadbearer {PKG_VERSION} — soak test");
+    println!(
+        "\n  Machine   {} · {} · {} threads · {} RAM",
+        m.hostname.as_deref().unwrap_or("unknown"),
+        m.cpu_model,
+        m.cpu_logical_cores,
+        human_bytes(m.ram_bytes),
+    );
+    print_soak_block(s);
+    println!(
+        "\n  Sustained load is not part of any grade. \"Retained\" is steady-state \
+         throughput as a\n  fraction of the machine's own unthrottled peak — how well it \
+         holds up under a long\n  workload, not how fast it is."
+    );
+}
+
+/// The soak result block, shared by the standalone report and `run --soak`.
+pub fn print_soak_block(s: &SoakResult) {
+    println!(
+        "\n  {:<8} {:>3.0}s · {} threads · not graded",
+        "SOAK", s.duration_secs, s.threads,
+    );
+    println!(
+        "    {:<12} {:>11.0} {}   ({:.0}\u{2013}{:.0}s)",
+        "Peak", s.peak_rate, s.unit, s.peak_window.0, s.peak_window.1,
+    );
+    println!(
+        "    {:<12} {:>11.0} {}   ({:.0}\u{2013}{:.0}s)   {:.1}% retained",
+        "Steady", s.steady_rate, s.unit, s.steady_window.0, s.steady_window.1, s.retained_pct,
+    );
+    match s.onset_secs {
+        Some(t) => println!(
+            "    {:<12} onset ~{:.0}s (first sustained drop below 95% of peak)",
+            "Throttle", t,
+        ),
+        None => println!(
+            "    {:<12} none \u{2014} throughput stayed above 95% of peak",
+            "Throttle",
+        ),
+    }
+    println!(
+        "    {:<12} steady-window CV {:.1}%",
+        "Stability", s.steady_cv_pct,
+    );
+    if s.mhz_peak > 0 {
+        println!(
+            "    {:<12} {:.2} GHz peak \u{2192} {:.2} GHz steady",
+            "Clock",
+            s.mhz_peak as f64 / 1000.0,
+            s.mhz_steady as f64 / 1000.0,
+        );
+    }
+    let spark = soak_sparkline(s, 60);
+    if !spark.is_empty() {
+        println!("    {:<12} {}  (\u{2248}1s/mark)", "Trace", spark);
+    }
+    println!("    \u{2192} {}", s.verdict());
+}
+
+/// A compact Unicode sparkline of the soak throughput samples, bucket-averaged
+/// down to at most `max_w` marks.
+fn soak_sparkline(s: &SoakResult, max_w: usize) -> String {
+    const TICKS: [char; 8] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+    let rates: Vec<f64> = s.samples.iter().map(|x| x.rate).collect();
+    if rates.is_empty() {
+        return String::new();
+    }
+    let reduced: Vec<f64> = if rates.len() <= max_w {
+        rates
+    } else {
+        let bucket = rates.len().div_ceil(max_w);
+        rates
+            .chunks(bucket)
+            .map(|c| c.iter().sum::<f64>() / c.len() as f64)
+            .collect()
+    };
+    let lo = reduced.iter().copied().fold(f64::MAX, f64::min);
+    let hi = reduced.iter().copied().fold(f64::MIN, f64::max);
+    let span = (hi - lo).max(1e-9);
+    reduced
+        .iter()
+        .map(|&v| {
+            let idx = (((v - lo) / span) * (TICKS.len() - 1) as f64).round() as usize;
+            TICKS[idx.min(TICKS.len() - 1)]
+        })
+        .collect()
 }
 
 fn grade_tag(g: Grade) -> String {
@@ -266,6 +361,25 @@ pub fn print_comparison(c: &Comparison) {
         print!(" {:>CMP_COL_W$}", rel_cell(mi, *rel));
     }
     println!("  {}", winner_tag(c, &c.overall.rel, c.overall.ranking[0]));
+
+    if let Some(sk) = &c.soak {
+        println!("\n  SUSTAINED LOAD (not graded)");
+        print!("  {:<CMP_NAME_W$}", format!("  steady ({})", sk.unit));
+        for (mi, v) in sk.steady_rate.iter().enumerate() {
+            let cell = if mi == 0 {
+                fmt_val(*v)
+            } else {
+                format!("{} {:+.0}%", fmt_val(*v), (sk.rel_steady[mi] - 1.0) * 100.0)
+            };
+            print!(" {cell:>CMP_COL_W$}");
+        }
+        println!("  {}", c.machines[sk.best_sustained].tag);
+        print!("  {:<CMP_NAME_W$}", "  retained vs own peak");
+        for v in &sk.retained_pct {
+            print!(" {:>CMP_COL_W$}", format!("{v:.0}%"));
+        }
+        println!("  {}", c.machines[sk.best_retention].tag);
+    }
 
     println!("\n  Verdict: {}\n", c.overall.summary);
 }

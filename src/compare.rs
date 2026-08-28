@@ -16,6 +16,7 @@ use crate::cli::CompareArgs;
 use crate::engine::Direction;
 use crate::output;
 use crate::scoring::ResultFile;
+use crate::soak::SoakResult;
 use crate::util::geomean;
 
 pub fn execute(args: CompareArgs) -> Result<()> {
@@ -82,6 +83,26 @@ pub struct OverallComparison {
     pub summary: String,
 }
 
+/// Sustained-load figures, present only when every file carries `--soak` data.
+/// Not folded into the verdict — shown as its own block, like the network
+/// component is kept out of the overall grade.
+#[derive(Debug, Serialize)]
+pub struct SoakComparison {
+    pub unit: String,
+    /// Steady-state throughput per machine.
+    pub steady_rate: Vec<f64>,
+    /// Unthrottled peak throughput per machine.
+    pub peak_rate: Vec<f64>,
+    /// Steady-state retained as a percentage of each machine's own peak.
+    pub retained_pct: Vec<f64>,
+    /// Steady-state throughput relative to machine 0 (`rel_steady[0] == 1.0`).
+    pub rel_steady: Vec<f64>,
+    /// Machine holding the highest fraction of its own peak.
+    pub best_retention: usize,
+    /// Machine with the highest absolute sustained throughput.
+    pub best_sustained: usize,
+}
+
 #[derive(Debug, Serialize)]
 pub struct Comparison {
     pub machines: Vec<MachineRef>,
@@ -89,6 +110,8 @@ pub struct Comparison {
     pub warnings: Vec<String>,
     pub components: Vec<ComponentComparison>,
     pub overall: OverallComparison,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub soak: Option<SoakComparison>,
 }
 
 fn load(paths: &[PathBuf]) -> Result<Vec<Machine>> {
@@ -287,6 +310,32 @@ fn compare(machines: &[Machine]) -> Result<Comparison> {
             ranking,
             summary,
         },
+        soak: soak_comparison(machines),
+    })
+}
+
+/// Build the sustained-load comparison, but only if *every* file carries soak
+/// data (a `loadbearer run --soak`).
+fn soak_comparison(machines: &[Machine]) -> Option<SoakComparison> {
+    let soaks: Vec<&SoakResult> = machines
+        .iter()
+        .map(|m| m.file.soak.as_ref())
+        .collect::<Option<Vec<_>>>()?;
+
+    let steady_rate: Vec<f64> = soaks.iter().map(|s| s.steady_rate).collect();
+    let peak_rate: Vec<f64> = soaks.iter().map(|s| s.peak_rate).collect();
+    let retained_pct: Vec<f64> = soaks.iter().map(|s| s.retained_pct).collect();
+    let reference = steady_rate[0].max(1e-9);
+    let rel_steady: Vec<f64> = steady_rate.iter().map(|v| v / reference).collect();
+
+    Some(SoakComparison {
+        unit: soaks[0].unit.clone(),
+        best_retention: argmax(&retained_pct),
+        best_sustained: argmax(&steady_rate),
+        steady_rate,
+        peak_rate,
+        retained_pct,
+        rel_steady,
     })
 }
 

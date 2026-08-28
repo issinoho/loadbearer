@@ -168,6 +168,7 @@ that `loadbearer compare` can diff against another machine's.
 ```
 loadbearer run        [OPTIONS]
 loadbearer compare    FILE FILE [FILE ...] [--plain] [--json]
+loadbearer soak       [--duration SECS] [--threads N] [--output FILE] [--json]
 loadbearer info       [--json]
 loadbearer list
 loadbearer baseline   [FILE ...] [--name NAME] [--description TEXT]
@@ -179,6 +180,12 @@ loadbearer net-server [--bind ADDR]
 - **`compare`** — head-to-head of two or more result files: per-metric deltas,
   per-component and overall verdict. Built from the **raw** metrics, so it does
   not depend on the baseline or curve the files were scored with.
+- **`soak`** — hold every core under sustained load (default 90 s) and report
+  how much throughput the machine *retains* once the thermal mass saturates and
+  the power limit bites: peak vs steady-state rate, percentage retained, when
+  throttling set in, and how steady the clock held. **Not scored** — it's the
+  signal that separates two laptops with identical burst numbers. Also available
+  as `loadbearer run --soak`, which embeds the result in the result JSON.
 - **`info`** — machine inventory (host, CPU, memory, disks) and nothing else.
 - **`list`** — the available benchmarks, the active baseline, and the scoring
   profiles.
@@ -201,6 +208,8 @@ loadbearer net-server [--bind ADDR]
 | `--runs N` | Override the number of timed iterations per subtest (default: 3 / 5 / 9 for short / normal / thorough). |
 | `--seed N` | Seed for the pseudo-random workload data, for bit-for-bit reproducible inputs. |
 | `--net-target HOST:PORT` | After the graded run, probe a real link (TCP upload, round-trip, UDP send rate) to a `loadbearer net-server` at this address. Reported in its own block and the result JSON's `link` field; **not graded** — it measures the network, not the machine. |
+| `--soak` | After the graded run, hold every core under sustained load and report throughput retention (thermal / power-limit throttling). Adds ~90 s. Reported in its own block and the result JSON's `soak` field; **not graded**. |
+| `--soak-duration SECS` | Duration for `--soak` (default 90; range 15–1800). |
 | `--output FILE` | Write the full result as a versioned JSON file. Works alongside the TUI or plain output. |
 | `--plain` | Disable the TUI and emit the plain-text report. Implied automatically when stdout is not a terminal. |
 | `--json` | Disable the TUI and emit only the result JSON to stdout. |
@@ -238,6 +247,38 @@ skips any component or subtest that isn't present in every file.
 
   Verdict: precision-5560 leads by 31% overall (ahead on cpu +45%, memory +18%).
 ```
+
+When every result file carries `--soak` data, `compare` adds a `SUSTAINED LOAD`
+block: absolute steady-state throughput (with a delta to the reference machine)
+and each machine's steady-state as a percentage of *its own* peak. It is not
+folded into the verdict.
+
+### `soak` options
+
+| Option | Description |
+| --- | --- |
+| `--duration SECS` | Sustained-load duration (default 90; range 15–1800). |
+| `--threads N` | Worker threads (default: one per logical CPU). |
+| `--output FILE` | Write the soak result as a `loadbearer.soak/1` JSON document. |
+| `--json` | Emit only the JSON to stdout. |
+
+```
+  SOAK      90s · 20 threads · not graded
+    Peak               68420 Mops/s   (2–5s)
+    Steady             55110 Mops/s   (68–90s)   80.5% retained
+    Throttle     onset ~22s (first sustained drop below 95% of peak)
+    Stability    steady-window CV 1.4%
+    Clock        3.90 GHz peak → 2.70 GHz steady
+    Trace        ▇█▇▆▅▅▄▄▄▄▃▃▃▃▃▃▃▃▃▃  (≈1s/mark)
+    → throttles from ~22s; settles at 80% of peak
+```
+
+The load is a blended integer + floating-point kernel that stays in registers
+(no memory traffic), run on every logical CPU at once — enough to hit a
+thin-and-light's sustained power limit. A build with `-C target-cpu=native`
+pushes harder still. `Retained` is the number to compare: a machine that holds
+90% of its peak for 90 s will out-work one that holds 65%, even if the second
+has the higher burst.
 
 ## Configuration
 
@@ -322,6 +363,9 @@ benchmark; use `--only cpu,memory,network` to skip it.
 - `config` — profile, preset, curve-k, seed, thread count, baseline name.
 - `raw` — every subtest's per-run values and summary statistics, unscored.
 - `components` / `overall` — the scored, graded results.
+- `link` — the `--net-target` link probe, if one ran (ungraded).
+- `soak` — the `--soak` sustained-load result, if one ran (ungraded): every
+  per-second sample plus the derived peak / steady / retained / onset figures.
 
 Because the raw metrics are preserved, a result file can be re-scored later
 against a different baseline or curve, and `compare` can work from it without

@@ -153,6 +153,10 @@ pub struct ResultFile {
     /// Present only when `--net-target` was given.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub link: Option<LinkResult>,
+    /// Present only when `--soak` was given. Sustained-load throughput
+    /// retention; measured and shown but not folded into any grade.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub soak: Option<crate::soak::SoakResult>,
 }
 
 impl ResultFile {
@@ -175,6 +179,7 @@ impl ResultFile {
             components: scored.components,
             overall: scored.overall,
             link,
+            soak: None,
         }
     }
 }

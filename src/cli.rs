@@ -38,8 +38,34 @@ pub enum Command {
     Compare(CompareArgs),
     /// Print the built-in baseline, or generate one by averaging result files.
     Baseline(BaselineArgs),
+    /// Hold every core under sustained load and report throughput retention
+    /// (thermal / power-limit throttling). Not scored.
+    Soak(SoakArgs),
     /// Run the server side of the `--net-target` link test until stopped.
     NetServer(NetServerArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct SoakArgs {
+    /// Sustained-load duration in seconds [default: 90; range 15–1800].
+    #[arg(long, value_name = "SECS")]
+    pub duration: Option<u64>,
+
+    /// Worker threads [default: one per logical CPU].
+    #[arg(long, value_name = "N")]
+    pub threads: Option<usize>,
+
+    /// Seed for the workload kernel.
+    #[arg(long, value_name = "N")]
+    pub seed: Option<u64>,
+
+    /// Write the soak result JSON to a file.
+    #[arg(long, value_name = "FILE")]
+    pub output: Option<PathBuf>,
+
+    /// Emit only the result JSON to stdout.
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(Args, Debug)]
@@ -90,6 +116,15 @@ pub struct RunArgs {
     /// this `host:port`. Reported separately and not graded.
     #[arg(long, value_name = "HOST:PORT")]
     pub net_target: Option<String>,
+
+    /// After the graded run, hold every core under sustained load and report
+    /// throughput retention. Adds ~90 s. Reported separately and not graded.
+    #[arg(long)]
+    pub soak: bool,
+
+    /// Duration in seconds for `--soak` [default: 90; range 15–1800].
+    #[arg(long, value_name = "SECS", requires = "soak")]
+    pub soak_duration: Option<u64>,
 
     /// Write the result JSON to a file.
     #[arg(long, value_name = "FILE")]

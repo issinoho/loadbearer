@@ -170,6 +170,10 @@ fn run_interactive(
     match tui::run(init)? {
         Some(mut result) => {
             result.link = probe_link(args)?;
+            result.soak = run_soak(args);
+            if let Some(soak) = &result.soak {
+                output::print_soak_block(soak);
+            }
             write_output(&result, args.output.as_deref())?;
             println!(
                 "Overall {:.0} [{}] · {} profile{}",
@@ -217,12 +221,17 @@ fn run_plain(
 
     let scored = score_run(&outcomes, baseline, profile, curve_k)?;
     let link = probe_link(args)?;
-    let result = ResultFile::assemble(machine, config, outcomes, scored, link);
+    let mut result = ResultFile::assemble(machine, config, outcomes, scored, link);
 
     if args.json {
+        result.soak = run_soak(args);
         println!("{}", serde_json::to_string_pretty(&result)?);
     } else {
         output::print_scored_report(&result);
+        result.soak = run_soak(args);
+        if let Some(soak) = &result.soak {
+            output::print_soak_block(soak);
+        }
     }
     if let Some(path) = &args.output {
         write_output(&result, Some(path))?;
@@ -231,6 +240,23 @@ fn run_plain(
         }
     }
     Ok(())
+}
+
+/// Run the optional `--soak` sustained-load phase, if one was requested. Prints
+/// a live progress line to stderr unless `--json` was given.
+fn run_soak(args: &RunArgs) -> Option<crate::soak::SoakResult> {
+    if !args.soak {
+        return None;
+    }
+    let cfg = crate::soak::SoakConfig {
+        duration: crate::soak::resolve_duration(args.soak_duration),
+        threads: std::thread::available_parallelism().map_or(1, |n| n.get()),
+        seed: DEFAULT_SEED,
+    };
+    if !args.json {
+        eprintln!();
+    }
+    Some(crate::soak::run_with_progress(&cfg, args.json))
 }
 
 /// Run the optional `--net-target` link probe, if one was requested.

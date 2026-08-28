@@ -7,6 +7,7 @@ mod inventory;
 mod output;
 mod run;
 mod scoring;
+mod soak;
 mod tui;
 mod util;
 
@@ -46,6 +47,7 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
+        Command::Soak(args) => soak::execute(args),
         Command::NetServer(args) => benches::net_serve(&args.bind),
     }
 }

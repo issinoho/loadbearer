@@ -11,8 +11,13 @@
 //! Bandwidth kernels use eight independent accumulators / a slice fill that the
 //! compiler is free to vectorise — the goal is to saturate the memory path.
 //! Latency is a pointer chase around a single random cycle (Sattolo), which
-//! serialises loads and exposes load-to-use latency to DRAM. All memory
-//! subtests are single-threaded in this version.
+//! serialises loads and exposes load-to-use latency to DRAM.
+//!
+//! Every subtest is single-threaded except the all-core read (`bw_read_mt`),
+//! which runs the read kernel on one thread per logical CPU — each on its own
+//! buffer (at least 32 MiB, past any per-core slice of a shared L3) — and sums
+//! the per-thread rates. The threads fill their buffers, then meet at a barrier
+//! so the timed window starts on every core at once.
 
 use std::hint::black_box;
 use std::sync::Mutex;
@@ -39,11 +44,12 @@ fn working_bytes(ctx: &RunContext) -> (usize, bool) {
 }
 
 /// Per-thread working set for the all-core read: the single-thread size split
-/// across the threads (floored at 16 MiB each), with the total held to RAM/4.
+/// across the threads (floored at 32 MiB each — comfortably past any per-core
+/// slice of a shared L3), with the total held to RAM/4.
 fn mt_read_bytes(ctx: &RunContext) -> (usize, bool) {
     let threads = ctx.threads.max(1);
     let (single, _) = working_bytes(ctx);
-    let mut per = (single / threads).max(16 * 1024 * 1024);
+    let mut per = (single / threads).max(32 * 1024 * 1024);
     let mut capped = false;
     let cap_total = (ctx.total_ram / 4) as usize;
     if per.saturating_mul(threads) > cap_total {
@@ -148,10 +154,19 @@ impl Benchmark for MemoryBenchmark {
                 if mt_capped {
                     self.note("all-core read working set reduced to fit within RAM/4");
                 }
+                let threads = ctx.threads.max(1);
                 let mt_words = per / 8;
                 let seed = ctx.seed ^ 0xB0;
-                parallel_sum(ctx.threads.max(1), || {
-                    read_bandwidth(&filled_words(mt_words, seed), budget)
+                // Every thread allocates and fills its own buffer, then waits at
+                // the barrier so all cores enter the timed read together. Without
+                // it, a thread that finished filling early would measure the
+                // first slice of its window against a machine not yet fully
+                // loaded, inflating the aggregate — worst at the `short` preset.
+                let start = std::sync::Barrier::new(threads);
+                parallel_sum(threads, || {
+                    let buf = filled_words(mt_words, seed);
+                    start.wait();
+                    read_bandwidth(&buf, budget)
                 })
             }
             "latency" => {

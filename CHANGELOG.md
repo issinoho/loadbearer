@@ -2,6 +2,30 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 0.5.0 - Thu, 28 Aug 2026
+
+- **New sustained-load / thermal soak test.** The graded benchmarks are all
+  short bursts and measure a machine near its boost clocks; the soak test holds
+  every logical CPU under a blended integer + floating-point load for a fixed
+  stretch (default 90 s), samples aggregate throughput and CPU frequency once a
+  second, and reports the unthrottled **peak**, the **steady-state** rate, the
+  percentage **retained**, the **throttle onset** time, and steady-window
+  stability. It is the signal that tells two thin-and-lights with identical
+  burst numbers apart. **Not scored** — measured and shown, like the
+  `--net-target` link probe.
+  - `loadbearer soak [--duration SECS] [--threads N] [--output FILE] [--json]`
+    runs it on its own.
+  - `loadbearer run --soak [--soak-duration SECS]` appends it to a full
+    assessment; the result is embedded in the result JSON under `soak`.
+  - `loadbearer compare` shows a `SUSTAINED LOAD` block — absolute steady
+    throughput and retained-vs-own-peak — when every result file carries soak
+    data.
+- Refinement to `memory/bw_read_mt` (0.4.0): the per-thread buffers now start
+  their timed read together at a barrier (removing staggered-start skew, most
+  visible at `--duration short`) and the per-thread floor rose 16 MiB → 32 MiB
+  (insurance against a large shared L3 on server parts). The metric's meaning is
+  unchanged; the baseline anchor stays at 28 GiB/s.
+
 ## 0.4.0 - Thu, 28 Aug 2026
 
 - **Two new CPU subtests: AES-256-GCM and SHA-256 throughput.** These pick up
