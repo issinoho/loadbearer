@@ -1,0 +1,216 @@
+//! Interactive run screen. The benchmark engine runs on a worker thread and
+//! streams progress to this UI loop over a channel; the loop owns the terminal,
+//! draws frames, and handles input.
+
+mod app;
+mod view;
+
+use std::sync::atomic::Ordering;
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::thread::{self, JoinHandle};
+use std::time::Duration;
+
+use anyhow::{Result, bail};
+use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+
+use app::{App, Ev, Msg, Phase};
+
+use crate::engine::{Benchmark, Progress, ProgressEvent, RunContext, run_benchmark};
+use crate::inventory::Inventory;
+use crate::scoring::{Baseline, Profile, ResultFile, RunConfig, score_run};
+
+/// Everything the worker thread needs to run and score a session.
+pub struct RunInit {
+    pub header: String,
+    pub selected: Vec<Box<dyn Benchmark>>,
+    pub ctx: RunContext,
+    pub baseline: Baseline,
+    pub profile: Profile,
+    pub curve_k: f64,
+    pub machine: Inventory,
+    pub config: RunConfig,
+}
+
+/// Run the interactive session. `Ok(Some(result))` on completion, `Ok(None)` if
+/// the user cancelled, `Err` if the run itself failed.
+pub fn run(init: RunInit) -> Result<Option<ResultFile>> {
+    let abort = init.ctx.abort.clone();
+    let header = init.header.clone();
+    let specs: Vec<(String, Vec<(String, String)>)> = init
+        .selected
+        .iter()
+        .map(|b| {
+            (
+                b.label().to_string(),
+                b.subtests()
+                    .iter()
+                    .map(|s| (s.label.to_string(), s.unit.to_string()))
+                    .collect(),
+            )
+        })
+        .collect();
+
+    let (tx, rx) = mpsc::channel();
+    let worker = spawn_worker(init, tx);
+
+    let mut terminal = ratatui::init();
+    let mut app = App::new(header, specs, abort);
+    let result = event_loop(&mut terminal, &mut app, &rx);
+    ratatui::restore();
+
+    // The worker either finished on its own or noticed the abort flag.
+    let _ = worker.join();
+    result
+}
+
+fn event_loop(
+    terminal: &mut ratatui::DefaultTerminal,
+    app: &mut App,
+    rx: &Receiver<Msg>,
+) -> Result<Option<ResultFile>> {
+    loop {
+        terminal.draw(|f| view::draw(f, app))?;
+
+        while let Ok(msg) = rx.try_recv() {
+            app.apply(msg);
+        }
+        if app.cancelling && app.is_finished() {
+            return resolve(app);
+        }
+
+        if event::poll(Duration::from_millis(100))?
+            && let Event::Key(key) = event::read()?
+            && key.kind == KeyEventKind::Press
+        {
+            let ctrl_c =
+                key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL);
+            match key.code {
+                KeyCode::Char('q') | KeyCode::Esc => {
+                    if app.is_finished() {
+                        return resolve(app);
+                    }
+                    app.cancelling = true;
+                    app.abort.store(true, Ordering::Relaxed);
+                }
+                KeyCode::Enter if app.is_finished() => return resolve(app),
+                KeyCode::Up => app.scroll_results(-1),
+                KeyCode::Down => app.scroll_results(1),
+                KeyCode::PageUp => app.scroll_results(-10),
+                KeyCode::PageDown => app.scroll_results(10),
+                _ if ctrl_c => {
+                    app.cancelling = true;
+                    app.abort.store(true, Ordering::Relaxed);
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+fn resolve(app: &mut App) -> Result<Option<ResultFile>> {
+    let aborted = app.abort.load(Ordering::Relaxed);
+    match std::mem::replace(&mut app.phase, Phase::Running) {
+        Phase::Done(result) => Ok(Some(*result)),
+        Phase::Failed(_) if aborted => Ok(None),
+        Phase::Failed(err) => bail!("{err}"),
+        Phase::Running => Ok(None),
+    }
+}
+
+fn spawn_worker(init: RunInit, tx: Sender<Msg>) -> JoinHandle<()> {
+    thread::spawn(move || {
+        let RunInit {
+            selected,
+            ctx,
+            baseline,
+            profile,
+            curve_k,
+            machine,
+            config,
+            ..
+        } = init;
+
+        let mut progress = ChannelProgress::new(tx.clone());
+        let mut outcomes = Vec::with_capacity(selected.len());
+        for bench in &selected {
+            match run_benchmark(bench.as_ref(), &ctx, &mut progress) {
+                Ok(outcome) => outcomes.push(outcome),
+                Err(err) => {
+                    let _ = tx.send(Msg::Failed(format!("{err:#}")));
+                    return;
+                }
+            }
+        }
+
+        match score_run(&outcomes, &baseline, profile, curve_k) {
+            Ok(scored) => {
+                let result = ResultFile::assemble(machine, config, outcomes, scored);
+                let _ = tx.send(Msg::Done(Box::new(result)));
+            }
+            Err(err) => {
+                let _ = tx.send(Msg::Failed(format!("{err:#}")));
+            }
+        }
+    })
+}
+
+/// Converts the engine's borrowed [`ProgressEvent`]s into owned [`Msg`]s. The
+/// engine visits benchmarks and subtests strictly in order, so a running cursor
+/// is enough to attach indices.
+struct ChannelProgress {
+    tx: Sender<Msg>,
+    bench: Option<usize>,
+    sub: usize,
+}
+
+impl ChannelProgress {
+    fn new(tx: Sender<Msg>) -> Self {
+        Self {
+            tx,
+            bench: None,
+            sub: 0,
+        }
+    }
+
+    fn send(&self, ev: Ev) {
+        let _ = self.tx.send(Msg::Progress(ev));
+    }
+}
+
+impl Progress for ChannelProgress {
+    fn on_event(&mut self, event: ProgressEvent<'_>) {
+        match event {
+            ProgressEvent::BenchStart { .. } => {
+                self.bench = Some(self.bench.map_or(0, |b| b + 1));
+                self.sub = 0;
+                self.send(Ev::BenchStart);
+            }
+            ProgressEvent::SubtestStart { timed_runs, .. } => self.send(Ev::SubtestStart {
+                bench: self.bench.unwrap_or(0),
+                sub: self.sub,
+                timed: timed_runs,
+            }),
+            ProgressEvent::Warmup { .. } => self.send(Ev::Warmup {
+                bench: self.bench.unwrap_or(0),
+                sub: self.sub,
+            }),
+            ProgressEvent::Run { run, value, .. } => self.send(Ev::Run {
+                bench: self.bench.unwrap_or(0),
+                sub: self.sub,
+                run,
+                value,
+            }),
+            ProgressEvent::SubtestDone { outcome, .. } => {
+                self.send(Ev::SubtestDone {
+                    bench: self.bench.unwrap_or(0),
+                    sub: self.sub,
+                    outcome: Box::new(outcome.clone()),
+                });
+                self.sub += 1;
+            }
+            ProgressEvent::BenchDone { .. } => self.send(Ev::BenchDone {
+                bench: self.bench.unwrap_or(0),
+            }),
+        }
+    }
+}

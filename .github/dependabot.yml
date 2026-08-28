@@ -1,0 +1,28 @@
+version: 2
+updates:
+  # GitHub Actions pinned in .github/workflows/*.yml (actions/checkout,
+  # Swatinem/rust-cache, softprops/action-gh-release, ...). These are
+  # major-version pinned, so this is where routine update PRs come from.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    labels:
+      - "dependencies"
+
+  # Rust crates from Cargo.toml / Cargo.lock. Cargo.lock is committed
+  # (this is a binary crate), so Dependabot bumps the locked versions.
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      cargo:
+        patterns:
+          - "*"
+    labels:
+      - "dependencies"

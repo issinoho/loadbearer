@@ -1,0 +1,34 @@
+# loadbearer reference baseline — v1
+#
+# PROVISIONAL. These are synthetic anchors, not yet calibrated against a fleet of
+# real machines. Each number is roughly what a mid-range 2021 thin-and-light
+# laptop (8-core mobile CPU, dual-channel LPDDR4x, Gen3 NVMe) is expected to
+# produce with `loadbearer run --duration normal` from a default (non-native)
+# build. A machine that matches the baseline on a metric scores ~1000 on it.
+#
+# Regenerating from real result files is planned (`loadbearer baseline`). Until
+# then, treat absolute scores as indicative and lean on `loadbearer compare`
+# for head-to-head verdicts, which does not depend on these values.
+
+name = "reference-v1"
+description = "Provisional mid-range 2021 ultrabook anchors"
+
+[components.cpu]
+int_single   = 10000.0   # Mops/s
+int_multi    = 45000.0   # Mops/s
+float_single = 8000.0    # MFLOP/s
+float_multi  = 70000.0   # MFLOP/s
+hash         = 4200.0    # MiB/s   (BLAKE3, SIMD)
+compress     = 68.0      # MiB/s   (DEFLATE level 6)
+
+[components.memory]
+bw_read  = 22.0          # GiB/s
+bw_write = 16.0          # GiB/s
+bw_copy  = 14.0          # GiB/s
+latency  = 95.0          # ns      (lower is better)
+
+[components.disk]
+seq_write  = 1500.0      # MiB/s   (with fsync)
+seq_read   = 3000.0      # MiB/s
+rand_read  = 15000.0     # IOPS    (QD1, 4 KiB)
+rand_write = 40000.0     # IOPS    (QD1, 4 KiB)

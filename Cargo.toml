@@ -1,0 +1,31 @@
+[package]
+name = "loadbearer"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+description = "CLI system-assessment tool: benchmarks CPU, memory and disk, then grades the machine"
+repository = "https://github.com/issinoho/loadbearer"
+license = "MIT"
+readme = "README.md"
+keywords = ["benchmark", "cpu", "memory", "disk", "tui"]
+categories = ["command-line-utilities", "hardware-support"]
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+time = { version = "0.3", features = ["formatting"] }
+ratatui = "0.29"
+sysinfo = { version = "0.33", default-features = false, features = ["system", "disk"] }
+anyhow = "1"
+blake3 = "1"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"

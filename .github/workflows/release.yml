@@ -1,0 +1,116 @@
+name: Build and publish release binaries
+
+# Fires on every version tag push (v0.1.0, v0.2.0, ...): build a
+# self-contained binary for Windows and Linux, zip/tar each with the
+# docs, and attach both to the GitHub Release for that tag.
+#
+# A manual workflow_dispatch run builds the same artifacts (downloadable
+# from the run page) but only publishes a Release if publish_release is
+# ticked -- so an experimental build can be verified on real hardware
+# without leaving a public Release behind.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: "Publish a GitHub Release from this run (leave unchecked for a throwaway test build)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin: loadbearer.exe
+            archive: zip
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bin: loadbearer
+            archive: tar.gz
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Add the target
+        run: rustup target add ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Tag push -> version is the tag without the leading "v".
+          # Manual run off a branch -> fall back to Cargo.toml + "-dev".
+          version="${GITHUB_REF_NAME#v}"
+          if [ "$version" = "$GITHUB_REF_NAME" ]; then
+            version="$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)-dev"
+          fi
+          name="loadbearer-${version}-${{ matrix.target }}"
+          mkdir -p "staging/${name}"
+          cp "target/${{ matrix.target }}/release/${{ matrix.bin }}" "staging/${name}/"
+          cp README.md LICENSE CHANGELOG.md loadbearer.example.toml "staging/${name}/"
+          cd staging
+          if [ "${{ matrix.archive }}" = "zip" ]; then
+            7z a "../${name}.zip" "${name}" >/dev/null
+          else
+            tar czf "../${name}.tar.gz" "${name}"
+          fi
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.target }}
+          path: |
+            loadbearer-*.zip
+            loadbearer-*.tar.gz
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: github.event_name == 'push' || inputs.publish_release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Pull this version's CHANGELOG section for the release body
+        # Tolerant of a non-version ref (a manual run off a branch): an
+        # unmatched version just leaves the file empty and the Release
+        # falls back to GitHub's auto-generated notes.
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v ver="$version" '
+            $0 ~ "^## " ver "( |$)" { found=1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          cat release-notes.md
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+
+      - name: Flatten artifacts into one directory
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f \( -name '*.zip' -o -name '*.tar.gz' \) -exec cp {} release-assets/ \;
+          ls -l release-assets
+
+      - name: Create/update the GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          name: "loadbearer ${{ github.ref_name }}"
+          body_path: release-notes.md
+          generate_release_notes: true
+          files: release-assets/*

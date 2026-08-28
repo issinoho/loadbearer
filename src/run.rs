@@ -1,0 +1,258 @@
+//! `loadbearer run` — resolve settings (CLI switches over config file over
+//! defaults), execute the selected benchmarks, score them, and emit a versioned
+//! result file. Interactive terminals get the TUI; otherwise plain text or JSON.
+
+use std::io::IsTerminal;
+use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+
+use anyhow::{Context, Result, anyhow, bail};
+use clap::ValueEnum;
+
+use crate::benches;
+use crate::cli::{DurationArg, RunArgs};
+use crate::config::FileConfig;
+use crate::engine::progress::PlainProgress;
+use crate::engine::{Benchmark, BenchmarkOutcome, DurationPreset, RunContext, run_benchmark};
+use crate::inventory::Inventory;
+use crate::output;
+use crate::scoring::{
+    Baseline, Profile, ResultFile, RunConfig, profile_by_name, profile_names, score_run,
+};
+use crate::tui;
+
+impl From<DurationArg> for DurationPreset {
+    fn from(value: DurationArg) -> Self {
+        match value {
+            DurationArg::Short => DurationPreset::Short,
+            DurationArg::Normal => DurationPreset::Normal,
+            DurationArg::Thorough => DurationPreset::Thorough,
+        }
+    }
+}
+
+const DEFAULT_SEED: u64 = 0x5EED_1234_ABCD_0001;
+
+/// Settings after merging CLI switches, the config file and defaults.
+struct Resolved {
+    profile: Profile,
+    duration: DurationArg,
+    curve_k: f64,
+    seed: Option<u64>,
+    runs: Option<u32>,
+    target_dir: Option<std::path::PathBuf>,
+    only: Vec<String>,
+}
+
+fn resolve(args: &RunArgs) -> Result<Resolved> {
+    let file = match &args.config {
+        Some(path) => FileConfig::load(path)?,
+        None => FileConfig::default(),
+    };
+
+    let profile_name = args
+        .profile
+        .clone()
+        .or(file.profile)
+        .unwrap_or_else(|| "general".to_string());
+    let profile = profile_by_name(&profile_name).with_context(|| {
+        format!(
+            "unknown profile {profile_name:?}; known profiles: {}",
+            profile_names().join(", ")
+        )
+    })?;
+
+    let duration = match args.duration {
+        Some(d) => d,
+        None => match file.duration.as_deref() {
+            Some(s) => DurationArg::from_str(s, true)
+                .map_err(|e| anyhow!("config: invalid duration {s:?} ({e})"))?,
+            None => DurationArg::Normal,
+        },
+    };
+
+    let curve_k = args.curve_k.or(file.curve_k).unwrap_or(0.5);
+    if !(0.05..=3.0).contains(&curve_k) {
+        bail!("curve-k must be between 0.05 and 3.0 (got {curve_k})");
+    }
+
+    let only = if args.only.is_empty() {
+        file.only.unwrap_or_default()
+    } else {
+        args.only.clone()
+    };
+
+    Ok(Resolved {
+        profile,
+        duration,
+        curve_k,
+        seed: args.seed.or(file.seed),
+        runs: args.runs.or(file.runs),
+        target_dir: args.target_dir.clone().or(file.target_dir),
+        only,
+    })
+}
+
+pub fn execute(args: RunArgs) -> Result<()> {
+    let r = resolve(&args)?;
+
+    let selected = select_benchmarks(&r.only)?;
+    let baseline = Baseline::reference_v1();
+    let machine = crate::inventory::collect();
+
+    let target_dir = match r.target_dir {
+        Some(dir) => dir,
+        None => std::env::current_dir()?,
+    };
+    let ctx = RunContext {
+        preset: r.duration.into(),
+        seed: r.seed.unwrap_or(DEFAULT_SEED),
+        target_dir,
+        threads: std::thread::available_parallelism().map_or(1, |n| n.get()),
+        total_ram: machine.ram_bytes,
+        runs_override: r.runs,
+        abort: Arc::new(AtomicBool::new(false)),
+    };
+
+    let config = RunConfig {
+        profile: r.profile.name.to_string(),
+        duration_preset: ctx.preset.name().to_string(),
+        curve_k: r.curve_k,
+        seed: ctx.seed,
+        threads: ctx.threads,
+        baseline: baseline.name.clone(),
+        only: r.only.iter().map(|s| s.trim().to_lowercase()).collect(),
+    };
+
+    let interactive = std::io::stdout().is_terminal() && !args.plain && !args.json;
+    if interactive {
+        run_interactive(
+            &args, selected, ctx, baseline, r.profile, r.curve_k, machine, config,
+        )
+    } else {
+        run_plain(
+            &args, &selected, &ctx, &baseline, r.profile, r.curve_k, machine, config,
+        )
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_interactive(
+    args: &RunArgs,
+    selected: Vec<Box<dyn Benchmark>>,
+    ctx: RunContext,
+    baseline: Baseline,
+    profile: Profile,
+    curve_k: f64,
+    machine: Inventory,
+    config: RunConfig,
+) -> Result<()> {
+    let header = format!(
+        "{} · {} · {} threads · {} preset · {} profile",
+        machine.hostname.as_deref().unwrap_or("unknown"),
+        machine.cpu_model,
+        ctx.threads,
+        ctx.preset.name(),
+        profile.name,
+    );
+    let init = tui::RunInit {
+        header,
+        selected,
+        curve_k,
+        ctx,
+        baseline,
+        profile,
+        machine,
+        config,
+    };
+
+    match tui::run(init)? {
+        Some(result) => {
+            write_output(&result, args.output.as_deref())?;
+            println!(
+                "Overall {:.0} [{}] · {} profile{}",
+                result.overall.score,
+                result.overall.grade.as_str(),
+                result.overall.profile,
+                match &args.output {
+                    Some(p) => format!(" · written to {}", p.display()),
+                    None => String::new(),
+                }
+            );
+        }
+        None => println!("run cancelled."),
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_plain(
+    args: &RunArgs,
+    selected: &[Box<dyn Benchmark>],
+    ctx: &RunContext,
+    baseline: &Baseline,
+    profile: Profile,
+    curve_k: f64,
+    machine: Inventory,
+    config: RunConfig,
+) -> Result<()> {
+    if !args.json {
+        eprintln!(
+            "loadbearer run — {} preset, {} timed run(s), {} thread(s), profile {}, seed {:#018x}",
+            ctx.preset.name(),
+            ctx.runs_override.unwrap_or_else(|| ctx.preset.timed_runs()),
+            ctx.threads,
+            profile.name,
+            ctx.seed,
+        );
+    }
+
+    let mut progress = PlainProgress::new();
+    let mut outcomes: Vec<BenchmarkOutcome> = Vec::new();
+    for bench in selected {
+        outcomes.push(run_benchmark(bench.as_ref(), ctx, &mut progress)?);
+    }
+
+    let scored = score_run(&outcomes, baseline, profile, curve_k)?;
+    let result = ResultFile::assemble(machine, config, outcomes, scored);
+
+    if args.json {
+        println!("{}", serde_json::to_string_pretty(&result)?);
+    } else {
+        output::print_scored_report(&result);
+    }
+    if let Some(path) = &args.output {
+        write_output(&result, Some(path))?;
+        if !args.json {
+            eprintln!("\nresult written to {}", path.display());
+        }
+    }
+    Ok(())
+}
+
+fn write_output(result: &ResultFile, path: Option<&Path>) -> Result<()> {
+    if let Some(path) = path {
+        let json = serde_json::to_string_pretty(result)?;
+        std::fs::write(path, json).with_context(|| format!("writing {}", path.display()))?;
+    }
+    Ok(())
+}
+
+fn select_benchmarks(only: &[String]) -> Result<Vec<Box<dyn Benchmark>>> {
+    let all = benches::all();
+    if only.is_empty() {
+        return Ok(all);
+    }
+    let wanted: Vec<String> = only.iter().map(|s| s.trim().to_lowercase()).collect();
+    let known = benches::known_ids();
+    for id in &wanted {
+        if !known.contains(&id.as_str()) {
+            bail!("unknown benchmark {id:?} (known: {})", known.join(", "));
+        }
+    }
+    Ok(all
+        .into_iter()
+        .filter(|b| wanted.iter().any(|w| w == b.id()))
+        .collect())
+}

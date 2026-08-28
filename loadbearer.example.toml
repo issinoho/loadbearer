@@ -1,0 +1,23 @@
+# Example config for `loadbearer run --config loadbearer.example.toml`.
+# Every key is optional. Command-line switches override anything set here.
+
+# Scoring profile: general | dev-workstation | content-creation | server
+profile = "general"
+
+# Thoroughness: short | normal | thorough
+duration = "normal"
+
+# Display-curve exponent (0.05–3.0). Lower compresses the extremes toward 1000.
+curve_k = 0.5
+
+# Restrict to a subset of benchmarks.
+# only = ["cpu", "memory"]
+
+# Directory for the disk benchmark's scratch file. Point at a real disk.
+# target_dir = "/var/tmp"
+
+# Fixed seed for reproducible workloads.
+# seed = 42
+
+# Override the number of timed iterations per subtest.
+# runs = 5
