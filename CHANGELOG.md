@@ -2,6 +2,12 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 0.7.7 - Fri, 29 Aug 2026
+
+- `compare`: a delta that rounds to zero now prints as a plain `0%` instead of
+  a signed `-0%` / `+0%` — the signed zero next to a `=` verdict read like a
+  real difference.
+
 ## 0.7.6 - Fri, 29 Aug 2026
 
 - Fix: `run --only gpu` (or `--only network`, or any selection with no graded

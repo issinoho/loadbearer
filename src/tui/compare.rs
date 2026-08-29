@@ -386,8 +386,18 @@ fn fmt_cell(col_w: usize, value: &str, delta: Option<f64>) -> String {
     let dw = 6.min(col_w);
     let vw = col_w.saturating_sub(dw);
     match delta {
-        Some(pct) => format!("{value:>vw$}{:>dw$}", format!("{pct:+.0}%")),
+        Some(pct) => format!("{value:>vw$}{:>dw$}", fmt_pct(pct)),
         None => format!("{value:>vw$}{:dw$}", ""),
+    }
+}
+
+/// A signed percentage — but a value that rounds to zero prints as a plain
+/// `0%`, never `+0%` or a signed-zero `-0%`.
+fn fmt_pct(pct: f64) -> String {
+    if pct.round() == 0.0 {
+        "0%".to_string()
+    } else {
+        format!("{pct:+.0}%")
     }
 }
 
@@ -554,6 +564,11 @@ mod tests {
         assert_eq!(b.rfind('9').unwrap(), 16 - 6 - 1);
         // No delta -> the sub-field is blank, not filled.
         assert!(fmt_cell(16, "42", None).ends_with("      "));
+        // A delta that rounds to zero is a plain `0%`, never `-0%` / `+0%`.
+        assert!(fmt_cell(16, "1", Some(-0.4)).ends_with("    0%"));
+        assert!(fmt_cell(16, "1", Some(0.4)).ends_with("    0%"));
+        assert_eq!(fmt_pct(-0.4), "0%");
+        assert_eq!(fmt_pct(0.6), "+1%");
     }
 
     #[test]

@@ -430,7 +430,15 @@ fn cmp_cell(value: &str, delta: Option<f64>) -> String {
     const DW: usize = 6;
     let vw = CMP_COL_W - DW;
     match delta {
-        Some(pct) => format!("{value:>vw$}{:>DW$}", format!("{pct:+.0}%")),
+        Some(pct) => {
+            // A delta that rounds to zero prints as a plain `0%`, not `-0%`.
+            let d = if pct.round() == 0.0 {
+                "0%".to_string()
+            } else {
+                format!("{pct:+.0}%")
+            };
+            format!("{value:>vw$}{d:>DW$}")
+        }
         None => format!("{value:>vw$}{:DW$}", ""),
     }
 }
