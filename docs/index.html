@@ -329,10 +329,15 @@ Disks
     <div class="install-grid">
       <div class="install-card">
         <h3>🪟 Windows (x86-64)</h3>
-        <p>Unzip and run <code>loadbearer.exe</code> from a terminal. Not
-        code-signed, so SmartScreen shows an "unrecognized app" warning the first
-        time — <em>More info → Run anyway</em>. Each release publishes
-        <code>SHA256SUMS</code> for verification and WDAC/AppLocker hash rules.</p>
+        <p>Unzip and run <code>loadbearer.exe</code> from a terminal.
+        Windows builds are Authenticode-signed via
+        <a href="https://signpath.io">SignPath.io</a>'s free programme for open
+        source (certificate by the
+        <a href="https://signpath.org">SignPath Foundation</a>); until the
+        certificate builds reputation, SmartScreen may still prompt
+        (<em>More info → Run anyway</em>) and Smart App Control can block it —
+        run it on a machine without SAC, or build from source. Each release
+        publishes <code>SHA256SUMS</code>.</p>
         <a class="btn btn-primary" data-dl="windows" href="https://github.com/issinoho/loadbearer/releases/latest">Download .zip</a>
       </div>
 
@@ -373,6 +378,11 @@ Disks
       <a href="https://github.com/issinoho/loadbearer/releases">Releases</a>
       <a href="https://github.com/issinoho/loadbearer/blob/main/LICENSE">License</a>
     </div>
+    <p class="footer-note">
+      Free Windows code signing provided by
+      <a href="https://signpath.io">SignPath.io</a>, certificate by the
+      <a href="https://signpath.org">SignPath Foundation</a>.
+    </p>
   </div>
 </footer>
 

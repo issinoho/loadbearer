@@ -219,3 +219,6 @@ footer .container { display: flex; justify-content: space-between; align-items: 
 .footer-links { display: flex; gap: 20px; }
 .footer-links a { color: var(--muted); text-decoration: none; }
 .footer-links a:hover { color: var(--text); }
+.footer-note { flex-basis: 100%; margin: 0; color: var(--faint); }
+.footer-note a { color: var(--muted); text-decoration: none; }
+.footer-note a:hover { color: var(--text); }
