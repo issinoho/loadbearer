@@ -595,6 +595,18 @@ CI runs all three on Linux and Windows for every push and pull request. Tagged
 `v*` pushes build release binaries for both and attach them to a GitHub Release
 (see [`.github/workflows`](.github/workflows)).
 
+## Stability
+
+From 1.0.0, loadbearer follows semantic versioning for its **CLI** (subcommands
+and flags), the four `schema`-tagged JSON formats (`loadbearer.result/1`,
+`loadbearer.soak/1`, `loadbearer.compare/1`, `loadbearer.mem/1`), and its
+**exit codes** — a breaking change to any of those is a major release.
+
+**Not** covered, and free to change in any release: absolute score values and
+letter grades, the reference baseline, the `--plain` text layout and the TUI,
+and the diagnostic-log format. The full contract is in
+[`VERSIONING.md`](VERSIONING.md).
+
 ## Contributing
 
 Bug reports, small fixes and well-scoped features are welcome — see
