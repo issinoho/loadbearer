@@ -329,7 +329,7 @@ fn grade_tag(g: Grade) -> String {
 }
 
 const CMP_NAME_W: usize = 32;
-const CMP_COL_W: usize = 15;
+const CMP_COL_W: usize = 17;
 
 /// Render a head-to-head comparison of two or more result files.
 pub fn print_comparison(c: &Comparison) {
@@ -375,19 +375,15 @@ pub fn print_comparison(c: &Comparison) {
                 truncate(&format!("{} ({})", st.label, st.unit), CMP_NAME_W)
             );
             for (mi, value) in st.values.iter().enumerate() {
-                let cell = if mi == 0 {
-                    fmt_val(*value)
-                } else {
-                    format!("{} {:+.0}%", fmt_val(*value), (st.rel[mi] - 1.0) * 100.0)
-                };
-                print!(" {cell:>CMP_COL_W$}");
+                let delta = (mi != 0).then(|| (st.rel[mi] - 1.0) * 100.0);
+                print!(" {}", cmp_cell(&fmt_val(*value), delta));
             }
             println!("     {}", winner_tag(c, &st.rel, st.best));
         }
         println!("  {}", "\u{2500}".repeat(body_w));
         print!("  {:<CMP_NAME_W$}", format!("{} total", comp.label));
         for (mi, rel) in comp.rel.iter().enumerate() {
-            print!(" {:>CMP_COL_W$}", rel_cell(mi, *rel));
+            print!(" {}", rollup_cell(mi, *rel));
         }
         println!("     {}", winner_tag(c, &comp.rel, comp.best));
     }
@@ -395,7 +391,7 @@ pub fn print_comparison(c: &Comparison) {
     println!("\n  {}", "\u{2550}".repeat(body_w));
     print!("  {:<CMP_NAME_W$}", "OVERALL");
     for (mi, rel) in c.overall.rel.iter().enumerate() {
-        print!(" {:>CMP_COL_W$}", rel_cell(mi, *rel));
+        print!(" {}", rollup_cell(mi, *rel));
     }
     println!(
         "     {}",
@@ -406,12 +402,8 @@ pub fn print_comparison(c: &Comparison) {
         println!("\n  SUSTAINED LOAD (not graded)");
         print!("  {:<CMP_NAME_W$}", format!("  steady ({})", sk.unit));
         for (mi, v) in sk.steady_rate.iter().enumerate() {
-            let cell = if mi == 0 {
-                fmt_val(*v)
-            } else {
-                format!("{} {:+.0}%", fmt_val(*v), (sk.rel_steady[mi] - 1.0) * 100.0)
-            };
-            print!(" {cell:>CMP_COL_W$}");
+            let delta = (mi != 0).then(|| (sk.rel_steady[mi] - 1.0) * 100.0);
+            print!(" {}", cmp_cell(&fmt_val(*v), delta));
         }
         println!("  {}", c.machines[sk.best_sustained].tag);
         print!("  {:<CMP_NAME_W$}", "  retained vs own peak");
@@ -424,11 +416,25 @@ pub fn print_comparison(c: &Comparison) {
     println!("\n  Verdict: {}\n", c.overall.summary);
 }
 
-fn rel_cell(machine_index: usize, rel: f64) -> String {
+/// A comparison cell, `CMP_COL_W` wide: the value right-aligned in a left
+/// sub-field, then the `±%` delta right-aligned in its own 6-char sub-field, so
+/// the deltas line up in a column of their own instead of crowding the number.
+fn cmp_cell(value: &str, delta: Option<f64>) -> String {
+    const DW: usize = 6;
+    let vw = CMP_COL_W - DW;
+    match delta {
+        Some(pct) => format!("{value:>vw$}{:>DW$}", format!("{pct:+.0}%")),
+        None => format!("{value:>vw$}{:DW$}", ""),
+    }
+}
+
+/// The cell for a rollup row: `ref` for machine 0, otherwise just the `±%`
+/// delta, positioned in the same delta sub-column as [`cmp_cell`].
+fn rollup_cell(machine_index: usize, rel: f64) -> String {
     if machine_index == 0 {
-        "ref".to_string()
+        cmp_cell("ref", None)
     } else {
-        format!("{:+.0}%", (rel - 1.0) * 100.0)
+        cmp_cell("", Some((rel - 1.0) * 100.0))
     }
 }
 

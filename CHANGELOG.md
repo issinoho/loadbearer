@@ -2,6 +2,13 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 0.7.2 - Fri, 29 Aug 2026
+
+- `compare`: the `±%` delta now sits in its own right-aligned column instead of
+  running straight on from the value (`12907  +40%`, with the deltas lining up
+  down the table). Rollup rows put their delta in the same column. Machine
+  columns widened a little to fit the split. TUI and plain both.
+
 ## 0.7.1 - Fri, 29 Aug 2026
 
 - `compare`: widen the gap between the last machine's value column and the

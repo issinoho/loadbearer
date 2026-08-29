@@ -20,8 +20,8 @@ const DIM: Color = Color::DarkGray;
 /// Column-width bounds; the actual widths are picked from the terminal.
 const NAME_MIN: usize = 22;
 const NAME_MAX: usize = 48;
-const COL_MIN: usize = 15;
-const COL_MAX: usize = 28;
+const COL_MIN: usize = 16;
+const COL_MAX: usize = 30;
 
 /// Show the comparison in an alternate screen until the user quits.
 pub fn run(c: &Comparison) -> Result<()> {
@@ -84,10 +84,12 @@ fn draw(f: &mut Frame, c: &Comparison, scroll: &mut u16) {
     // from COL_MIN up to whatever their "A: <name>" header needs.
     let n = c.machines.len();
     let inner_w = inner.width as usize;
+    // Wide enough for the "A: <name>" header, plus room for the value / delta
+    // split in the body.
     let want_col = c
         .machines
         .iter()
-        .map(|m| m.tag.chars().count() + 2 + m.label.chars().count())
+        .map(|m| m.tag.chars().count() + 2 + m.label.chars().count() + 2)
         .max()
         .unwrap_or(COL_MIN)
         .clamp(COL_MIN, COL_MAX);
@@ -353,19 +355,12 @@ fn metric_row(
         Style::default().add_modifier(emph),
     )];
     for (i, r) in rel.iter().enumerate() {
-        let cell = if i == 0 {
-            if aggregate {
-                "ref".to_string()
-            } else {
-                fmt_val(values[i])
-            }
-        } else {
-            let pct = (r - 1.0) * 100.0;
-            if aggregate {
-                format!("{pct:+.0}%")
-            } else {
-                format!("{} {pct:+.0}%", fmt_val(values[i]))
-            }
+        let pct = (r - 1.0) * 100.0;
+        let cell = match (i, aggregate) {
+            (0, true) => fmt_cell(col_w, "ref", None),
+            (0, false) => fmt_cell(col_w, &fmt_val(values[i]), None),
+            (_, true) => fmt_cell(col_w, "", Some(pct)),
+            (_, false) => fmt_cell(col_w, &fmt_val(values[i]), Some(pct)),
         };
         let winner = rel.len() > 1 && i == best;
         let style = if winner {
@@ -377,13 +372,23 @@ fn metric_row(
         } else {
             Style::default()
         };
-        spans.push(Span::styled(
-            format!(" {cell:>col_w$}"),
-            style.add_modifier(emph),
-        ));
+        spans.push(Span::styled(format!(" {cell}"), style.add_modifier(emph)));
     }
     spans.push(winner_span(c, rel, best));
     Line::from(spans)
+}
+
+/// Format one machine's cell as `col_w` chars: the value right-aligned in a
+/// left sub-field, then the `±%` delta right-aligned in its own 6-char
+/// sub-field, so the deltas line up in a column of their own and never crowd
+/// the number.
+fn fmt_cell(col_w: usize, value: &str, delta: Option<f64>) -> String {
+    let dw = 6.min(col_w);
+    let vw = col_w.saturating_sub(dw);
+    match delta {
+        Some(pct) => format!("{value:>vw$}{:>dw$}", format!("{pct:+.0}%")),
+        None => format!("{value:>vw$}{:dw$}", ""),
+    }
 }
 
 /// Gap between the last value column and the winner-tag column.
@@ -532,6 +537,23 @@ mod tests {
             .position(|l| l.trim_start().starts_with("OVERALL"))
             .unwrap();
         assert!(lines[ov - 1].contains('\u{2550}'), "{:?}", lines[ov - 1]);
+    }
+
+    #[test]
+    fn deltas_share_a_column_regardless_of_value_width() {
+        // 6-char delta sub-field: value ends 6 from the column edge, the
+        // delta right-aligns to the edge.
+        assert_eq!(fmt_cell(16, "9", Some(4.0)).len(), 16);
+        let a = fmt_cell(16, "9", Some(4.0));
+        let b = fmt_cell(16, "999999", Some(-40.0));
+        assert!(a.ends_with("   +4%"), "{a:?}");
+        assert!(b.ends_with("  -40%"), "{b:?}");
+        // Both deltas right-align to the same edge, and the value never reaches
+        // into the last 6 columns.
+        assert_eq!(a.rfind('%'), b.rfind('%'));
+        assert_eq!(b.rfind('9').unwrap(), 16 - 6 - 1);
+        // No delta -> the sub-field is blank, not filled.
+        assert!(fmt_cell(16, "42", None).ends_with("      "));
     }
 
     #[test]
