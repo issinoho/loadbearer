@@ -2,6 +2,14 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 0.7.8 - Fri, 29 Aug 2026
+
+- The disk benchmark now sweeps a **stale scratch file** left by a previous run
+  that was hard-killed before its cleanup could run. On start-up it removes any
+  `.loadbearer-scratch.<pid>` in `--target-dir` that isn't this run's and hasn't
+  been modified in 20 minutes (a concurrent run is never touched), and records a
+  note. On a recurring schedule the ~1 GiB orphan is now reclaimed on its own.
+
 ## 0.7.7 - Fri, 29 Aug 2026
 
 - `compare`: a delta that rounds to zero now prints as a plain `0%` instead of

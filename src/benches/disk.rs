@@ -55,6 +55,47 @@ impl Drop for Scratch {
     }
 }
 
+/// A run that was hard-killed (SIGKILL, `TerminateProcess`, reboot, a
+/// deploy-tool step timeout) never runs [`Scratch::drop`], so its
+/// `.loadbearer-scratch.<pid>` file — up to ~1 GiB — is left behind. Before a
+/// fresh run creates its own, sweep those away: a file is removed only if it
+/// belongs to a *different* PID **and** hasn't been modified in `stale_after`,
+/// so a `loadbearer` run happening concurrently in the same directory is never
+/// touched. Non-`loadbearer` files are never considered. Errors are ignored —
+/// this is best-effort tidy-up, not a benchmark step.
+fn sweep_stale_scratch(dir: &Path, stale_after: Duration) -> usize {
+    let me = std::process::id();
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    let mut removed = 0;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(pid) = name
+            .to_str()
+            .and_then(|n| n.strip_prefix(".loadbearer-scratch."))
+        else {
+            continue;
+        };
+        if pid.is_empty() || !pid.bytes().all(|b| b.is_ascii_digit()) {
+            continue;
+        }
+        if pid.parse::<u32>().ok() == Some(me) {
+            continue;
+        }
+        let stale = entry
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|age| age >= stale_after);
+        if stale && std::fs::remove_file(entry.path()).is_ok() {
+            removed += 1;
+        }
+    }
+    removed
+}
+
 pub struct DiskBenchmark {
     scratch: Mutex<Option<Scratch>>,
     /// `Some(true)` unbuffered, `Some(false)` buffered fallback, `None` untested.
@@ -95,6 +136,14 @@ impl DiskBenchmark {
                 "{} is a RAM-backed filesystem (tmpfs/ramfs); disk figures reflect memory, \
                  not storage — pass --target-dir on a real disk",
                 ctx.target_dir.display()
+            ));
+        }
+
+        // Clean up after any previous run that was killed before it could.
+        let swept = sweep_stale_scratch(&ctx.target_dir, Duration::from_secs(20 * 60));
+        if swept > 0 {
+            self.note(format!(
+                "removed {swept} stale scratch file(s) left by an interrupted earlier run"
             ));
         }
 
@@ -380,6 +429,33 @@ mod tests {
         let scratch_path = bench.scratch.lock().unwrap().as_ref().unwrap().path.clone();
         drop(bench);
         assert!(!scratch_path.exists(), "scratch file was not removed");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn sweep_removes_a_foreign_orphan_only_when_stale() {
+        let dir = std::env::temp_dir().join(format!("lb-sweep-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mine = dir.join(format!(".loadbearer-scratch.{}", std::process::id()));
+        let foreign = dir.join(".loadbearer-scratch.424242");
+        let unrelated = dir.join("notes.txt");
+        let weird = dir.join(".loadbearer-scratch.notapid");
+        for p in [&mine, &foreign, &unrelated, &weird] {
+            std::fs::write(p, b"x").unwrap();
+        }
+
+        // A long staleness window spares the freshly-written foreign file.
+        assert_eq!(sweep_stale_scratch(&dir, Duration::from_secs(3600)), 0);
+        assert!(foreign.exists());
+
+        // Zero window: the foreign orphan goes; our own file and the
+        // non-scratch files are untouched.
+        assert_eq!(sweep_stale_scratch(&dir, Duration::ZERO), 1);
+        assert!(!foreign.exists());
+        assert!(mine.exists());
+        assert!(unrelated.exists());
+        assert!(weird.exists());
+
         std::fs::remove_dir_all(&dir).ok();
     }
 
