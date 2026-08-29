@@ -2,6 +2,8 @@
 
 # loadbearer
 
+[![Tiny Tool Town](https://img.shields.io/badge/Tiny_Tool_Town-featured-6f42c1?style=flat)](https://www.tinytooltown.com/tools/loadbearer)
+
 A command-line system-assessment tool. It benchmarks a host machine's **CPU**,
 **memory**, **disk** and **network stack** — and its **GPU** where there is one —
 scores every measurement against an embedded reference baseline, and grades each
