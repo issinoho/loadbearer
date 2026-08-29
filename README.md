@@ -19,7 +19,8 @@ interactive terminal `loadbearer run` shows a TUI — live per-subtest progress,
 running overall gauge with an ETA, then a scrollable graded results screen — and
 `loadbearer compare` shows the head-to-head in a scrollable coloured view. Piped
 output, `--plain`, or `--json` fall back to plain text / machine-readable JSON, so
-it works just as well from a script or CI job.
+it works just as well from a script or CI job. Every invocation also writes a
+[diagnostic log](#diagnostic-logging) (`--no-log` to skip it).
 
 Primarily built for and released on **Windows** (a self-contained `.exe`, no
 runtime to install — see [Install](#install)); Linux is supported as a
@@ -36,7 +37,7 @@ through, `compare` internals, and how to recalibrate the baseline — see the
 ## What a run looks like
 
 ```
-loadbearer 0.8.0 — assessment
+loadbearer 0.10.0 — assessment
 
   Machine   ThinkPad-X280 · Intel(R) Core(TM) i5-8350U CPU @ 1.70GHz · 8 threads · 7.0 GiB RAM
   Profile   general · curve k=0.5 · baseline reference-v1 · short preset
@@ -314,7 +315,7 @@ folded into the verdict.
 
 ```
 re-scoring thinkpad-x280 (2026-08-28T15:45:20Z)
-  tool      0.4.0  →  0.8.0
+  tool      0.4.0  →  0.10.0
   baseline  reference-v1  →  our-fleet
   profile   general  →  server
   curve k   0.5  →  0.7
@@ -362,7 +363,7 @@ has the higher burst.
 | `--json` | Emit the snapshot as JSON (`source`, `programs[]`, `unreadable`) instead of the table. |
 
 ```
-loadbearer 0.8.0 — memory by program
+loadbearer 0.10.0 — memory by program
 
     Private +     Shared =   RAM used   Program
 
