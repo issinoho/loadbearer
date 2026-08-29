@@ -36,7 +36,7 @@ through, `compare` internals, and how to recalibrate the baseline — see the
 ## What a run looks like
 
 ```
-loadbearer 0.6.4 — assessment
+loadbearer 0.8.0 — assessment
 
   Machine   ThinkPad-X280 · Intel(R) Core(TM) i5-8350U CPU @ 1.70GHz · 8 threads · 7.0 GiB RAM
   Profile   general · curve k=0.5 · baseline reference-v1 · short preset
@@ -75,13 +75,23 @@ loadbearer 0.6.4 — assessment
 
   A score of 1000 = the reference-v1 baseline. Grades: S≥1400 A≥1150 B≥850 C≥600 D≥400.
   Network is measured and shown, but kept out of the overall grade (OS-dependent / optional hardware).
+
+  BATTERY  health 88% of design · 257 cycles · not graded
+    Charge       73% (discharging)
+    Health       42.0 / 48.0 Wh design (88%)
+    Cycles       257
+    Voltage      11.75 V
+    → healthy — minor capacity loss
+    note: on battery power — clocks may be capped; prefer mains for a clean grade
 ```
 
 Each subtest row is: raw measurement, its ratio to the baseline, its score, and a
 confidence flag derived from run-to-run spread. (A few rows are trimmed above for
-length — a real run shows all eight CPU and all five memory subtests.) In a
-terminal this is a coloured, scrollable full-screen view with a live progress
-gauge while the run is in progress; the block above is the `--plain` rendering.
+length — a real run shows all eight CPU and all five memory subtests, and a GPU
+block where there's a GPU.) The `BATTERY` block appears only on a machine with a
+battery and never counts toward the grade. In a terminal this is a coloured,
+scrollable full-screen view with a live progress gauge while the run is in
+progress; the block above is the `--plain` rendering.
 
 This X280 is a 2018 laptop, so against a 2021 baseline it lands at C across the
 board — the SHA-256 row (`0.12x`) is it lacking the SHA instruction extension,
@@ -296,7 +306,7 @@ folded into the verdict.
 
 ```
 re-scoring thinkpad-x280 (2026-08-28T15:45:20Z)
-  tool      0.4.0  →  0.6.4
+  tool      0.4.0  →  0.8.0
   baseline  reference-v1  →  our-fleet
   profile   general  →  server
   curve k   0.5  →  0.7
