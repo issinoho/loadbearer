@@ -37,68 +37,77 @@ through, `compare` internals, and how to recalibrate the baseline — see the
 ## What a run looks like
 
 ```
-loadbearer 0.10.0 — assessment
+loadbearer 1.0.0 — assessment
 
   Machine   ThinkPad-X280 · Intel(R) Core(TM) i5-8350U CPU @ 1.70GHz · 8 threads · 7.0 GiB RAM
-  Profile   general · curve k=0.5 · baseline reference-v1 · short preset
+  Profile   general · curve k=0.5 · baseline reference-v1 · thorough preset
 
-  CPU         799  [C]   █████████████░░░░░░░░░░░
-    Integer, all cores           37713.2 Mops/s     0.84x     915  high
-    Float, all cores             53689.9 MFLOP/s    0.77x     876  medium
-    BLAKE3 hash                   3587.9 MiB/s      0.85x     924  high
-    DEFLATE compress                58.0 MiB/s      0.85x     924  high
-    AES-256-GCM encrypt           1107.0 MiB/s      0.62x     784  high
-    SHA-256 hash                   209.9 MiB/s      0.12x     342  high
+  CPU         984  [B]   ████████████████░░░░░░░░
+    Integer, single-core          6092.9 Mops/s     0.95x     973  high
+    Integer, all cores           25180.3 Mops/s     1.43x    1194  high
+    Float, single-core            4746.0 MFLOP/s    0.83x     914  high
+    Float, all cores             36997.5 MFLOP/s    1.61x    1267  high
+    BLAKE3 hash                   2384.6 MiB/s      1.27x    1128  high
+    DEFLATE compress                38.8 MiB/s      0.87x     935  high
+    AES-256-GCM encrypt            736.1 MiB/s      0.97x     984  high
+    SHA-256 hash                   140.5 MiB/s      0.39x     628  high
 
-  MEMORY      756  [C]   ████████████░░░░░░░░░░░░
-    Sequential read                 13.3 GiB/s      0.61x     778  high
-    Copy (memcpy)                    8.8 GiB/s      0.63x     791  high
-    Sequential read, all cores      12.1 GiB/s      0.43x     658  medium
-    Random access latency          151.2 ns         0.63x     793  medium
+  MEMORY      947  [B]   ███████████████░░░░░░░░░
+    Sequential read                  8.9 GiB/s      0.83x     913  medium
+    Sequential write                 8.3 GiB/s      1.21x    1101  medium
+    Copy (memcpy)                    7.2 GiB/s      1.11x    1054  medium
+    Sequential read, all cores        10.4 GiB/s      0.64x     798  medium
+    Random access latency          181.8 ns         0.81x     901  high
 
-  DISK        522  [D]   ████████░░░░░░░░░░░░░░░░
-    Sequential write               381.2 MiB/s      0.25x     504  high
-    Sequential read                374.9 MiB/s      0.12x     354  high
-    Random 4K read                8463.6 IOPS       0.56x     751  low
-    Random 4K write              12334.8 IOPS       0.31x     555  medium
+  DISK        835  [C]   █████████████░░░░░░░░░░░
+    Sequential write               175.5 MiB/s      0.51x     716  medium
+    Sequential read                380.4 MiB/s      0.67x     816  high
+    Random 4K read                8093.8 IOPS       0.99x     994  medium
+    Random 4K write               7601.6 IOPS       0.70x     838  low
 
-  NETWORK     757  [C]   ████████████░░░░░░░░░░░░   · measured, not in the overall (OS-dependent)
-    TCP throughput, single stream         4.8 GiB/s      0.69x     832  high
-    TCP round-trip latency          18.5 us         0.76x     869  low
-    UDP send rate                  253.1 Kpps       0.56x     750  high
+  NETWORK    1219  [A]   ████████████████████░░░░   · measured, not in the overall
+    TCP throughput, single stream         3.2 GiB/s      1.63x    1275  medium
+    TCP throughput, all streams           6.7 GiB/s      2.26x    1505  low
+    TCP round-trip latency          54.6 us         0.73x     853  low
+    UDP send rate                  169.1 Kpps       1.82x    1348  high
 
-  OVERALL     680  [C]   ███████████░░░░░░░░░░░░░
+  GPU        1318  [A]   █████████████████████░░░   · measured, not in the overall
+    FP32 compute (FMA)            1124.9 GFLOP/s    3.99x    1997  high
+    VRAM read bandwidth             15.5 GiB/s      0.76x     869  medium
+
+  OVERALL     920  [B]   ███████████████░░░░░░░░░
 
   Why:
-    - held back by Disk (score 522)
-    - held back by Memory (score 756)
+    - held back by Disk (score 835)
     - low measurement confidence in: Disk
 
   A score of 1000 = the reference-v1 baseline. Grades: S≥1400 A≥1150 B≥850 C≥600 D≥400.
-  Network is measured and shown, but kept out of the overall grade (OS-dependent / optional hardware).
+  Network and GPU are measured and shown, but kept out of the overall grade (OS-dependent / optional hardware).
 
   BATTERY  health 88% of design · 257 cycles · not graded
-    Charge       73% (discharging)
+    Charge       86% (discharging)
     Health       42.0 / 48.0 Wh design (88%)
     Cycles       257
-    Voltage      11.75 V
+    Voltage      12.09 V
     → healthy — minor capacity loss
     note: on battery power — clocks may be capped; prefer mains for a clean grade
 ```
 
 Each subtest row is: raw measurement, its ratio to the baseline, its score, and a
-confidence flag derived from run-to-run spread. (A few rows are trimmed above for
-length — a real run shows all eight CPU and all five memory subtests, and a GPU
-block where there's a GPU.) The `BATTERY` block appears only on a machine with a
-battery and never counts toward the grade. In a terminal this is a coloured,
+confidence flag derived from run-to-run spread. In a terminal this is a coloured,
 scrollable full-screen view with a live progress gauge while the run is in
-progress; the block above is the `--plain` rendering.
+progress; the block above is the `--plain` rendering. The `GPU` block appears
+only where there's a GPU and the `BATTERY` block only on a machine with a
+battery — neither counts toward the grade.
 
-This X280 is a 2018 laptop, so against a 2021 baseline it lands at C across the
-board — the SHA-256 row (`0.12x`) is it lacking the SHA instruction extension,
-and `Sequential read, all cores` barely beating single-thread read is its
-dual-channel memory not scaling. Both are exactly the kind of thing the new
-subtests exist to surface.
+This 2018 X280 lands **B** against `reference-v1` (a
+[small, older-leaning sample](#scoring-model) — its all-core CPU and memory
+figures actually clear the baseline). The rows that stand out are exactly the
+kind of thing the subtests exist to surface: `SHA-256` at `0.39x` is the chip
+lacking the SHA instruction extension, `Sequential read, all cores` (`0.64x`)
+barely beating single-thread read (`0.83x`) is its dual-channel memory not
+scaling, and the ungraded `FP32 compute` at `3.99x` just reflects how weak the
+baseline's four-iGPU GPU anchor is.
 
 ## Requirements
 
@@ -332,7 +341,7 @@ folded into the verdict.
 
 ```
 re-scoring thinkpad-x280 (2026-08-28T15:45:20Z)
-  tool      0.4.0  →  0.10.0
+  tool      0.4.0  →  1.0.0
   baseline  reference-v1  →  our-fleet
   profile   general  →  server
   curve k   0.5  →  0.7
@@ -380,7 +389,7 @@ has the higher burst.
 | `--json` | Emit the snapshot as JSON (`schema` `"loadbearer.mem/1"`, `tool_version`, `source`, `programs[]`, `unreadable`) instead of the table. |
 
 ```
-loadbearer 0.10.0 — memory by program
+loadbearer 1.0.0 — memory by program
 
     Private +     Shared =   RAM used   Program
 

@@ -80,33 +80,32 @@
 
     <div class="term term-hero">
       <div class="term-bar"><i></i><i></i><i></i><em>loadbearer run</em></div>
-<pre>loadbearer 0.10.0 — assessment
+<pre>loadbearer 1.0.0 — assessment
 
   Machine   ThinkPad-X280 · i5-8350U · 8 threads · 7.0 GiB RAM
   Profile   general · curve k=0.5 · baseline reference-v1
 
-  CPU       <b class="g-b">929  [B]</b>  <span class="bar">██████████████░░░░░░░░░</span>
-    Integer, all cores     37937.0 Mops/s   0.84x   918  high
-    Float, all cores       54982.6 MFLOP/s  0.79x   886  high
-    BLAKE3 hash             3637.5 MiB/s    0.87x   931  high
+  CPU       <b class="g-b">984  [B]</b>  <span class="bar">████████████████░░░░░░░</span>
+    Integer, all cores     25180.3 Mops/s   1.43x  1194  high
+    Float, all cores       36997.5 MFLOP/s  1.61x  1267  high
+    BLAKE3 hash             2384.6 MiB/s    1.27x  1128  high
 
-  MEMORY    <b class="g-c">820  [C]</b>  <span class="bar">████████████░░░░░░░░░░░</span>
-    Sequential read           14.4 GiB/s    0.65x   809  high
-    Random access latency    131.5 ns       0.72x   850  high
+  MEMORY    <b class="g-b">947  [B]</b>  <span class="bar">███████████████░░░░░░░░</span>
+    Sequential read            8.9 GiB/s    0.83x   913  medium
+    Random access latency    181.8 ns       0.81x   901  high
 
-  DISK      <b class="g-d">538  [D]</b>  <span class="bar">████████░░░░░░░░░░░░░░░</span>
-    Sequential read          371.3 MiB/s    0.12x   352  high
-    Random 4K write        13197.1 IOPS     0.33x   574  low
+  DISK      <b class="g-c">835  [C]</b>  <span class="bar">█████████████░░░░░░░░░░</span>
+    Sequential read          380.4 MiB/s    0.67x   816  high
+    Random 4K write         7601.6 IOPS     0.70x   838  low
 
-  NETWORK   <b class="g-c">761  [C]</b>  <span class="bar">███████████░░░░░░░░░░░░</span>  <span class="dim">· not in overall</span>
-    TCP round-trip latency    17.5 us       0.80x   893  medium
-    UDP send rate            259.0 Kpps     0.58x   759  high
+  NETWORK   <b class="g-a">1219  [A]</b>  <span class="bar">████████████████████░░</span>  <span class="dim">· not in overall</span>
+    TCP round-trip latency    54.6 us       0.73x   853  low
+    UDP send rate            169.1 Kpps     1.82x  1348  high
 
-  <b>OVERALL   <span class="g-c">743  [C]</span></b>  <span class="bar">███████████░░░░░░░░░░░</span>
+  <b>OVERALL   <span class="g-b">920  [B]</span></b>  <span class="bar">███████████████░░░░░░░</span>
 
   Why:
-    - held back by Disk (score 538)
-    - held back by Memory (score 820)
+    - held back by Disk (score 835)
     - low measurement confidence in: Disk</pre>
     </div>
   </div>
@@ -188,7 +187,7 @@
     <div class="gallery">
       <figure class="term">
         <figcaption class="term-bar"><i></i><i></i><i></i><em>loadbearer compare x280.json desktop.json --plain</em></figcaption>
-<pre>loadbearer 0.10.0 — compare (2 machines)
+<pre>loadbearer 1.0.0 — compare (2 machines)
 
   A  ThinkPad-X280   Intel(R) Core(TM) i5-8350U
   B  dev-desktop     AMD Ryzen 9 7900X
@@ -215,7 +214,7 @@
       <div class="gallery-col">
         <figure class="term">
           <figcaption class="term-bar"><i></i><i></i><i></i><em>loadbearer info</em></figcaption>
-<pre>loadbearer 0.10.0 — machine inventory
+<pre>loadbearer 1.0.0 — machine inventory
 
 Host
   Hostname        ThinkPad-X280

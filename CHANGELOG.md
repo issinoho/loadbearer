@@ -2,6 +2,36 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 1.0.0 - Sat, 29 Aug 2026
+
+First stable release. From here, [`VERSIONING.md`](VERSIONING.md) is the semver
+contract: the CLI, the `schema`-tagged JSON formats and the exit codes are
+covered; absolute scores, the reference baseline, the `--plain` layout and the
+diagnostic-log format are not.
+
+- **`reference-v1` recalibrated from real hardware.** The synthetic anchors —
+  which every real machine graded C/D against — are replaced by the geometric
+  mean of each metric across seven Intel machines (2015–2023, an i7-1370P down
+  to a Celeron J4005) run at `--duration thorough`. Absolute scores shift
+  substantially; it is a small, older-leaning sample, so a current mainstream
+  machine now grades A/S. The `baseline/reference-v1.toml` header lists the
+  machines; recalibrating again is a normal minor release.
+- **Every machine-readable output is versioned.** `loadbearer compare --json`
+  and `loadbearer mem --json` now carry `schema` (`loadbearer.compare/1`,
+  `loadbearer.mem/1`) and `tool_version`, joining `loadbearer.result/1` and
+  `loadbearer.soak/1`. Adding an optional field keeps the number; removing or
+  retyping one bumps it.
+- **Shell completions and a man page** are generated at build time and bundled
+  in every release archive — `completions/` (bash, zsh, fish, PowerShell) and
+  `loadbearer.1`.
+- **Windows code signing** wired to [SignPath.io](https://signpath.io)'s free
+  programme for open source: the release workflow signs `loadbearer.exe` when
+  the SignPath secrets are configured, and ships it unsigned otherwise. The
+  Windows install docs now cover SmartScreen, WDAC/AppLocker, and Smart App
+  Control (which takes no allow rules at all).
+- `VERSIONING.md` and a wiki *Stability* page; `loadbearer.1` and `VERSIONING.md`
+  added to the archives.
+
 ## 0.10.0 - Sat, 29 Aug 2026
 
 **The last `0.x` release.** The next release is `1.0.0`.
