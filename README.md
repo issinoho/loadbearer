@@ -624,6 +624,9 @@ enforces, and how to add a benchmark. All participants follow the
 [Code of Conduct](CODE_OF_CONDUCT.md). Security reports go through
 [SECURITY.md](SECURITY.md), not the public tracker.
 
+loadbearer collects no data and sends nothing anywhere — see
+[PRIVACY.md](PRIVACY.md).
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
