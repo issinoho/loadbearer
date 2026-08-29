@@ -35,6 +35,10 @@ pub struct Cli {
 pub enum Command {
     /// Show machine inventory without running any benchmark.
     Info(InfoArgs),
+    /// Per-program memory use, in the style of `ps_mem` — grouped by program,
+    /// largest last, with a grand total. Linux reports true PSS; Windows the
+    /// working set. A diagnostic, not a benchmark.
+    Mem(MemArgs),
     /// List available benchmarks, the active baseline and scoring profiles.
     List,
     /// Run benchmarks and produce a graded result.
@@ -86,6 +90,21 @@ pub struct NetServerArgs {
 #[derive(Args, Debug)]
 pub struct InfoArgs {
     /// Emit machine-readable JSON instead of formatted text.
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct MemArgs {
+    /// Show only the N largest programs (the total still covers all of them).
+    #[arg(long, value_name = "N")]
+    pub limit: Option<usize>,
+
+    /// Add a Swap column (Linux only; shows the proportional paged-out size).
+    #[arg(long)]
+    pub swap: bool,
+
+    /// Emit machine-readable JSON instead of the table.
     #[arg(long)]
     pub json: bool,
 }

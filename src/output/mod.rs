@@ -4,6 +4,7 @@
 use crate::compare::Comparison;
 use crate::engine::Benchmark;
 use crate::inventory::Inventory;
+use crate::mem::{MemSnapshot, Source};
 use crate::scoring::{Baseline, Grade, PROFILES, ResultFile};
 use crate::soak::SoakResult;
 
@@ -160,6 +161,105 @@ pub fn print_catalog(benchmarks: &[Box<dyn Benchmark>], baseline: &Baseline) {
         kv(p.name, p.description, 17);
     }
     println!();
+}
+
+/// Render a `ps_mem`-style per-program memory table: smallest first, so the
+/// heaviest consumers sit right above the grand total.
+pub fn print_mem(snap: &MemSnapshot, limit: Option<usize>, swap: bool) {
+    const W: usize = 10;
+    println!("loadbearer {PKG_VERSION} — memory by program");
+
+    let header = if swap {
+        format!(
+            " {:>W$} + {:>W$} = {:>W$} + {:>W$}   Program",
+            "Private", "Shared", "RAM used", "Swap"
+        )
+    } else {
+        format!(
+            " {:>W$} + {:>W$} = {:>W$}   Program",
+            "Private", "Shared", "RAM used"
+        )
+    };
+    let rule_w = if swap { 4 * W + 9 } else { 3 * W + 6 };
+    println!("\n{header}\n");
+
+    let total = snap.programs.len();
+    let shown: &[crate::mem::ProgramMem] = match limit {
+        Some(n) if n < total => &snap.programs[total - n..],
+        _ => &snap.programs,
+    };
+
+    for p in shown {
+        let label = if p.processes > 1 {
+            format!("{} ({})", p.name, p.processes)
+        } else {
+            p.name.clone()
+        };
+        if swap {
+            println!(
+                " {:>W$} + {:>W$} = {:>W$} + {:>W$}   {label}",
+                human_bytes(p.private_bytes),
+                human_bytes(p.shared_bytes),
+                human_bytes(p.total_bytes()),
+                human_bytes(p.swap_bytes),
+            );
+        } else {
+            println!(
+                " {:>W$} + {:>W$} = {:>W$}   {label}",
+                human_bytes(p.private_bytes),
+                human_bytes(p.shared_bytes),
+                human_bytes(p.total_bytes()),
+            );
+        }
+    }
+
+    println!(" {}", "-".repeat(rule_w));
+    if swap {
+        println!(
+            " {:>W$}   {:>W$}   {:>W$}   {:>W$}",
+            "",
+            "",
+            human_bytes(snap.ram_total()),
+            human_bytes(snap.swap_total()),
+        );
+    } else {
+        println!(" {:>rule_w$}", human_bytes(snap.ram_total()));
+    }
+    println!(" {}", "=".repeat(rule_w));
+
+    if let Some(n) = limit
+        && n < total
+    {
+        println!(
+            " {} smaller program(s) not shown (still in the total).",
+            total - n
+        );
+    }
+    match snap.source {
+        Source::Pss => {
+            println!(" PSS from /proc/<pid>/smaps_rollup — shared pages counted proportionally.");
+            if snap.unreadable > 0 {
+                println!(
+                    " {} process(es) not readable — run as root for the full total.",
+                    snap.unreadable,
+                );
+            }
+        }
+        Source::WorkingSet => {
+            println!(
+                " Working set — Windows has no PSS; Shared is an estimate, Swap is not shown."
+            );
+            if snap.unreadable > 0 {
+                println!(
+                    " {} process(es) not readable — run elevated for the full total.",
+                    snap.unreadable,
+                );
+            }
+        }
+    }
+    if swap && snap.source == Source::Pss && !snap.has_swap() {
+        println!(" No swap in use.");
+    }
 }
 
 /// A short bar for a score, where 1000 (baseline) fills about two-thirds.

@@ -5,6 +5,7 @@ mod compare;
 mod config;
 mod engine;
 mod inventory;
+mod mem;
 mod output;
 mod run;
 mod score;
@@ -33,6 +34,7 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
+        Command::Mem(args) => mem::execute(args),
         Command::List => {
             output::print_catalog(&benches::all(), &scoring::Baseline::reference_v1());
             Ok(())

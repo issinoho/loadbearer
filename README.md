@@ -201,6 +201,7 @@ loadbearer compare    FILE FILE [FILE ...] [--plain] [--json]
 loadbearer score      FILE [--baseline FILE] [--profile NAME] [--curve-k FLOAT] [--output FILE] [--json]
 loadbearer soak       [--duration SECS] [--threads N] [--seed N] [--output FILE] [--json]
 loadbearer info       [--json]
+loadbearer mem        [--limit N] [--swap] [--json]
 loadbearer list
 loadbearer baseline   [FILE ...] [--name NAME] [--description TEXT]
 loadbearer net-server [--bind ADDR]
@@ -225,6 +226,13 @@ loadbearer net-server [--bind ADDR]
   as `loadbearer run --soak`, which embeds the result in the result JSON.
 - **`info`** — machine inventory (host, CPU, memory, disks, and the GPU and
   battery where present) and nothing else.
+- **`mem`** — per-program memory use right now, in the style of
+  [`ps_mem`](https://github.com/pixelb/ps_mem): grouped by program, smallest
+  first, with a grand total. On Linux the numbers are true **PSS**
+  (proportional set size — shared pages counted once, split across their
+  sharers), read from `/proc/<pid>/smaps_rollup`; on Windows they're the
+  **working set**, split into private and an estimated shared. A diagnostic,
+  not a benchmark — nothing here is scored.
 - **`list`** — the available benchmarks, the active baseline, and the scoring
   profiles.
 - **`baseline`** — with no arguments, prints the built-in baseline. Given result
@@ -344,6 +352,38 @@ thin-and-light's sustained power limit. A build with `-C target-cpu=native`
 pushes harder still. `Retained` is the number to compare: a machine that holds
 90% of its peak for 90 s will out-work one that holds 65%, even if the second
 has the higher burst.
+
+### `mem` options
+
+| Option | Description |
+| --- | --- |
+| `--limit N` | Show only the N largest programs. The grand total still covers every program. |
+| `--swap` | Add a `Swap` column (Linux only — the proportional paged-out size, `SwapPss`). |
+| `--json` | Emit the snapshot as JSON (`source`, `programs[]`, `unreadable`) instead of the table. |
+
+```
+loadbearer 0.8.0 — memory by program
+
+    Private +     Shared =   RAM used   Program
+
+    6.0 MiB +   43.0 KiB =    6.0 MiB   loadbearer
+   33.0 MiB +    4.2 MiB =   37.2 MiB   ptyxis
+  208.9 MiB +   10.4 MiB =  219.4 MiB   gnome-shell
+  643.2 MiB +   74.0 KiB =  643.2 MiB   claude (2)
+    1.9 GiB +  103.2 MiB =    2.0 GiB   firefox (17)
+ ------------------------------------
+                              3.2 GiB
+ ====================================
+ PSS from /proc/<pid>/smaps_rollup — shared pages counted proportionally.
+ 50 process(es) not readable — run as root for the full total.
+```
+
+On Linux, reading another user's process needs root, so an unprivileged run
+sees only its own processes and the total is short by the rest — the footer
+says how many were skipped. `Private + Shared = RAM used` is PSS: a shared
+library mapped by 40 processes counts about 1/40 toward each, so the per-program
+totals sum to something close to real RAM in use. Windows has no PSS; there
+`RAM used` is the working set and `Shared` is an estimate.
 
 ## Configuration
 

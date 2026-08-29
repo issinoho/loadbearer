@@ -918,6 +918,7 @@ dependencies = [
  "sysinfo",
  "time",
  "toml",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]

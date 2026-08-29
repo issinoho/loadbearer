@@ -180,7 +180,8 @@
       <h2>The whole thing is a terminal</h2>
       <p>An interactive <code>run</code> shows a live TUI, and <code>compare</code>
       opens a scrollable coloured view; piped or scripted, both fall back to
-      plain text or JSON. Here's the plain output.</p>
+      plain text or JSON. <code>info</code>, <code>soak</code> and
+      <code>mem</code> are plain diagnostics. Here's the plain output.</p>
     </div>
 
     <div class="gallery">
@@ -265,6 +266,19 @@ Disks
     Trace        <span class="acc">██▇█████▇▇▇▆▆▅▅▄▄▄▄▄▄</span>  (≈1s/mark)
     <span class="dim">→ throttles from ~14s; settles at 92% of peak</span></pre>
         </figure>
+
+        <figure class="term">
+          <figcaption class="term-bar"><i></i><i></i><i></i><em>loadbearer mem &nbsp;·&nbsp; ps_mem-style</em></figcaption>
+<pre>    Private +     Shared =   RAM used   Program
+
+   33.0 MiB +    4.2 MiB =   37.2 MiB   ptyxis
+  208.9 MiB +   10.4 MiB =  219.4 MiB   gnome-shell
+  643.2 MiB +   74.0 KiB =  643.2 MiB   claude (2)
+    1.9 GiB +  103.2 MiB =    2.0 GiB   firefox (17)
+ ------------------------------------
+                              3.2 GiB
+ <span class="dim">PSS from /proc/&lt;pid&gt;/smaps_rollup — shared pages counted proportionally.</span></pre>
+        </figure>
       </div>
     </div>
   </div>
@@ -282,6 +296,7 @@ Disks
 <span class="p">$</span> loadbearer run --output me.json        <span class="c"># ...and save the result</span>
 <span class="p">$</span> loadbearer compare me.json them.json   <span class="c"># which machine wins, and why</span>
 <span class="p">$</span> loadbearer soak                        <span class="c"># does it throttle under a long load?</span>
+<span class="p">$</span> loadbearer mem                         <span class="c"># what's using RAM (ps_mem-style, PSS)</span>
 <span class="p">$</span> loadbearer score me.json --baseline ref.toml  <span class="c"># re-grade, no re-run</span>
 <span class="p">$</span> loadbearer run --json | jq .overall    <span class="c"># for scripts and CI gates</span>
 <span class="p">$</span> loadbearer run --only cpu,memory       <span class="c"># skip the disk write</span>
