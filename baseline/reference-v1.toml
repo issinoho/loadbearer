@@ -1,53 +1,65 @@
 # loadbearer reference baseline — v1
 #
-# PROVISIONAL. These are synthetic anchors, not yet calibrated against a fleet of
-# real machines. Each number is roughly what a mid-range 2021 thin-and-light
-# laptop (8-core mobile CPU, dual-channel LPDDR4x, Gen3 NVMe) is expected to
-# produce with `loadbearer run --duration normal` from a default (non-native)
-# build. A machine that matches the baseline on a metric scores ~1000 on it.
+# CALIBRATED. Each value is the geometric mean of that metric across seven real
+# machines benchmarked with `loadbearer run --duration thorough` from the
+# released (default, non-native) build — see the list below. A machine that
+# matches the baseline on a metric scores ~1000 on it.
 #
-# Regenerating from real result files is planned (`loadbearer baseline`). Until
-# then, treat absolute scores as indicative and lean on `loadbearer compare`
-# for head-to-head verdicts, which does not depend on these values.
+#   host              CPU                              cores  OS
+#   SGS-D47TDY3        Intel Core i7-1370P (2023)         20  Windows 11
+#   dell-ubuntu        Intel Core i7-10510U (2019)         8  Linux
+#   ThinkPad-X280      Intel Core i5-8350U (2018)          8  Linux
+#   DESKTOP-QRLKF2J    Intel N95 (2023)                    4  Windows 11
+#   docker-nuc         Intel Core i5-5250U (2015)          4  Linux
+#   LYNN-LAPTOP        Intel Core i5-6300U (2015)          4  Windows 10
+#   openvms            Intel Celeron J4005 (2017)          2  Linux
+#
+# It is a SMALL, INTEL-ONLY sample skewed toward older low-power laptops, so
+# the anchors sit on the low side: a current mainstream machine grades A/S, and
+# five of the seven lack the SHA extensions so `sha256` anchors low. Treat the
+# absolute score and letter as a rough position and lean on `loadbearer compare`
+# — baseline-independent — for anything that has to be defensible. The baseline
+# is calibration data, not part of the stability contract (see VERSIONING.md);
+# it will be recalibrated as more machines are measured.
+#
+# Regenerate:  loadbearer baseline run1.json run2.json … --name reference-v1 \
+#                --description "…" > baseline/reference-v1.toml && cargo build
 
 name = "reference-v1"
-description = "Provisional mid-range 2021 ultrabook anchors"
+description = "geomean of 7 Intel machines (2015-2023), calibrated 2026-08-29"
 
 [components.cpu]
-int_single   = 10000.0   # Mops/s
-int_multi    = 45000.0   # Mops/s
-float_single = 8000.0    # MFLOP/s
-float_multi  = 70000.0   # MFLOP/s
-hash         = 4200.0    # MiB/s   (BLAKE3, SIMD)
-compress     = 68.0      # MiB/s   (DEFLATE level 6)
-# These two assume the reference chip has hardware AES + SHA acceleration
-# (AES-NI + CLMUL, and the SHA extensions) — mainstream from ~2019 on x86.
-aes_gcm      = 1800.0    # MiB/s   (AES-256-GCM, single thread)
-sha256       = 1800.0    # MiB/s   (SHA-256, single thread)
+int_single   = 6432.0    # Mops/s
+int_multi    = 17660.0   # Mops/s
+float_single = 5684.0    # MFLOP/s
+float_multi  = 23030.0   # MFLOP/s
+hash         = 1873.0    # MiB/s   (BLAKE3, SIMD)
+compress     = 44.37     # MiB/s   (DEFLATE level 6)
+aes_gcm      = 760.2     # MiB/s   (AES-256-GCM, single thread)
+sha256       = 355.7     # MiB/s   (SHA-256, single thread; mostly software in this sample)
 
 [components.memory]
-bw_read     = 22.0       # GiB/s   (single thread)
-bw_write    = 16.0       # GiB/s
-bw_copy     = 14.0       # GiB/s
-bw_read_mt  = 28.0       # GiB/s   (all logical CPUs, summed)
-latency     = 95.0       # ns      (lower is better)
+bw_read     = 10.64      # GiB/s   (single thread)
+bw_write    = 6.849      # GiB/s
+bw_copy     = 6.498      # GiB/s
+bw_read_mt  = 16.32      # GiB/s   (all logical CPUs, summed)
+latency     = 147.6      # ns      (lower is better)
 
 [components.disk]
-seq_write  = 1500.0      # MiB/s   (with fsync)
-seq_read   = 3000.0      # MiB/s
-rand_read  = 15000.0     # IOPS    (QD1, 4 KiB)
-rand_write = 40000.0     # IOPS    (QD1, 4 KiB)
+seq_write  = 342.3       # MiB/s   (with fsync)
+seq_read   = 571.6       # MiB/s
+rand_read  = 8195.0      # IOPS    (QD1, 4 KiB)
+rand_write = 10820.0     # IOPS    (QD1, 4 KiB)
 
 [components.network]
 # Loopback (127.0.0.1) network-stack figures, not a physical link.
-tcp_stream   = 7.0       # GiB/s   (single stream)
-tcp_parallel = 20.0      # GiB/s   (all logical CPUs)
-tcp_rtt      = 14.0      # us      (lower is better)
-udp_pps      = 450.0     # Kpps    (successful sends/sec)
+tcp_stream   = 1.956     # GiB/s   (single stream)
+tcp_parallel = 2.939     # GiB/s   (all logical CPUs)
+tcp_rtt      = 39.80     # us      (lower is better)
+udp_pps      = 93.13     # Kpps    (successful sends/sec)
 
 [components.gpu]
-# Integrated-GPU class (Iris Xe 96EU / Vega 8): shared-memory bandwidth, ~1.5
-# TFLOP/s FP32. A discrete GPU scores well above 1000 here — that's expected;
-# GPU is not folded into the overall grade.
-compute_fp32 = 1500.0    # GFLOP/s (FP32 FMA)
-bandwidth    = 40.0      # GiB/s   (VRAM read)
+# Geomean over the 4 machines that had a usable GPU (3 iGPUs + one Iris Xe-class
+# part). GPU is measured and shown but never folded into the overall grade.
+compute_fp32 = 282.0     # GFLOP/s (FP32 FMA)
+bandwidth    = 20.52     # GiB/s   (VRAM read)

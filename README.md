@@ -449,14 +449,17 @@ target_dir = "/var/tmp"
 
 ## Scoring model
 
-**Baseline.** Each raw measurement is compared against `reference-v1`, a set of
-values for a hypothetical mid-range 2021 thin-and-light laptop (8-core mobile
-CPU, dual-channel LPDDR4x, Gen3 NVMe). It is embedded in the binary and its
-source is in [`baseline/reference-v1.toml`](baseline/reference-v1.toml). A
-missing entry is a hard error, so the baseline cannot silently fall out of sync
-with the benchmarks. **It is provisional** — synthetic anchors, not yet
-calibrated against a fleet of real machines — so treat a single machine's
-absolute score as indicative and lean on `compare` for head-to-head questions.
+**Baseline.** Each raw measurement is compared against `reference-v1`, the
+geometric mean of that metric across seven real machines (Intel, 2015–2023) run
+at `--duration thorough` — the machine list is in the header of
+[`baseline/reference-v1.toml`](baseline/reference-v1.toml). It is embedded in
+the binary; a missing entry is a hard error, so the baseline cannot silently
+fall out of sync with the benchmarks. It is a **small, Intel-only sample skewed
+toward older low-power laptops**, so the anchors sit low — a current mainstream
+machine grades A/S. Treat a single machine's absolute score and letter as a
+rough position, lean on `compare` for head-to-head questions, and see
+[`VERSIONING.md`](VERSIONING.md): the baseline is calibration data, not part of
+the stability contract, and will be recalibrated as more machines are measured.
 
 **Curve.** `score = 1000 · ratio^k`. With the default `k = 0.5`, a component
 twice as fast as the baseline scores ~1414, half as fast ~707. Lower `k` is more
@@ -542,8 +545,9 @@ scores it was written with.
 
 ### Recalibrating the baseline
 
-The shipped baseline is a placeholder. To build one from real hardware, collect
-result files from machines you consider representative and average them:
+`reference-v1` is a small sample (see [Scoring model](#scoring-model)). To
+re-anchor it to hardware you care about — your own fleet, or a wider spread —
+collect result files from representative machines and average them:
 
 ```
 loadbearer run --output ref-laptop-1.json

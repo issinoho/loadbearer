@@ -654,14 +654,16 @@ mod tests {
     #[test]
     fn latency_direction_is_inverted() {
         let b = Baseline::reference_v1();
+        // A latency of exactly half the baseline: lower-is-better, so ratio 2.0
+        // and (k = 1.0) score 2000 — regardless of the baseline's actual value.
+        let half = b.lookup("memory", "latency").unwrap() / 2.0;
         let outcomes = vec![BenchmarkOutcome {
             id: "memory".to_string(),
             label: "Memory".to_string(),
-            subtests: vec![subtest("latency", Direction::LowerIsBetter, 47.5)], // half the 95ns baseline
+            subtests: vec![subtest("latency", Direction::LowerIsBetter, half)],
             notes: vec![],
         }];
         let scored = score_run(&outcomes, &b, GENERAL_FOR_TEST(), 1.0).unwrap();
-        // ratio 2.0, k 1.0 -> score 2000
         assert!((scored.components[0].subtests[0].score - 2000.0).abs() < 1.0);
     }
 
