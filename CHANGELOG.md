@@ -121,6 +121,8 @@ Carries the `compare`-TUI fixes back to the `run` TUI:
 - The results screen gains `j`/`k`/`space` and `Home`/`End` (`g`/`G`)
   to match the `compare` view, and the scroll hint shows the position.
 
+## 0.6.2 - Thu, 28 Aug 2026
+
 - The `compare` TUI now sizes its label column from the terminal width
   (bounded 22–48) instead of a fixed 30, so subtest names like
   `Sequential read, all cores (GiB/s)` stop losing their unit to
