@@ -2,6 +2,15 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 0.7.6 - Fri, 29 Aug 2026
+
+- Fix: `run --only gpu` (or `--only network`, or any selection with no graded
+  component) reported `OVERALL 0 [F]` with a bogus "balanced — every component
+  is close to the reference baseline" line. It now says **"no graded components
+  in this run"** and shows no score/grade for the overall — the selected
+  components are still measured and reported as normal. Latent since 0.3.0
+  (`--only network`); surfaced while validating the GPU path on real hardware.
+
 ## 0.7.5 - Fri, 29 Aug 2026
 
 - `SHA256SUMS` now also lists the hash of the **bare executable inside each

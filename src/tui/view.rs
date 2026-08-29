@@ -378,12 +378,19 @@ fn draw_results(f: &mut Frame, scroll: &mut u16, r: &ResultFile, area: Rect) {
         lines.push(Line::raw(""));
     }
 
-    lines.push(component_line(
-        "OVERALL",
-        r.overall.score,
-        r.overall.grade,
-        true,
-    ));
+    if r.components.iter().any(|c| c.graded) {
+        lines.push(component_line(
+            "OVERALL",
+            r.overall.score,
+            r.overall.grade,
+            true,
+        ));
+    } else {
+        lines.push(Line::from(Span::styled(
+            "  OVERALL    —  no graded components in this run".to_string(),
+            Style::default().add_modifier(Modifier::BOLD),
+        )));
+    }
     lines.push(Line::raw(""));
     lines.push(Line::from(Span::styled(
         "Why:",

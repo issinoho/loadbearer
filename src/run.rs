@@ -172,16 +172,23 @@ fn run_interactive(
         Some(mut result) => {
             result.link = probe_link(args)?;
             write_output(&result, args.output.as_deref())?;
-            println!(
-                "Overall {:.0} [{}] · {} profile{}",
-                result.overall.score,
-                result.overall.grade.as_str(),
-                result.overall.profile,
-                match &args.output {
-                    Some(p) => format!(" · written to {}", p.display()),
-                    None => String::new(),
-                }
-            );
+            let written = match &args.output {
+                Some(p) => format!(" · written to {}", p.display()),
+                None => String::new(),
+            };
+            if result.components.iter().any(|c| c.graded) {
+                println!(
+                    "Overall {:.0} [{}] · {} profile{written}",
+                    result.overall.score,
+                    result.overall.grade.as_str(),
+                    result.overall.profile,
+                );
+            } else {
+                println!(
+                    "No graded components in this run · {} profile{written}",
+                    result.overall.profile
+                );
+            }
         }
         None => println!("run cancelled."),
     }

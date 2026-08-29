@@ -186,21 +186,28 @@ pub fn print_scored_report(result: &ResultFile) {
         }
     }
 
-    println!(
-        "\n  {:<8} {:>6.0}  {}   {}",
-        "OVERALL",
-        result.overall.score,
-        grade_tag(result.overall.grade),
-        score_bar(result.overall.score),
-    );
+    let has_graded = result.components.iter().any(|c| c.graded);
+    if has_graded {
+        println!(
+            "\n  {:<8} {:>6.0}  {}   {}",
+            "OVERALL",
+            result.overall.score,
+            grade_tag(result.overall.grade),
+            score_bar(result.overall.score),
+        );
+    } else {
+        println!("\n  {:<8} —   no graded components in this run", "OVERALL");
+    }
     println!("\n  Why:");
     for line in &result.overall.why {
         println!("    - {line}");
     }
-    println!(
-        "\n  A score of 1000 = the {} baseline. Grades: S≥1400 A≥1150 B≥850 C≥600 D≥400.",
-        cfg.baseline,
-    );
+    if has_graded {
+        println!(
+            "\n  A score of 1000 = the {} baseline. Grades: S≥1400 A≥1150 B≥850 C≥600 D≥400.",
+            cfg.baseline,
+        );
+    }
     let ungraded: Vec<&str> = result
         .components
         .iter()

@@ -269,9 +269,16 @@ pub fn score_run(
 }
 
 /// Rank the graded components by distance from the baseline and phrase the
-/// outliers. Ungraded components (e.g. network) are left out of the "why".
+/// outliers. Ungraded components (e.g. network, gpu) are left out of the "why".
 fn explain(components: &[ScoredComponent]) -> Vec<String> {
     let mut by_score: Vec<&ScoredComponent> = components.iter().filter(|c| c.graded).collect();
+    if by_score.is_empty() {
+        // e.g. `run --only gpu` / `--only network` — nothing feeds the overall.
+        return vec![
+            "no graded components in this run — the overall grade needs CPU, memory or disk"
+                .to_string(),
+        ];
+    }
     by_score.sort_by(|a, b| a.score.total_cmp(&b.score));
 
     let mut why = Vec::new();
@@ -571,6 +578,39 @@ mod tests {
                 .iter()
                 .any(|w| w.to_lowercase().contains("network"))
         );
+    }
+
+    #[test]
+    fn an_all_ungraded_selection_has_no_overall() {
+        // `run --only network` (or --only gpu): nothing feeds the overall.
+        let b = Baseline::reference_v1();
+        let net = BenchmarkOutcome {
+            id: "network".to_string(),
+            label: "Network".to_string(),
+            subtests: b.components["network"]
+                .iter()
+                .map(|(id, &v)| {
+                    let d = if id == "tcp_rtt" {
+                        Direction::LowerIsBetter
+                    } else {
+                        Direction::HigherIsBetter
+                    };
+                    subtest(id, d, v)
+                })
+                .collect(),
+            notes: vec![],
+        };
+        let scored = score_run(&[net], &b, GENERAL_FOR_TEST(), 0.5).unwrap();
+
+        assert!(scored.components.iter().all(|c| !c.graded));
+        assert_eq!(scored.overall.score, 0.0);
+        assert!(
+            scored.overall.why.iter().any(|w| w.contains("no graded")),
+            "why: {:?}",
+            scored.overall.why
+        );
+        // The "balanced" fallback must not appear.
+        assert!(!scored.overall.why.iter().any(|w| w.contains("balanced")));
     }
 
     #[test]
