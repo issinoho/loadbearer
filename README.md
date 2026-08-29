@@ -111,9 +111,19 @@ Prompt):
 loadbearer.exe run
 ```
 
-The binary is unsigned, so Windows SmartScreen shows an "unrecognized app"
-warning the first time — click **More info** then **Run anyway**. Put the folder
-on your `PATH` if you want to call `loadbearer` from anywhere.
+The released binary is **not code-signed**, so Windows SmartScreen shows an
+"unrecognized app" warning the first time — click **More info** then **Run
+anyway**. Put the folder on your `PATH` if you want to call `loadbearer` from
+anywhere.
+
+**Deploying on a locked-down / managed estate.** Each release also publishes a
+`SHA256SUMS` file. On a machine with WDAC or AppLocker enforced, add a **file
+hash** allow rule for `loadbearer.exe` (hash rules work on unsigned binaries;
+publisher rules don't) — take the hash from `SHA256SUMS` or
+`Get-FileHash loadbearer.exe`. The release workflow will Authenticode-sign the
+binary automatically if the repo is configured with a code-signing certificate
+(`WINDOWS_PFX_BASE64` / `WINDOWS_PFX_PASSWORD` secrets); build from source with
+your own cert otherwise.
 
 ### Linux
 

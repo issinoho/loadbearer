@@ -2,6 +2,17 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 0.7.4 - Fri, 29 Aug 2026
+
+- Releases now publish a **`SHA256SUMS`** file alongside the archives — for
+  download verification and, on a locked-down Windows estate, a WDAC / AppLocker
+  **file-hash** allow rule (hash rules permit an unsigned binary; publisher
+  rules don't).
+- The release workflow will **Authenticode-sign** the Windows binary when the
+  repo has a code-signing cert configured (`WINDOWS_PFX_BASE64` /
+  `WINDOWS_PFX_PASSWORD` secrets); with no secret it ships unsigned exactly as
+  before. No binary or behaviour change in this version.
+
 ## 0.7.3 - Fri, 29 Aug 2026
 
 Hardening for fleet / managed-estate deployment:

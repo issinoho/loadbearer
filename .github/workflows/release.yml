@@ -48,6 +48,33 @@ jobs:
       - name: Build
         run: cargo build --release --locked --target ${{ matrix.target }}
 
+      - name: Sign the Windows binary
+        # Opt-in Authenticode signing: runs only when an organisation has put
+        # a code-signing cert in the repo secrets. With no secret it prints a
+        # line and exits 0 — the release ships unsigned, exactly as before.
+        # Secrets: WINDOWS_PFX_BASE64 (base64 of a .pfx), WINDOWS_PFX_PASSWORD.
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        env:
+          PFX_B64: ${{ secrets.WINDOWS_PFX_BASE64 }}
+          PFX_PASS: ${{ secrets.WINDOWS_PFX_PASSWORD }}
+        run: |
+          if (-not $env:PFX_B64) {
+            Write-Host "No code-signing cert configured — shipping the binary unsigned."
+            exit 0
+          }
+          $pfx = Join-Path $env:RUNNER_TEMP 'code-sign.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:PFX_B64))
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" `
+            | Sort-Object FullName | Select-Object -Last 1 -ExpandProperty FullName
+          $exe = "target\${{ matrix.target }}\release\${{ matrix.bin }}"
+          & $signtool sign /f $pfx /p $env:PFX_PASS /fd SHA256 `
+            /tr http://timestamp.digicert.com /td SHA256 $exe
+          if ($LASTEXITCODE -ne 0) { Remove-Item $pfx -Force; throw "signtool sign failed" }
+          & $signtool verify /pa $exe
+          Remove-Item $pfx -Force
+          if ($LASTEXITCODE -ne 0) { throw "signtool verify failed" }
+
       - name: Package
         shell: bash
         run: |
@@ -106,6 +133,14 @@ jobs:
           mkdir -p release-assets
           find artifacts -type f \( -name '*.zip' -o -name '*.tar.gz' \) -exec cp {} release-assets/ \;
           ls -l release-assets
+
+      - name: Checksums
+        # SHA-256 of every asset, published as SHA256SUMS. Lets a locked-down
+        # estate add a WDAC / AppLocker *file-hash* allow rule for the
+        # unsigned binary, and lets anyone verify the download.
+        run: |
+          cd release-assets
+          sha256sum * | tee SHA256SUMS
 
       - name: Create/update the GitHub Release
         uses: softprops/action-gh-release@v3
