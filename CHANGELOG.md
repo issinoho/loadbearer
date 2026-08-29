@@ -2,6 +2,24 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 0.9.0 - Sat, 29 Aug 2026
+
+- **New `loadbearer mem` command** — per-program memory use, in the style of
+  [`ps_mem`](https://github.com/pixelb/ps_mem): grouped by program, smallest
+  first, with a grand total. A diagnostic, not a benchmark — nothing here is
+  scored.
+- On **Linux** the figures are true **PSS** (proportional set size) from
+  `/proc/<pid>/smaps_rollup`: a page shared by N processes counts 1/N toward
+  each, so the per-program totals sum to close to the RAM actually in use.
+  `Private + Shared = PSS`. Reading another user's process needs root; skipped
+  processes are counted and the footer says how many.
+- On **Windows** the figures are the process **working set**, split into
+  `PrivateUsage` (capped at the working set) and an estimated `Shared`. The
+  report footer states which kind of number is shown, so a PSS snapshot and a
+  working-set snapshot are never conflated.
+- Options: `--limit N` (show only the N largest; the total still covers all),
+  `--swap` (Linux — a proportional paged-out column), `--json`.
+
 ## 0.8.0 - Fri, 29 Aug 2026
 
 - **Battery inventory and health.** On a machine with a battery, `loadbearer
