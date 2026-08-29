@@ -24,6 +24,11 @@ pub enum DurationArg {
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,
+
+    /// Never touch the GPU: skip the `gpu` component and the OpenCL probe that
+    /// `info` and `run` otherwise perform (so `OpenCL.dll` is never loaded).
+    #[arg(long, global = true)]
+    pub no_gpu: bool,
 }
 
 #[derive(Subcommand, Debug)]

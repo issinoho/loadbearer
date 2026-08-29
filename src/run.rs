@@ -301,8 +301,8 @@ fn select_benchmarks(only: &[String]) -> Result<Vec<Box<dyn Benchmark>>> {
     }
     if wanted.iter().any(|w| w == "gpu") && !gpu_ok {
         bail!(
-            "no GPU compute device available — the OpenCL loader or a GPU was not \
-             found. Drop `gpu` from --only."
+            "the GPU component is unavailable — either `--no-gpu` was given, or no \
+             OpenCL loader / GPU device was found. Drop `gpu` from --only."
         );
     }
     Ok(all

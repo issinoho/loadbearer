@@ -8,7 +8,7 @@ mod network;
 
 use crate::engine::Benchmark;
 
-pub use gpu::{GpuInfo, probe as gpu_probe};
+pub use gpu::{GpuInfo, disable as gpu_disable, probe as gpu_probe};
 pub use network::{link_probe, serve as net_serve};
 
 /// Every benchmark, in display order. `gpu` is included whether or not a GPU is

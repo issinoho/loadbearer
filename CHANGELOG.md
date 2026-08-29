@@ -2,6 +2,18 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 0.7.3 - Fri, 29 Aug 2026
+
+Hardening for fleet / managed-estate deployment:
+
+- **`--no-gpu`** — a global flag that skips the `gpu` component *and* the OpenCL
+  probe that `info` and `run` otherwise perform, so `OpenCL.dll` is never
+  loaded. Use it where a stale ICD loader (left by an uninstalled driver) might
+  stall device enumeration.
+- **Windows: the OpenCL loader is now taken only from `System32`**
+  (`LOAD_LIBRARY_SEARCH_SYSTEM32`) — never the executable's directory, the
+  working directory, or `%PATH%`. Closes a DLL-planting path.
+
 ## 0.7.2 - Fri, 29 Aug 2026
 
 - `compare`: the `±%` delta now sits in its own right-aligned column instead of

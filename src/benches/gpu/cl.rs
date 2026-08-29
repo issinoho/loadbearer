@@ -5,6 +5,10 @@
 //! at all, and the GPU benchmark simply reports itself unavailable. We bind only
 //! the ~20 entry points the benchmark needs, with thin `Result`-returning
 //! wrappers and RAII handles.
+//!
+//! On Windows the loader is taken **only** from `%SystemRoot%\System32`
+//! (`LOAD_LIBRARY_SEARCH_SYSTEM32`), never from the executable's directory or
+//! the working directory — so a planted `OpenCL.dll` can't be picked up.
 
 #![allow(non_camel_case_types)]
 
@@ -171,18 +175,23 @@ struct Inner {
 #[derive(Clone)]
 pub struct Cl(Arc<Inner>);
 
-fn lib_names() -> &'static [&'static str] {
+/// Open the OpenCL ICD loader. `None` (not a panic) when it isn't present.
+fn open_icd() -> Option<Library> {
     #[cfg(windows)]
     {
-        &["OpenCL.dll"]
+        use libloading::os::windows::{LOAD_LIBRARY_SEARCH_SYSTEM32, Library as WinLibrary};
+        // System32 only — not the exe dir, not the CWD, not %PATH%.
+        unsafe { WinLibrary::load_with_flags("OpenCL.dll", LOAD_LIBRARY_SEARCH_SYSTEM32) }
+            .ok()
+            .map(Library::from)
     }
-    #[cfg(target_os = "macos")]
+    #[cfg(not(windows))]
     {
-        &["/System/Library/Frameworks/OpenCL.framework/OpenCL"]
-    }
-    #[cfg(not(any(windows, target_os = "macos")))]
-    {
-        &["libOpenCL.so.1", "libOpenCL.so"]
+        #[cfg(target_os = "macos")]
+        let names: &[&str] = &["/System/Library/Frameworks/OpenCL.framework/OpenCL"];
+        #[cfg(not(target_os = "macos"))]
+        let names: &[&str] = &["libOpenCL.so.1", "libOpenCL.so"];
+        names.iter().find_map(|n| unsafe { Library::new(n) }.ok())
     }
 }
 
@@ -197,9 +206,7 @@ fn check(code: cl_int, what: &str) -> Result<()> {
 impl Cl {
     /// Load the ICD loader. `Err` (not a panic) if OpenCL is not installed.
     pub fn load() -> Result<Self> {
-        let lib = lib_names()
-            .iter()
-            .find_map(|n| unsafe { Library::new(n) }.ok())
+        let lib = open_icd()
             .ok_or_else(|| anyhow!("OpenCL ICD loader not found (no GPU compute support)"))?;
 
         unsafe fn req<T: Copy>(lib: &Library, name: &str) -> Result<T> {

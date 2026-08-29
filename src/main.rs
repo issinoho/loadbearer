@@ -19,6 +19,9 @@ use cli::{Cli, Command};
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    if cli.no_gpu {
+        benches::gpu_disable();
+    }
     match cli.command {
         Command::Info(args) => {
             let inv = inventory::collect();

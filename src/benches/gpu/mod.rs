@@ -86,9 +86,22 @@ impl GpuInfo {
     }
 }
 
-/// The GPU that would be tested, or `None` if OpenCL / a GPU device is absent.
-/// Cheap after the first call.
+/// Set by `--no-gpu`: turns the GPU component off for the whole process,
+/// including the [`probe`] that `loadbearer info` runs — so OpenCL is never
+/// loaded at all.
+static DISABLED: AtomicBool = AtomicBool::new(false);
+
+/// Disable all GPU support for this process. Call once, before anything probes.
+pub fn disable() {
+    DISABLED.store(true, Ordering::Relaxed);
+}
+
+/// The GPU that would be tested, or `None` if `--no-gpu` was given, or OpenCL /
+/// a GPU device is absent. Cheap after the first call.
 pub fn probe() -> Option<&'static GpuInfo> {
+    if DISABLED.load(Ordering::Relaxed) {
+        return None;
+    }
     static CACHE: OnceLock<Option<GpuInfo>> = OnceLock::new();
     CACHE
         .get_or_init(|| {
@@ -194,6 +207,9 @@ impl Benchmark for GpuBenchmark {
     }
 
     fn run_subtest(&self, subtest_id: &str, ctx: &RunContext) -> Result<f64> {
+        if DISABLED.load(Ordering::Relaxed) {
+            bail!("GPU support is disabled (--no-gpu)");
+        }
         let cl = cl::Cl::load()?;
         let (device, info) = select(&cl)?;
         self.note(format!("device: {}", info.summary()));
