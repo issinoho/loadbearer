@@ -90,6 +90,39 @@ pub fn print_inventory(inv: &Inventory) {
         }
     }
 
+    if let Some(b) = &inv.battery {
+        section("Battery");
+        let id = [b.vendor.as_deref(), b.model.as_deref()]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(" ");
+        if !id.is_empty() {
+            row("Model", id);
+        }
+        if let Some(t) = &b.technology {
+            row("Technology", t);
+        }
+        row("Charge", format!("{:.0}% ({})", b.charge_pct, b.state));
+        match (b.energy_full_wh, b.energy_full_design_wh, b.health_pct) {
+            (Some(full), Some(design), Some(h)) => row(
+                "Health",
+                format!("{full:.1} / {design:.1} Wh design ({h:.0}%)"),
+            ),
+            (_, _, Some(h)) => row("Health", format!("{h:.0}% of design capacity")),
+            _ => row("Health", "unavailable (no design-capacity reading)"),
+        }
+        if let Some(c) = b.cycle_count {
+            row("Cycles", c.to_string());
+        }
+        if let Some(v) = b.voltage_v {
+            row("Voltage", format!("{v:.2} V"));
+        }
+        if let Some(t) = b.temperature_c {
+            row("Temperature", format!("{t:.0} °C"));
+        }
+    }
+
     section("Disks");
     if inv.disks.is_empty() {
         row("", "none detected");
@@ -223,6 +256,10 @@ pub fn print_scored_report(result: &ResultFile) {
         );
     }
 
+    if let Some(b) = &result.machine.battery {
+        print_battery_block(b);
+    }
+
     if let Some(link) = &result.link {
         println!("\n  Link to {} (measured, not graded)", link.target);
         println!(
@@ -238,6 +275,41 @@ pub fn print_scored_report(result: &ResultFile) {
 
     if let Some(soak) = &result.soak {
         print_soak_block(soak);
+    }
+}
+
+/// The battery-health block at the foot of a `run` report. Not graded — pack
+/// wear is a property of the consumable, not of the silicon under test.
+fn print_battery_block(b: &crate::battery::BatteryInfo) {
+    println!("\n  {:<8} {} · not graded", "BATTERY", b.summary());
+    println!("    {:<12} {:.0}% ({})", "Charge", b.charge_pct, b.state);
+    match (b.energy_full_wh, b.energy_full_design_wh, b.health_pct) {
+        (Some(full), Some(design), Some(h)) => {
+            println!(
+                "    {:<12} {full:.1} / {design:.1} Wh design ({h:.0}%)",
+                "Health"
+            )
+        }
+        (_, _, Some(h)) => println!("    {:<12} {h:.0}% of design capacity", "Health"),
+        _ => println!(
+            "    {:<12} unavailable (no design-capacity reading)",
+            "Health"
+        ),
+    }
+    if let Some(c) = b.cycle_count {
+        println!("    {:<12} {c}", "Cycles");
+    }
+    if let Some(v) = b.voltage_v {
+        println!("    {:<12} {v:.2} V", "Voltage");
+    }
+    if let Some(t) = b.temperature_c {
+        println!("    {:<12} {t:.0} \u{b0}C", "Temperature");
+    }
+    if let Some(v) = b.health_verdict() {
+        println!("    \u{2192} {v}");
+    }
+    if let Some(n) = b.power_note() {
+        println!("    note: {n}");
     }
 }
 

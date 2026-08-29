@@ -1,3 +1,4 @@
+mod battery;
 mod benches;
 mod cli;
 mod compare;

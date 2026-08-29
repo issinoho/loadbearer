@@ -412,6 +412,38 @@ fn draw_results(f: &mut Frame, scroll: &mut u16, r: &ResultFile, area: Rect) {
         )));
     }
 
+    if let Some(b) = &r.machine.battery {
+        lines.push(Line::raw(""));
+        lines.push(Line::from(Span::styled(
+            format!("BATTERY  ({} · not graded)", b.summary()),
+            Style::default().add_modifier(Modifier::BOLD),
+        )));
+        lines.push(Line::from(Span::styled(
+            format!("  charge {:.0}% ({})", b.charge_pct, b.state),
+            Style::default().fg(DIM),
+        )));
+        let health = match (b.energy_full_wh, b.energy_full_design_wh, b.health_pct) {
+            (Some(full), Some(design), Some(h)) => {
+                format!("  health {full:.1} / {design:.1} Wh design ({h:.0}%)")
+            }
+            (_, _, Some(h)) => format!("  health {h:.0}% of design capacity"),
+            _ => "  health unavailable (no design-capacity reading)".to_string(),
+        };
+        lines.push(Line::from(Span::styled(health, Style::default().fg(DIM))));
+        if let Some(v) = b.health_verdict() {
+            lines.push(Line::from(Span::styled(
+                format!("  → {v}"),
+                Style::default().fg(DIM),
+            )));
+        }
+        if let Some(n) = b.power_note() {
+            lines.push(Line::from(Span::styled(
+                format!("  note: {n}"),
+                Style::default().fg(Color::Yellow),
+            )));
+        }
+    }
+
     if let Some(s) = &r.soak {
         lines.push(Line::raw(""));
         lines.push(Line::from(Span::styled(

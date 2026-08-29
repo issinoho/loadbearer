@@ -257,6 +257,7 @@ mod tests {
             swap_bytes: 0,
             disks: vec![],
             gpu: None,
+            battery: None,
         }
     }
 

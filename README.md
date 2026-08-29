@@ -213,7 +213,8 @@ loadbearer net-server [--bind ADDR]
   throttling set in, and how steady the clock held. **Not scored** — it's the
   signal that separates two laptops with identical burst numbers. Also available
   as `loadbearer run --soak`, which embeds the result in the result JSON.
-- **`info`** — machine inventory (host, CPU, memory, disks) and nothing else.
+- **`info`** — machine inventory (host, CPU, memory, disks, and the GPU and
+  battery where present) and nothing else.
 - **`list`** — the available benchmarks, the active baseline, and the scoring
   profiles.
 - **`baseline`** — with no arguments, prints the built-in baseline. Given result
@@ -387,6 +388,13 @@ soak test reports throughput *retention* (a property, not a speed). Both are
 shown in their own block, stored in the result JSON, and used by `compare` in a
 separate block, but neither touches a grade.
 
+**Battery health** is read into the inventory on a machine that has a battery
+(design vs current full-charge capacity, cycle count, charge, technology) and a
+`run` prints a `BATTERY` block with a wear verdict. It is pack condition, not
+machine speed, so it never touches a grade; a machine on battery power also gets
+a note, since a power profile may be capping clocks. A machine with no battery
+shows none of this.
+
 **Grades.** `S ≥ 1400`, `A ≥ 1150`, `B ≥ 850`, `C ≥ 600`, `D ≥ 400`, else `F` —
 centred so the baseline (1000) lands in the middle of B.
 
@@ -423,7 +431,8 @@ benchmark; use `--only cpu,memory,network` to skip it.
 `loadbearer run --output result.json` writes a versioned
 (`schema: "loadbearer.result/1"`) document containing:
 
-- `machine` — the full inventory (as `loadbearer info --json`).
+- `machine` — the full inventory (as `loadbearer info --json`), including the
+  GPU and battery when the machine has them.
 - `config` — profile, preset, curve-k, seed, thread count, baseline name.
 - `raw` — every subtest's per-run values and summary statistics, unscored.
 - `components` / `overall` — the scored, graded results.

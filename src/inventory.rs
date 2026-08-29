@@ -23,6 +23,9 @@ pub struct Inventory {
     /// The GPU `loadbearer` would benchmark via OpenCL, if any was found.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gpu: Option<crate::benches::GpuInfo>,
+    /// The primary battery and its wear state, on a machine that has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub battery: Option<crate::battery::BatteryInfo>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,5 +94,6 @@ pub fn collect() -> Inventory {
         swap_bytes: sys.total_swap(),
         disks,
         gpu: crate::benches::gpu_probe().cloned(),
+        battery: crate::battery::probe().cloned(),
     }
 }
