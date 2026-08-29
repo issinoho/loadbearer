@@ -105,8 +105,23 @@ pub fn probe() -> Option<&'static GpuInfo> {
     static CACHE: OnceLock<Option<GpuInfo>> = OnceLock::new();
     CACHE
         .get_or_init(|| {
-            let cl = cl::Cl::load().ok()?;
-            select(&cl).ok().map(|(_, info)| info)
+            let cl = match cl::Cl::load() {
+                Ok(cl) => cl,
+                Err(e) => {
+                    log::debug!(target: "loadbearer::gpu", "probe: no OpenCL loader ({e}); gpu component skipped");
+                    return None;
+                }
+            };
+            match select(&cl) {
+                Ok((_, info)) => {
+                    log::info!(target: "loadbearer::gpu", "probe: selected {}", info.summary());
+                    Some(info)
+                }
+                Err(e) => {
+                    log::debug!(target: "loadbearer::gpu", "probe: OpenCL loaded but no usable GPU ({e}); gpu component skipped");
+                    None
+                }
+            }
         })
         .as_ref()
 }
@@ -216,8 +231,11 @@ impl Benchmark for GpuBenchmark {
 
         let context = cl.context(device)?;
         let queue = context.queue()?;
-        let program = context.program(KERNELS)?;
+        let program = context
+            .program(KERNELS)
+            .inspect_err(|e| log::warn!(target: "loadbearer::gpu", "kernel build failed: {e}"))?;
         let budget = ctx.time_budget();
+        log::debug!(target: "loadbearer::gpu", "subtest {subtest_id}: context/queue/program ready on {}", info.name);
 
         match subtest_id {
             "compute_fp32" => compute_fp32(&context, &queue, &program, budget, &ctx.abort),

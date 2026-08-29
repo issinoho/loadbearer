@@ -385,6 +385,33 @@ library mapped by 40 processes counts about 1/40 toward each, so the per-program
 totals sum to something close to real RAM in use. Windows has no PSS; there
 `RAM used` is the working set and `Shared` is an estimate.
 
+## Diagnostic logging
+
+Every invocation writes a diagnostic log — the resolved settings, each
+benchmark and subtest boundary, the GPU / battery / OpenCL probe results, disk
+`O_DIRECT` fallbacks, the scratch-file sweep, the final grade, and any error.
+It's a plain text file, one timestamped line per event:
+
+```
+2026-08-29T10:12:18.480Z INFO  loadbearer::run       resolved settings: profile=general, preset=Short, …
+2026-08-29T10:12:18.515Z INFO  loadbearer::gpu       probe: selected Intel(R) UHD Graphics 620 · integrated · …
+2026-08-29T10:12:20.276Z DEBUG loadbearer::engine    subtest cpu/int_single done: median 548.8 Mops/s (cv 0.5%, high)
+2026-08-29T10:12:30.427Z INFO  loadbearer::scoring   overall 188 [F] · profile general · … · 1 graded component(s)
+```
+
+| Where | |
+| --- | --- |
+| Default path | `$XDG_CACHE_HOME/loadbearer/loadbearer.log` (Linux), `%LOCALAPPDATA%\loadbearer\loadbearer.log` (Windows), else the system temp dir. Rotated to `…/loadbearer.log.old` once it passes ~2 MiB. |
+| `--log-file PATH` | Write here instead. |
+| `--no-log` | Don't write a log at all. |
+| `--log-level LEVEL` | `off` / `error` / `warn` / `info` (default) / `debug` / `trace`. `debug` adds a line per subtest; `trace` adds a line per timed iteration. |
+| `LOADBEARER_LOG` | Same as `--log-level`, for when you can't pass a flag. The flag wins. |
+
+All four are global — they work on any subcommand. Logging is placed at
+lifecycle boundaries and fallbacks, never inside a timed measurement, so it
+doesn't perturb benchmark numbers even at `info`. If the log file can't be
+opened the run still proceeds (with a one-line note on stderr).
+
 ## Configuration
 
 `run` settings resolve in this order: **command-line switch → `--config` file →

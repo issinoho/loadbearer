@@ -5,6 +5,7 @@ mod compare;
 mod config;
 mod engine;
 mod inventory;
+mod logging;
 mod mem;
 mod output;
 mod run;
@@ -16,12 +17,51 @@ mod util;
 
 use anyhow::Result;
 use clap::Parser;
+use log::{error, info};
 
 use cli::{Cli, Command};
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    if let Some(path) = logging::init(cli.log_target(), cli.log_level.map(Into::into)) {
+        info!(
+            target: "loadbearer",
+            "=== loadbearer {} · {} · pid {} · log {} ===",
+            env!("LOADBEARER_VERSION"),
+            command_name(&cli.command),
+            std::process::id(),
+            path.display(),
+        );
+    }
+
+    let result = dispatch(cli);
+    if let Err(e) = &result {
+        error!(target: "loadbearer", "exiting with error: {e:#}");
+    } else {
+        info!(target: "loadbearer", "done");
+    }
+    result
+}
+
+/// The subcommand name, for the session header line.
+fn command_name(command: &Command) -> &'static str {
+    match command {
+        Command::Info(_) => "info",
+        Command::Mem(_) => "mem",
+        Command::List => "list",
+        Command::Run(_) => "run",
+        Command::Compare(_) => "compare",
+        Command::Score(_) => "score",
+        Command::Baseline(_) => "baseline",
+        Command::Soak(_) => "soak",
+        Command::NetServer(_) => "net-server",
+    }
+}
+
+fn dispatch(cli: Cli) -> Result<()> {
     if cli.no_gpu {
+        info!(target: "loadbearer", "--no-gpu: GPU probe and component disabled");
         benches::gpu_disable();
     }
     match cli.command {

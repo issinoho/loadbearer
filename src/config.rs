@@ -23,7 +23,10 @@ impl FileConfig {
     pub fn load(path: &Path) -> Result<Self> {
         let text = std::fs::read_to_string(path)
             .with_context(|| format!("reading config file {}", path.display()))?;
-        toml::from_str(&text).with_context(|| format!("parsing config file {}", path.display()))
+        let cfg = toml::from_str(&text)
+            .with_context(|| format!("parsing config file {}", path.display()))?;
+        log::info!(target: "loadbearer::config", "loaded config from {}", path.display());
+        Ok(cfg)
     }
 }
 

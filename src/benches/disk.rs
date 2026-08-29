@@ -51,7 +51,15 @@ struct Scratch {
 
 impl Drop for Scratch {
     fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.path);
+        match std::fs::remove_file(&self.path) {
+            Ok(()) => {
+                log::debug!(target: "loadbearer::disk", "removed scratch file {}", self.path.display())
+            }
+            Err(e) => log::warn!(
+                target: "loadbearer::disk",
+                "could not remove scratch file {}: {e}", self.path.display(),
+            ),
+        }
     }
 }
 
@@ -116,6 +124,7 @@ impl DiskBenchmark {
         let msg = msg.into();
         let mut guard = self.notes.lock().unwrap();
         if !guard.contains(&msg) {
+            log::info!(target: "loadbearer::disk", "note: {msg}");
             guard.push(msg);
         }
     }
@@ -150,6 +159,10 @@ impl DiskBenchmark {
         let path = ctx
             .target_dir
             .join(format!(".loadbearer-scratch.{}", std::process::id()));
+        log::debug!(
+            target: "loadbearer::disk",
+            "filling scratch file {} ({:.0} MiB)", path.display(), want as f64 / (1024.0 * 1024.0),
+        );
         fill_scratch(&path, want, ctx.seed)
             .with_context(|| format!("preparing scratch file at {}", path.display()))?;
         *guard = Some(Scratch {
@@ -169,6 +182,7 @@ impl DiskBenchmark {
         match platform::open_unbuffered_read(path) {
             Ok(file) if probe_unbuffered_read(&file).is_ok() => {
                 if decided.is_none() {
+                    log::debug!(target: "loadbearer::disk", "unbuffered reads (O_DIRECT / NO_BUFFERING) confirmed");
                     *decided = Some(true);
                 }
                 Ok((file, true))

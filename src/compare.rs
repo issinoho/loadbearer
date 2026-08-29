@@ -21,8 +21,13 @@ use crate::soak::SoakResult;
 use crate::util::geomean;
 
 pub fn execute(args: CompareArgs) -> Result<()> {
+    log::info!(target: "loadbearer::compare", "comparing {} result file(s)", args.files.len());
     let machines = load(&args.files)?;
     let comparison = compare(&machines)?;
+    for w in &comparison.warnings {
+        log::warn!(target: "loadbearer::compare", "{w}");
+    }
+    log::info!(target: "loadbearer::compare", "verdict: {}", comparison.overall.summary);
     if args.json {
         println!("{}", serde_json::to_string_pretty(&comparison)?);
     } else if args.plain || !std::io::stdout().is_terminal() {

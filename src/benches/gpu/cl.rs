@@ -181,9 +181,16 @@ fn open_icd() -> Option<Library> {
     {
         use libloading::os::windows::{LOAD_LIBRARY_SEARCH_SYSTEM32, Library as WinLibrary};
         // System32 only — not the exe dir, not the CWD, not %PATH%.
-        unsafe { WinLibrary::load_with_flags("OpenCL.dll", LOAD_LIBRARY_SEARCH_SYSTEM32) }
-            .ok()
-            .map(Library::from)
+        let lib =
+            unsafe { WinLibrary::load_with_flags("OpenCL.dll", LOAD_LIBRARY_SEARCH_SYSTEM32) }
+                .ok()
+                .map(Library::from);
+        log::debug!(
+            target: "loadbearer::gpu",
+            "OpenCL ICD loader: System32\\OpenCL.dll {}",
+            if lib.is_some() { "opened" } else { "not found" },
+        );
+        lib
     }
     #[cfg(not(windows))]
     {
@@ -191,7 +198,13 @@ fn open_icd() -> Option<Library> {
         let names: &[&str] = &["/System/Library/Frameworks/OpenCL.framework/OpenCL"];
         #[cfg(not(target_os = "macos"))]
         let names: &[&str] = &["libOpenCL.so.1", "libOpenCL.so"];
-        names.iter().find_map(|n| unsafe { Library::new(n) }.ok())
+        names.iter().find_map(|n| {
+            let lib = unsafe { Library::new(n) }.ok();
+            if lib.is_some() {
+                log::debug!(target: "loadbearer::gpu", "OpenCL ICD loader: opened {n}");
+            }
+            lib
+        })
     }
 }
 

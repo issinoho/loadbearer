@@ -173,6 +173,15 @@ pub fn run_benchmark(
 ) -> Result<BenchmarkOutcome> {
     let specs = bench.subtests();
     let timed = ctx.timed_runs();
+    log::info!(
+        target: "loadbearer::engine",
+        "benchmark {} start: {} subtest(s), {} warmup + {} timed run(s)",
+        bench.id(),
+        specs.len(),
+        ctx.preset.warmup_runs(),
+        timed,
+    );
+    let started = std::time::Instant::now();
     progress.on_event(ProgressEvent::BenchStart {
         id: bench.id(),
         label: bench.label(),
@@ -182,6 +191,7 @@ pub fn run_benchmark(
     let mut subtests = Vec::with_capacity(specs.len());
     for spec in &specs {
         if ctx.aborted() {
+            log::warn!(target: "loadbearer::engine", "{} aborted before subtest {}", bench.id(), spec.id);
             bail!("run aborted");
         }
         progress.on_event(ProgressEvent::SubtestStart {
@@ -191,6 +201,12 @@ pub fn run_benchmark(
         });
 
         let pinned = bench.single_threaded(spec.id);
+        log::debug!(
+            target: "loadbearer::engine",
+            "subtest {}/{} start ({})",
+            bench.id(), spec.id,
+            if pinned { "pinned, single-thread" } else { "unpinned" },
+        );
         for _ in 0..ctx.preset.warmup_runs() {
             progress.on_event(ProgressEvent::Warmup { id: spec.id });
             run_one(bench, spec.id, ctx, pinned)?;
@@ -200,6 +216,10 @@ pub fn run_benchmark(
         for r in 1..=timed {
             let value = run_one(bench, spec.id, ctx, pinned)?;
             runs.push(value);
+            log::trace!(
+                target: "loadbearer::engine",
+                "{}/{} run {}/{}: {:.3} {}", bench.id(), spec.id, r, timed, value, spec.unit,
+            );
             progress.on_event(ProgressEvent::Run {
                 id: spec.id,
                 run: r,
@@ -211,6 +231,11 @@ pub fn run_benchmark(
 
         let stats = Stats::from_runs(runs);
         let confidence = Confidence::from_cv(stats.cv);
+        log::debug!(
+            target: "loadbearer::engine",
+            "subtest {}/{} done: median {:.3} {} (cv {:.1}%, {})",
+            bench.id(), spec.id, stats.median, spec.unit, stats.cv * 100.0, confidence.as_str(),
+        );
         let outcome = SubtestOutcome {
             id: spec.id.to_string(),
             label: spec.label.to_string(),
@@ -227,6 +252,12 @@ pub fn run_benchmark(
         subtests.push(outcome);
     }
 
+    log::info!(
+        target: "loadbearer::engine",
+        "benchmark {} done in {:.1}s",
+        bench.id(),
+        started.elapsed().as_secs_f64(),
+    );
     progress.on_event(ProgressEvent::BenchDone { id: bench.id() });
     Ok(BenchmarkOutcome {
         id: bench.id().to_string(),
@@ -254,7 +285,10 @@ fn run_one(bench: &dyn Benchmark, id: &str, ctx: &RunContext, pinned: bool) -> R
         });
         match handle.join() {
             Ok(result) => result,
-            Err(_) => bail!("measurement thread for {id} panicked"),
+            Err(_) => {
+                log::error!(target: "loadbearer::engine", "measurement thread for {id} panicked");
+                bail!("measurement thread for {id} panicked")
+            }
         }
     })
 }
@@ -267,14 +301,23 @@ fn measurement_core() -> Option<core_affinity::CoreId> {
     use std::sync::OnceLock;
     static CORE: OnceLock<Option<core_affinity::CoreId>> = OnceLock::new();
     *CORE.get_or_init(|| {
-        let ids = core_affinity::get_core_ids()?;
+        let Some(ids) = core_affinity::get_core_ids() else {
+            log::warn!(
+                target: "loadbearer::engine",
+                "core affinity unavailable — single-threaded subtests are not pinned",
+            );
+            return None;
+        };
         #[cfg(target_os = "linux")]
         if let Some(best) = linux_fastest_cpu()
             && let Some(id) = ids.iter().copied().find(|c| c.id == best)
         {
+            log::debug!(target: "loadbearer::engine", "pinning single-threaded subtests to CPU {}", id.id);
             return Some(id);
         }
-        ids.into_iter().next()
+        let chosen = ids.into_iter().next();
+        log::debug!(target: "loadbearer::engine", "pinning single-threaded subtests to CPU {:?}", chosen.map(|c| c.id));
+        chosen
     })
 }
 

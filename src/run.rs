@@ -9,6 +9,7 @@ use std::sync::atomic::AtomicBool;
 
 use anyhow::{Context, Result, anyhow, bail};
 use clap::ValueEnum;
+use log::{debug, info, warn};
 
 use crate::benches;
 use crate::cli::{DurationArg, RunArgs};
@@ -96,8 +97,18 @@ fn resolve(args: &RunArgs) -> Result<Resolved> {
 
 pub fn execute(args: RunArgs) -> Result<()> {
     let r = resolve(&args)?;
+    info!(
+        target: "loadbearer::run",
+        "resolved settings: profile={}, preset={:?}, curve_k={}, seed={:?}, runs={:?}, only={:?}",
+        r.profile.name, r.duration, r.curve_k, r.seed, r.runs, r.only,
+    );
 
     let selected = select_benchmarks(&r.only)?;
+    info!(
+        target: "loadbearer::run",
+        "selected benchmarks: [{}]",
+        selected.iter().map(|b| b.id()).collect::<Vec<_>>().join(", "),
+    );
     let baseline = Baseline::reference_v1();
     let machine = crate::inventory::collect();
 
@@ -105,6 +116,7 @@ pub fn execute(args: RunArgs) -> Result<()> {
         Some(dir) => dir,
         None => std::env::current_dir()?,
     };
+    debug!(target: "loadbearer::run", "disk scratch target dir: {}", target_dir.display());
     let ctx = RunContext {
         preset: r.duration.into(),
         seed: r.seed.unwrap_or(DEFAULT_SEED),
@@ -126,6 +138,10 @@ pub fn execute(args: RunArgs) -> Result<()> {
     };
 
     let interactive = std::io::stdout().is_terminal() && !args.plain && !args.json;
+    info!(
+        target: "loadbearer::run",
+        "output path: {}", if interactive { "interactive TUI" } else { "plain/json" },
+    );
     if interactive {
         run_interactive(
             &args, selected, ctx, baseline, r.profile, r.curve_k, machine, config,
@@ -260,6 +276,7 @@ fn soak_config(args: &RunArgs) -> Option<crate::soak::SoakConfig> {
 /// the soak inside the TUI instead.
 fn run_soak(args: &RunArgs) -> Option<crate::soak::SoakResult> {
     let cfg = soak_config(args)?;
+    info!(target: "loadbearer::run", "--soak: starting sustained-load phase");
     if !args.json {
         eprintln!();
     }
@@ -271,11 +288,18 @@ fn probe_link(args: &RunArgs) -> Result<Option<crate::scoring::LinkResult>> {
     let Some(target) = &args.net_target else {
         return Ok(None);
     };
+    info!(target: "loadbearer::run", "--net-target: probing link to {target}");
     eprintln!("probing link to {target} …");
-    let link =
-        benches::link_probe(target, std::time::Duration::from_secs(1)).with_context(|| {
+    let link = benches::link_probe(target, std::time::Duration::from_secs(1))
+        .inspect_err(|e| warn!(target: "loadbearer::run", "link probe to {target} failed: {e}"))
+        .with_context(|| {
             format!("probing link to {target} (is `loadbearer net-server` running there?)")
         })?;
+    info!(
+        target: "loadbearer::run",
+        "link probe ok: {:.2} GiB/s up, {:.0} us rtt, {:.0} Kpps",
+        link.tcp_upload_gibps, link.tcp_rtt_us, link.udp_send_kpps,
+    );
     Ok(Some(link))
 }
 
@@ -283,6 +307,7 @@ fn write_output(result: &ResultFile, path: Option<&Path>) -> Result<()> {
     if let Some(path) = path {
         let json = serde_json::to_string_pretty(result)?;
         std::fs::write(path, json).with_context(|| format!("writing {}", path.display()))?;
+        info!(target: "loadbearer::run", "result written to {}", path.display());
     }
     Ok(())
 }
@@ -293,6 +318,9 @@ fn select_benchmarks(only: &[String]) -> Result<Vec<Box<dyn Benchmark>>> {
 
     // Default set: everything, minus `gpu` when there's no GPU to test.
     if only.is_empty() {
+        if !gpu_ok {
+            debug!(target: "loadbearer::run", "no GPU/OpenCL — gpu component excluded from the default set");
+        }
         return Ok(all
             .into_iter()
             .filter(|b| b.id() != "gpu" || gpu_ok)

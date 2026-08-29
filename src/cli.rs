@@ -2,6 +2,31 @@ use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
+/// Diagnostic-log verbosity.
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+#[value(rename_all = "lower")]
+pub enum LogLevelArg {
+    Off,
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace,
+}
+
+impl From<LogLevelArg> for log::LevelFilter {
+    fn from(v: LogLevelArg) -> Self {
+        match v {
+            LogLevelArg::Off => log::LevelFilter::Off,
+            LogLevelArg::Error => log::LevelFilter::Error,
+            LogLevelArg::Warn => log::LevelFilter::Warn,
+            LogLevelArg::Info => log::LevelFilter::Info,
+            LogLevelArg::Debug => log::LevelFilter::Debug,
+            LogLevelArg::Trace => log::LevelFilter::Trace,
+        }
+    }
+}
+
 /// Benchmark thoroughness. Trades wall-clock time for lower measurement variance.
 #[derive(ValueEnum, Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[value(rename_all = "lower")]
@@ -29,6 +54,31 @@ pub struct Cli {
     /// `info` and `run` otherwise perform (so `OpenCL.dll` is never loaded).
     #[arg(long, global = true)]
     pub no_gpu: bool,
+
+    /// Write the diagnostic log here instead of the default cache location.
+    #[arg(long, global = true, value_name = "PATH")]
+    pub log_file: Option<PathBuf>,
+
+    /// Don't write a diagnostic log at all.
+    #[arg(long, global = true, conflicts_with = "log_file")]
+    pub no_log: bool,
+
+    /// Diagnostic log verbosity [default: info]. Overrides `LOADBEARER_LOG`.
+    #[arg(long, global = true, value_name = "LEVEL", value_enum)]
+    pub log_level: Option<LogLevelArg>,
+}
+
+impl Cli {
+    /// Where the diagnostic log should go, from `--log-file` / `--no-log`.
+    pub fn log_target(&self) -> crate::logging::LogTarget {
+        if self.no_log {
+            crate::logging::LogTarget::Disabled
+        } else if let Some(path) = &self.log_file {
+            crate::logging::LogTarget::Path(path.clone())
+        } else {
+            crate::logging::LogTarget::Default
+        }
+    }
 }
 
 #[derive(Subcommand, Debug)]

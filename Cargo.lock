@@ -910,6 +910,7 @@ dependencies = [
  "flate2",
  "libc",
  "libloading",
+ "log",
  "ratatui",
  "serde",
  "serde_json",

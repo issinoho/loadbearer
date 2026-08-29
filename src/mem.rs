@@ -103,11 +103,20 @@ pub fn execute(args: MemArgs) -> Result<()> {
 /// Take a snapshot of per-program memory use on this machine.
 pub fn collect() -> Result<MemSnapshot> {
     let (procs, unreadable) = platform::read()?;
-    Ok(MemSnapshot {
+    let snap = MemSnapshot {
         source: platform::SOURCE,
         programs: group(procs),
         unreadable,
-    })
+    };
+    log::info!(
+        target: "loadbearer::mem",
+        "{:?}: {} program(s), {} unreadable, {:.0} MiB total",
+        snap.source,
+        snap.programs.len(),
+        snap.unreadable,
+        snap.ram_total() as f64 / (1024.0 * 1024.0),
+    );
+    Ok(snap)
 }
 
 /// Roll per-process rows up by program name and sort ascending by total.

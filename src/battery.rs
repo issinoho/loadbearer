@@ -142,9 +142,23 @@ pub fn probe() -> Option<&'static BatteryInfo> {
 }
 
 fn read() -> Option<BatteryInfo> {
-    let manager = starship_battery::Manager::new().ok()?;
-    let battery = manager.batteries().ok()?.next()?.ok()?;
-    Some(BatteryInfo::from_battery(&battery))
+    let manager = match starship_battery::Manager::new() {
+        Ok(m) => m,
+        Err(e) => {
+            log::debug!(target: "loadbearer::battery", "no battery manager ({e})");
+            return None;
+        }
+    };
+    let Some(Ok(battery)) = manager.batteries().ok()?.next() else {
+        log::debug!(target: "loadbearer::battery", "no battery present");
+        return None;
+    };
+    let info = BatteryInfo::from_battery(&battery);
+    log::debug!(
+        target: "loadbearer::battery",
+        "battery: {} · charge {:.0}% ({})", info.summary(), info.charge_pct, info.state,
+    );
+    Some(info)
 }
 
 #[cfg(test)]

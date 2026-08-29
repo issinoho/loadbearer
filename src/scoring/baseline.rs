@@ -41,6 +41,11 @@ impl Baseline {
             "baseline {} defines no components",
             path.display()
         );
+        log::info!(
+            target: "loadbearer::scoring",
+            "loaded baseline {:?} from {} ({} component(s))",
+            baseline.name, path.display(), baseline.components.len(),
+        );
         Ok(baseline)
     }
 

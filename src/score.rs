@@ -50,8 +50,16 @@ pub fn execute(args: ScoreArgs) -> Result<()> {
     })?;
 
     let curve_k = args.curve_k.unwrap_or(original.config.curve_k);
+    log::info!(
+        target: "loadbearer::score",
+        "re-scoring {} (tool {}) against baseline {:?}, profile {}, curve k {}",
+        args.file.display(), original.tool_version, baseline.name, profile.name, curve_k,
+    );
 
     let (rescored, skipped) = rescore(&original, &baseline, profile, curve_k)?;
+    if !skipped.is_empty() {
+        log::info!(target: "loadbearer::score", "skipped (no baseline entry): {}", skipped.join(", "));
+    }
     for s in &skipped {
         eprintln!(
             "note: {s} — no entry in baseline {:?}, left out",

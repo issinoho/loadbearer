@@ -240,6 +240,11 @@ pub fn run(
     mut on_sample: impl FnMut(&SoakSample),
 ) -> SoakResult {
     let threads = cfg.threads.max(1);
+    log::info!(
+        target: "loadbearer::soak",
+        "sustained-load start: {}s, {} thread(s), seed {:#018x}",
+        cfg.duration.as_secs(), threads, cfg.seed,
+    );
     let counters: Vec<AtomicU64> = (0..threads).map(|_| AtomicU64::new(0)).collect();
     let start = Instant::now();
     let deadline = start + cfg.duration;
@@ -391,6 +396,12 @@ fn derive(cfg: &SoakConfig, threads: usize, samples: Vec<SoakSample>) -> SoakRes
         steady_mhz.iter().sum::<u64>() / steady_mhz.len() as u64
     };
 
+    log::info!(
+        target: "loadbearer::soak",
+        "sustained-load done: {} sample(s), peak {:.0}, steady {:.0} {}, {:.1}% retained, onset {}",
+        n, peak_rate, steady_rate, SOAK_UNIT, retained_pct,
+        onset_secs.map_or_else(|| "none".to_string(), |t| format!("~{t:.0}s")),
+    );
     SoakResult {
         duration_secs: cfg.duration.as_secs_f64(),
         threads,

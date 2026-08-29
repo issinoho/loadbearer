@@ -74,6 +74,7 @@ impl MemoryBenchmark {
         let msg = msg.into();
         let mut guard = self.notes.lock().unwrap();
         if !guard.contains(&msg) {
+            log::info!(target: "loadbearer::memory", "note: {msg}");
             guard.push(msg);
         }
     }

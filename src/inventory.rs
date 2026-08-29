@@ -80,7 +80,7 @@ pub fn collect() -> Inventory {
         })
         .collect();
 
-    Inventory {
+    let inv = Inventory {
         hostname: System::host_name(),
         os: System::long_os_version().or_else(System::os_version),
         kernel: System::kernel_version(),
@@ -95,5 +95,17 @@ pub fn collect() -> Inventory {
         disks,
         gpu: crate::benches::gpu_probe().cloned(),
         battery: crate::battery::probe().cloned(),
-    }
+    };
+    log::debug!(
+        target: "loadbearer::inventory",
+        "collected: {} · {} · {} logical cores · {} MiB RAM · {} disk(s) · gpu={} · battery={}",
+        inv.hostname.as_deref().unwrap_or("?"),
+        inv.cpu_model,
+        inv.cpu_logical_cores,
+        inv.ram_bytes / (1024 * 1024),
+        inv.disks.len(),
+        inv.gpu.is_some(),
+        inv.battery.is_some(),
+    );
+    inv
 }

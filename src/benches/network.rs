@@ -241,8 +241,11 @@ const MODE_ECHO: u8 = b'E';
 /// Probe a running `net-server` at `target` (`host:port`). Each of the three
 /// measurements runs for `budget`.
 pub fn link_probe(target: &str, budget: Duration) -> Result<LinkResult> {
+    log::debug!(target: "loadbearer::network", "link probe: connecting to {target}");
     // Upload throughput.
-    let mut up = TcpStream::connect(target)?;
+    let mut up = TcpStream::connect(target).inspect_err(
+        |e| log::warn!(target: "loadbearer::network", "link probe: connect {target} failed: {e}"),
+    )?;
     up.set_nodelay(true)?;
     up.write_all(&[MODE_SINK])?;
     let up_gibps = blast(up, budget);
@@ -287,9 +290,13 @@ pub fn link_probe(target: &str, budget: Duration) -> Result<LinkResult> {
 /// each TCP connection by its mode byte (sink or echo), and drains a UDP socket
 /// on the same port.
 pub fn serve(bind: &str) -> Result<()> {
-    let tcp = TcpListener::bind(bind)?;
+    log::info!(target: "loadbearer::network", "net-server: binding {bind}");
+    let tcp = TcpListener::bind(bind).inspect_err(
+        |e| log::error!(target: "loadbearer::network", "net-server: bind {bind} failed: {e}"),
+    )?;
     let local = tcp.local_addr()?;
     let udp = UdpSocket::bind(local)?;
+    log::info!(target: "loadbearer::network", "net-server: listening on {local} (TCP + UDP)");
 
     thread::spawn(move || {
         let mut buf = [0u8; 2048];

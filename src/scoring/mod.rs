@@ -206,7 +206,9 @@ pub fn score_run(
     for bench in outcomes {
         let mut subtests = Vec::with_capacity(bench.subtests.len());
         for st in &bench.subtests {
-            let reference = baseline.lookup(&bench.id, &st.id)?;
+            let reference = baseline.lookup(&bench.id, &st.id).inspect_err(|e| {
+                log::error!(target: "loadbearer::scoring", "baseline lookup failed for {}/{}: {e}", bench.id, st.id)
+            })?;
             ensure!(
                 st.value > 0.0,
                 "{}/{} produced a non-positive value ({})",
@@ -237,12 +239,19 @@ pub fn score_run(
             .map(|s| s.confidence)
             .min_by_key(|c| c.rank())
             .unwrap_or(Confidence::High);
+        let graded = !UNGRADED_COMPONENTS.contains(&bench.id.as_str());
+        log::debug!(
+            target: "loadbearer::scoring",
+            "component {}: score {:.0} [{}], {} ({})",
+            bench.id, score, Grade::from_score(score).as_str(), confidence.as_str(),
+            if graded { "graded" } else { "not graded" },
+        );
         components.push(ScoredComponent {
             id: bench.id.clone(),
             label: bench.label.clone(),
             score,
             grade: Grade::from_score(score),
-            graded: !UNGRADED_COMPONENTS.contains(&bench.id.as_str()),
+            graded,
             confidence,
             subtests,
             notes: bench.notes.clone(),
@@ -261,6 +270,11 @@ pub fn score_run(
         profile: profile.name.to_string(),
         why: explain(&components),
     };
+    log::info!(
+        target: "loadbearer::scoring",
+        "overall {:.0} [{}] · profile {} · curve k {} · baseline {} · {} graded component(s)",
+        overall.score, overall.grade.as_str(), profile.name, curve_k, baseline.name, weighted.len(),
+    );
 
     Ok(ScoredRun {
         components,

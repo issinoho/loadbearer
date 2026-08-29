@@ -94,6 +94,9 @@ fn event_loop(
                     if app.is_finished() {
                         return resolve(app);
                     }
+                    if !app.cancelling {
+                        log::info!(target: "loadbearer::tui", "cancel requested (q/Esc) — finishing current measurement");
+                    }
                     app.cancelling = true;
                     app.abort.store(true, Ordering::Relaxed);
                 }
@@ -107,6 +110,9 @@ fn event_loop(
                     app.results_scroll = u16::MAX
                 }
                 _ if ctrl_c => {
+                    if !app.cancelling {
+                        log::info!(target: "loadbearer::tui", "cancel requested (Ctrl-C) — finishing current measurement");
+                    }
                     app.cancelling = true;
                     app.abort.store(true, Ordering::Relaxed);
                 }
@@ -140,12 +146,14 @@ fn spawn_worker(init: RunInit, tx: Sender<Msg>) -> JoinHandle<()> {
             ..
         } = init;
 
+        log::debug!(target: "loadbearer::tui", "worker thread started");
         let mut progress = ChannelProgress::new(tx.clone());
         let mut outcomes = Vec::with_capacity(selected.len());
         for bench in &selected {
             match run_benchmark(bench.as_ref(), &ctx, &mut progress) {
                 Ok(outcome) => outcomes.push(outcome),
                 Err(err) => {
+                    log::warn!(target: "loadbearer::tui", "worker: benchmark {} failed: {err:#}", bench.id());
                     let _ = tx.send(Msg::Failed(format!("{err:#}")));
                     return;
                 }
