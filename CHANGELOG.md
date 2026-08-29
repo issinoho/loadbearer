@@ -2,6 +2,24 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 0.10.0 - Sat, 29 Aug 2026
+
+- **Diagnostic logging.** Every invocation now writes a plain-text log — one
+  timestamped line per event: the resolved settings, each benchmark and subtest
+  boundary, the GPU / battery / OpenCL probe outcomes, disk `O_DIRECT`
+  fallbacks, the scratch-file sweep, the final grade, and any error.
+- Written by default to `$XDG_CACHE_HOME/loadbearer/loadbearer.log` (Linux),
+  `%LOCALAPPDATA%\loadbearer\loadbearer.log` (Windows), or the system temp dir;
+  appended to and rotated to `loadbearer.log.old` past ~2 MiB. A log file that
+  can't be opened is a one-line stderr note, not a failure.
+- New global flags (valid on any subcommand): `--log-file PATH`, `--no-log`,
+  `--log-level off|error|warn|info|debug|trace` (default `info`). The
+  `LOADBEARER_LOG` env var does the same as `--log-level`; the flag wins.
+  `debug` adds a line per subtest, `trace` a line per timed iteration.
+- Log lines sit at lifecycle boundaries and fallbacks, never inside a timed
+  measurement, so logging does not perturb the benchmark numbers even at the
+  default level.
+
 ## 0.9.0 - Sat, 29 Aug 2026
 
 - **New `loadbearer mem` command** — per-program memory use, in the style of
