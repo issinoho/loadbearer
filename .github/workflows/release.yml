@@ -135,12 +135,21 @@ jobs:
           ls -l release-assets
 
       - name: Checksums
-        # SHA-256 of every asset, published as SHA256SUMS. Lets a locked-down
-        # estate add a WDAC / AppLocker *file-hash* allow rule for the
-        # unsigned binary, and lets anyone verify the download.
+        # SHA256SUMS covers each archive *and* the bare executable inside it —
+        # the exe hash is what a WDAC / AppLocker file-hash allow rule needs
+        # (hash rules permit an unsigned binary; publisher rules don't).
         run: |
           cd release-assets
-          sha256sum * | tee SHA256SUMS
+          sha256sum *.zip *.tar.gz > SHA256SUMS
+          for z in *.zip; do
+            unzip -p "$z" '*/loadbearer.exe' | sha256sum \
+              | sed "s#-#loadbearer.exe  (inside $z)#" >> SHA256SUMS
+          done
+          for t in *.tar.gz; do
+            tar -xzOf "$t" --wildcards '*/loadbearer' | sha256sum \
+              | sed "s#-#loadbearer  (inside $t)#" >> SHA256SUMS
+          done
+          cat SHA256SUMS
 
       - name: Create/update the GitHub Release
         uses: softprops/action-gh-release@v3

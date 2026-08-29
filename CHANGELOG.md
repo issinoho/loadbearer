@@ -2,6 +2,13 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 0.7.5 - Fri, 29 Aug 2026
+
+- `SHA256SUMS` now also lists the hash of the **bare executable inside each
+  archive**, not just the archive — that's the value a WDAC / AppLocker
+  file-hash allow rule wants, so a policy can be written straight from the
+  release page without extracting first. No binary change.
+
 ## 0.7.4 - Fri, 29 Aug 2026
 
 - Releases now publish a **`SHA256SUMS`** file alongside the archives — for
