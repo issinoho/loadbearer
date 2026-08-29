@@ -2,6 +2,22 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 0.8.0 - Fri, 29 Aug 2026
+
+- **Battery inventory and health.** On a machine with a battery, `loadbearer
+  info` now shows a `Battery` section — charge and state, health (present
+  full-charge capacity as a fraction of the pack's design capacity), cycle
+  count, voltage, technology, vendor/model — and a `run` report gains a
+  `BATTERY` block with a one-line wear verdict (`as-new` / `healthy` / `worn` /
+  `degraded` / `failing`). Read once at inventory time (sysfs on Linux, the
+  battery IOCTL on Windows) and stored in the result JSON's `machine.battery`.
+- Battery health is **never folded into a grade** — it's the condition of a
+  consumable part, not the silicon, like the `network` and `gpu` components. A
+  machine running **on battery power** during a run also gets a note, since a
+  power profile may be capping clocks.
+- A machine with **no battery** (desktop, server, most VMs) shows none of the
+  above — nothing is skipped or errored, the section is simply absent.
+
 ## 0.7.8 - Fri, 29 Aug 2026
 
 - The disk benchmark now sweeps a **stale scratch file** left by a previous run
