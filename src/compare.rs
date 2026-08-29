@@ -20,6 +20,10 @@ use crate::scoring::ResultFile;
 use crate::soak::SoakResult;
 use crate::util::geomean;
 
+/// Schema tag for `loadbearer compare --json`. Additive fields keep `/1`; a
+/// removal, rename or type change bumps it (and is a breaking release).
+pub const COMPARE_SCHEMA: &str = "loadbearer.compare/1";
+
 pub fn execute(args: CompareArgs) -> Result<()> {
     log::info!(target: "loadbearer::compare", "comparing {} result file(s)", args.files.len());
     let machines = load(&args.files)?;
@@ -113,6 +117,8 @@ pub struct SoakComparison {
 
 #[derive(Debug, Serialize)]
 pub struct Comparison {
+    pub schema: String,
+    pub tool_version: String,
     pub machines: Vec<MachineRef>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
@@ -310,6 +316,8 @@ fn compare(machines: &[Machine]) -> Result<Comparison> {
         .collect();
 
     Ok(Comparison {
+        schema: COMPARE_SCHEMA.to_string(),
+        tool_version: env!("CARGO_PKG_VERSION").to_string(),
         machines: machine_refs,
         warnings,
         components,
@@ -474,5 +482,25 @@ mod tests {
     #[test]
     fn argmax_picks_the_largest() {
         assert_eq!(argmax(&[0.9, 1.4, 1.1]), 1);
+    }
+
+    #[test]
+    fn json_carries_a_schema_and_version() {
+        let cmp = Comparison {
+            schema: COMPARE_SCHEMA.to_string(),
+            tool_version: env!("CARGO_PKG_VERSION").to_string(),
+            machines: vec![],
+            warnings: vec![],
+            components: vec![],
+            overall: OverallComparison {
+                rel: vec![],
+                ranking: vec![],
+                summary: String::new(),
+            },
+            soak: None,
+        };
+        let v: serde_json::Value = serde_json::to_value(&cmp).unwrap();
+        assert_eq!(v["schema"], "loadbearer.compare/1");
+        assert_eq!(v["tool_version"], env!("CARGO_PKG_VERSION"));
     }
 }

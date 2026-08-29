@@ -34,8 +34,12 @@ Clippy on CI's toolchain is sometimes stricter than a local one — if in doubt
 `.github/workflows/release.yml` fires on the `v*` tag and builds+attaches the
 Windows `.zip` and Linux `.tar.gz`. Nothing else to do.
 
-Versioning this repo uses: new subcommand / capability → minor (`0.6.0` was
-`score`); UX polish / refinement → patch (`0.6.1`–`0.6.5` were TUI work).
+Versioning (semver from 1.0.0 — see `VERSIONING.md` for the covered surface):
+breaking change to the CLI or a `schema`-tagged JSON format → **major**; new
+subcommand / capability → **minor** (`0.6.0` was `score`); UX polish /
+refinement → **patch** (`0.6.1`–`0.6.5` were TUI work). Recalibrating the
+baseline or raising the MSRV is **minor**, not major — absolute scores and the
+baseline are explicitly *not* part of the stability contract.
 
 ## Pushing
 

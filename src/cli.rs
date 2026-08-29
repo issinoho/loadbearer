@@ -1,8 +1,11 @@
+// This module is `#[path]`-included by `build.rs` to generate shell completions
+// and the man page, so it must stay free of `crate::` and non-`clap` deps.
+
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
-/// Diagnostic-log verbosity.
+/// Diagnostic-log verbosity. Maps to `log::LevelFilter` in `main`.
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 #[value(rename_all = "lower")]
 pub enum LogLevelArg {
@@ -12,19 +15,6 @@ pub enum LogLevelArg {
     Info,
     Debug,
     Trace,
-}
-
-impl From<LogLevelArg> for log::LevelFilter {
-    fn from(v: LogLevelArg) -> Self {
-        match v {
-            LogLevelArg::Off => log::LevelFilter::Off,
-            LogLevelArg::Error => log::LevelFilter::Error,
-            LogLevelArg::Warn => log::LevelFilter::Warn,
-            LogLevelArg::Info => log::LevelFilter::Info,
-            LogLevelArg::Debug => log::LevelFilter::Debug,
-            LogLevelArg::Trace => log::LevelFilter::Trace,
-        }
-    }
 }
 
 /// Benchmark thoroughness. Trades wall-clock time for lower measurement variance.
@@ -45,7 +35,12 @@ pub enum DurationArg {
 /// Run the same build on two machines and compare their result files to see
 /// which is stronger and why.
 #[derive(Parser, Debug)]
-#[command(name = "loadbearer", version = env!("LOADBEARER_VERSION"), about, long_about = None)]
+#[command(
+    name = "loadbearer",
+    version = option_env!("LOADBEARER_VERSION").unwrap_or(env!("CARGO_PKG_VERSION")),
+    about,
+    long_about = None
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,
@@ -66,19 +61,6 @@ pub struct Cli {
     /// Diagnostic log verbosity [default: info]. Overrides `LOADBEARER_LOG`.
     #[arg(long, global = true, value_name = "LEVEL", value_enum)]
     pub log_level: Option<LogLevelArg>,
-}
-
-impl Cli {
-    /// Where the diagnostic log should go, from `--log-file` / `--no-log`.
-    pub fn log_target(&self) -> crate::logging::LogTarget {
-        if self.no_log {
-            crate::logging::LogTarget::Disabled
-        } else if let Some(path) = &self.log_file {
-            crate::logging::LogTarget::Path(path.clone())
-        } else {
-            crate::logging::LogTarget::Default
-        }
-    }
 }
 
 #[derive(Subcommand, Debug)]

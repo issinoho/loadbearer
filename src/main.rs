@@ -17,9 +17,36 @@ mod util;
 
 use anyhow::Result;
 use clap::Parser;
-use log::{error, info};
+use log::{LevelFilter, error, info};
 
-use cli::{Cli, Command};
+use cli::{Cli, Command, LogLevelArg};
+use logging::LogTarget;
+
+impl From<LogLevelArg> for LevelFilter {
+    fn from(v: LogLevelArg) -> Self {
+        match v {
+            LogLevelArg::Off => LevelFilter::Off,
+            LogLevelArg::Error => LevelFilter::Error,
+            LogLevelArg::Warn => LevelFilter::Warn,
+            LogLevelArg::Info => LevelFilter::Info,
+            LogLevelArg::Debug => LevelFilter::Debug,
+            LogLevelArg::Trace => LevelFilter::Trace,
+        }
+    }
+}
+
+impl Cli {
+    /// Where the diagnostic log should go, from `--log-file` / `--no-log`.
+    fn log_target(&self) -> LogTarget {
+        if self.no_log {
+            LogTarget::Disabled
+        } else if let Some(path) = &self.log_file {
+            LogTarget::Path(path.clone())
+        } else {
+            LogTarget::Default
+        }
+    }
+}
 
 fn main() -> Result<()> {
     let cli = Cli::parse();

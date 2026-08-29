@@ -23,6 +23,10 @@ use serde::Serialize;
 
 use crate::cli::MemArgs;
 
+/// Schema tag for `loadbearer mem --json`. Additive fields keep `/1`; a
+/// removal, rename or type change bumps it (and is a breaking release).
+pub const MEM_SCHEMA: &str = "loadbearer.mem/1";
+
 /// One process's memory, before grouping.
 struct ProcRow {
     name: String,
@@ -64,6 +68,8 @@ pub enum Source {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct MemSnapshot {
+    pub schema: String,
+    pub tool_version: String,
     pub source: Source,
     /// Programs, sorted ascending by total — largest last, by the total line.
     pub programs: Vec<ProgramMem>,
@@ -104,6 +110,8 @@ pub fn execute(args: MemArgs) -> Result<()> {
 pub fn collect() -> Result<MemSnapshot> {
     let (procs, unreadable) = platform::read()?;
     let snap = MemSnapshot {
+        schema: MEM_SCHEMA.to_string(),
+        tool_version: env!("CARGO_PKG_VERSION").to_string(),
         source: platform::SOURCE,
         programs: group(procs),
         unreadable,
@@ -424,6 +432,8 @@ mod tests {
     #[test]
     fn snapshot_totals_add_up() {
         let snap = MemSnapshot {
+            schema: MEM_SCHEMA.to_string(),
+            tool_version: env!("CARGO_PKG_VERSION").to_string(),
             source: Source::Pss,
             programs: group(vec![row("a", 10, 5, 1), row("b", 20, 5, 0)]),
             unreadable: 3,
@@ -433,5 +443,20 @@ mod tests {
         assert_eq!(snap.ram_total(), 40);
         assert_eq!(snap.swap_total(), 1);
         assert!(snap.has_swap());
+    }
+
+    #[test]
+    fn json_carries_a_schema_and_version() {
+        let snap = MemSnapshot {
+            schema: MEM_SCHEMA.to_string(),
+            tool_version: env!("CARGO_PKG_VERSION").to_string(),
+            source: Source::Pss,
+            programs: vec![],
+            unreadable: 0,
+        };
+        let v: serde_json::Value = serde_json::to_value(&snap).unwrap();
+        assert_eq!(v["schema"], "loadbearer.mem/1");
+        assert_eq!(v["tool_version"], env!("CARGO_PKG_VERSION"));
+        assert_eq!(v["source"], "pss");
     }
 }

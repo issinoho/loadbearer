@@ -491,6 +491,8 @@ mod tests {
             best: 1,
         };
         Comparison {
+            schema: crate::compare::COMPARE_SCHEMA.to_string(),
+            tool_version: env!("CARGO_PKG_VERSION").to_string(),
             machines: vec![machine("A", "alpha"), machine("B", "bravo")],
             warnings: vec!["files used different duration presets".into()],
             components: vec![comp],

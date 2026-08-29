@@ -170,6 +170,15 @@ RUSTFLAGS="-C target-cpu=native" cargo build --release
 The absolute numbers go up; relative grades stay meaningful **as long as both
 machines you're comparing are built the same way**.
 
+### Shell completions and man page
+
+Every release archive contains a `completions/` directory (`bash`, `zsh`,
+`fish`, PowerShell) and `loadbearer.1`. Point your shell at the file for it —
+e.g. `source completions/loadbearer.bash`, or copy `_loadbearer` onto your
+`$fpath` for zsh — and `man ./loadbearer.1` for the manual. A source build
+generates the same files next to the binary
+(`target/release/loadbearer.1`, `target/release/loadbearer.bash`, …).
+
 ## How it works
 
 `loadbearer run` executes each selected benchmark, one subtest at a time. A
@@ -274,7 +283,7 @@ finishes, then the process exits). On the results screen: `↑`/`↓`/`PgUp`/`Pg
 | --- | --- |
 | `FILE ...` | Two or more result files written by `loadbearer run --output`. |
 | `--plain` | Force the plain-text table. The default is a scrollable TUI when stdout is a terminal, the plain table otherwise. |
-| `--json` | Emit the comparison as structured JSON. |
+| `--json` | Emit the comparison as structured JSON (`schema` `"loadbearer.compare/1"`, `tool_version`, `machines`, `components`, `overall`, `warnings`, `soak`). |
 
 The first file is the reference; every other machine's metrics are shown as a
 direction-adjusted percentage relative to it (`+28%` always means "better").
@@ -360,7 +369,7 @@ has the higher burst.
 | --- | --- |
 | `--limit N` | Show only the N largest programs. The grand total still covers every program. |
 | `--swap` | Add a `Swap` column (Linux only — the proportional paged-out size, `SwapPss`). |
-| `--json` | Emit the snapshot as JSON (`source`, `programs[]`, `unreadable`) instead of the table. |
+| `--json` | Emit the snapshot as JSON (`schema` `"loadbearer.mem/1"`, `tool_version`, `source`, `programs[]`, `unreadable`) instead of the table. |
 
 ```
 loadbearer 0.10.0 — memory by program
