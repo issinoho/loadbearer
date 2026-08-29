@@ -123,7 +123,10 @@ publisher rules don't) — take the hash from `SHA256SUMS` or
 `Get-FileHash loadbearer.exe`. The release workflow will Authenticode-sign the
 binary automatically if the repo is configured with a code-signing certificate
 (`WINDOWS_PFX_BASE64` / `WINDOWS_PFX_PASSWORD` secrets); build from source with
-your own cert otherwise.
+your own cert otherwise. For running it unattended across a fleet (PDQ / Intune /
+GPO) — the command line, the scratch file, collecting results — see
+[Fleet Deployment](https://github.com/issinoho/loadbearer/wiki/Fleet-Deployment)
+in the wiki.
 
 ### Linux
 
