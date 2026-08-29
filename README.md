@@ -124,20 +124,28 @@ Prompt):
 loadbearer.exe run
 ```
 
-The released binary is **not code-signed**, so Windows SmartScreen shows an
-"unrecognized app" warning the first time — click **More info** then **Run
-anyway**. Put the folder on your `PATH` if you want to call `loadbearer` from
-anywhere.
+Put the folder on your `PATH` if you want to call `loadbearer` from anywhere.
 
-**Deploying on a locked-down / managed estate.** Each release also publishes a
-`SHA256SUMS` file. On a machine with WDAC or AppLocker enforced, add a **file
-hash** allow rule for `loadbearer.exe` (hash rules work on unsigned binaries;
-publisher rules don't) — take the hash from `SHA256SUMS` or
-`Get-FileHash loadbearer.exe`. The release workflow will Authenticode-sign the
-binary automatically if the repo is configured with a code-signing certificate
-(`WINDOWS_PFX_BASE64` / `WINDOWS_PFX_PASSWORD` secrets); build from source with
-your own cert otherwise. For running it unattended across a fleet (PDQ / Intune /
-GPO) — the command line, the scratch file, collecting results — see
+**Smart App Control.** On Windows 11 with Smart App Control on (the default on
+clean installs), a binary that isn't signed *and* known-good is blocked outright
+— "An Application Control policy has blocked this file" — with **no allow-list
+or file-hash exception**. Run it on a machine without SAC (Windows Sandbox works;
+SAC doesn't apply inside it), or build from source. Releases are
+Authenticode-signed through [SignPath.io](https://signpath.io)'s free programme
+for open source (certificate by the [SignPath Foundation](https://signpath.org)),
+but SAC also wants download reputation — a freshly-signed build may still be
+blocked until that accrues.
+
+**SmartScreen.** Without SAC, SmartScreen shows an "unrecognized app" prompt the
+first time — **More info → Run anyway**, or `Unblock-File .\loadbearer.exe`. This
+eases as the signing certificate accumulates reputation.
+
+**Locked-down estates (WDAC / AppLocker).** These honour explicit rules: add a
+**publisher** rule for the SignPath Foundation certificate, or a **file-hash**
+rule for `loadbearer.exe` — the exact SHA-256 is in the release's `SHA256SUMS`,
+or `Get-FileHash loadbearer.exe`. Hash rules work on an unsigned binary;
+Smart App Control ignores both kinds of rule. For running it unattended across a
+fleet (PDQ / Intune / GPO) see
 [Fleet Deployment](https://github.com/issinoho/loadbearer/wiki/Fleet-Deployment)
 in the wiki.
 
