@@ -4,6 +4,8 @@ All notable changes to loadbearer are documented in this file.
 
 ## 0.10.0 - Sat, 29 Aug 2026
 
+**The last `0.x` release.** The next release is `1.0.0`.
+
 - **Diagnostic logging.** Every invocation now writes a plain-text log — one
   timestamped line per event: the resolved settings, each benchmark and subtest
   boundary, the GPU / battery / OpenCL probe outcomes, disk `O_DIRECT`
