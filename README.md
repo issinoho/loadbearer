@@ -158,6 +158,12 @@ fleet (PDQ / Intune / GPO) see
 [Fleet Deployment](https://github.com/issinoho/loadbearer/wiki/Fleet-Deployment)
 in the wiki.
 
+**Code signing policy.** Free code signing on Windows is provided by
+[SignPath.io](https://signpath.io), certificate by the
+[SignPath Foundation](https://signpath.org). What is signed, how to verify it,
+and the signing roles are in
+[CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md).
+
 ### Linux
 
 Download `loadbearer-<version>-x86_64-unknown-linux-gnu.tar.gz` from the
