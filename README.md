@@ -189,7 +189,7 @@ that `loadbearer compare` can diff against another machine's.
 loadbearer run        [OPTIONS]
 loadbearer compare    FILE FILE [FILE ...] [--plain] [--json]
 loadbearer score      FILE [--baseline FILE] [--profile NAME] [--curve-k FLOAT] [--output FILE] [--json]
-loadbearer soak       [--duration SECS] [--threads N] [--output FILE] [--json]
+loadbearer soak       [--duration SECS] [--threads N] [--seed N] [--output FILE] [--json]
 loadbearer info       [--json]
 loadbearer list
 loadbearer baseline   [FILE ...] [--name NAME] [--description TEXT]
@@ -312,6 +312,7 @@ again later.
 | --- | --- |
 | `--duration SECS` | Sustained-load duration (default 90; range 15–1800). |
 | `--threads N` | Worker threads (default: one per logical CPU). |
+| `--seed N` | Seed for the sustained-load kernel. |
 | `--output FILE` | Write the soak result as a `loadbearer.soak/1` JSON document. |
 | `--json` | Emit only the JSON to stdout. |
 
@@ -400,8 +401,8 @@ flag among their subtests, and low-confidence components are called out in the
 | --- | --- |
 | `general` | CPU, memory and disk count equally (default). |
 | `dev-workstation` | Favours CPU and disk — builds, containers, version control. |
-| `content-creation` | Favours CPU and memory bandwidth — encode, render; de-emphasises network. |
-| `server` | Favours disk I/O, network and CPU — sustained throughput under load. |
+| `content-creation` | Favours CPU and memory bandwidth — encode, render; de-emphasises disk. |
+| `server` | Favours disk I/O and CPU — sustained throughput under load. |
 
 ## The benchmarks
 
@@ -409,7 +410,7 @@ flag among their subtests, and low-confidence components are called out in the
 | --- | --- |
 | **CPU** | Integer and floating-point throughput (single-core and all-core), BLAKE3 hashing, DEFLATE (level 6) compression, **AES-256-GCM** and **SHA-256** throughput. The integer/float kernels use eight independent accumulator lanes so they measure pipeline throughput, not dependency-chain latency. AES-GCM and SHA-256 pick up the CPU's AES-NI / CLMUL / SHA-extension hardware at runtime where it exists. All-core subtests run the kernel on every logical CPU and sum the rates. |
 | **Memory** | Sequential read, write and copy bandwidth over a working set sized past any last-level cache (256 MiB at `normal`), plus an **all-core** read that sums the read kernel across every logical CPU; random-access latency via a single-cycle pointer chase (Sattolo) that defeats the prefetcher. Single-threaded except the all-core read. |
-| **Disk** | Sequential write (each pass ends with `fsync`, so it's durable-write throughput) and read; random 4 KiB read and write IOPS at queue depth 1. Reads and random I/O use unbuffered I/O — `O_DIRECT` on Linux, `FILE_FLAG_NO_BUFFERING` on Windows — to bypass the page cache, with a buffered fallback (and a recorded note) where the filesystem refuses it. The scratch file (1 GiB at `normal`) is filled with random data to defeat filesystem compression, reused by every subtest, and deleted when the run ends. |
+| **Disk** | Sequential write (each pass ends with `fsync`, so it's durable-write throughput) and read; random 4 KiB read and write IOPS at queue depth 1. Reads and random I/O use unbuffered I/O — `O_DIRECT` on Linux, `FILE_FLAG_NO_BUFFERING` on Windows — to bypass the page cache, with a buffered fallback (and a recorded note) where the filesystem refuses it. The scratch file (1 GiB at `normal`) is filled with random data to defeat filesystem compression, reused by every subtest, and deleted when the run ends. A hard-killed run leaves it behind; the next run against the same directory sweeps any orphan that isn't its own and hasn't been touched in 20 minutes. |
 | **Network** | Loopback (`127.0.0.1`) only — this measures the machine's network *stack* (syscall, TCP processing, scheduler wakeup latency), **not** a physical link, and makes no network calls. Single-stream and all-core TCP throughput, TCP request/response round-trip latency, and UDP small-packet send rate. **Scored and shown, but not in the overall grade** (see [Scoring model](#scoring-model)). For a real link test between two machines, run `loadbearer net-server` on one and `loadbearer run --net-target` on the other (reported separately, also not graded). |
 | **GPU** | FP32 fused-multiply-add throughput (GFLOP/s) and VRAM read bandwidth (GiB/s), via OpenCL. The strongest GPU is picked automatically (discrete beats integrated). The OpenCL loader is opened at runtime, not linked — on Windows **only from `System32`** (`LOAD_LIBRARY_SEARCH_SYSTEM32`), so a planted `OpenCL.dll` can't be picked up. No GPU or no OpenCL means no `gpu` component, and the binary is unaffected. **Scored and shown, but not in the overall grade**: GPU is optional hardware and a discrete-vs-integrated gap would swamp the "faster for my work" question. Runs only when a GPU is present, or on explicit `--only gpu`; `--no-gpu` disables it (and the probe) entirely. |
 | **Sustained load** *(opt-in: `soak` / `run --soak`)* | Holds every logical CPU under a blended integer + floating-point kernel for a fixed stretch (default 90 s), sampling aggregate throughput and CPU clock once a second. Reports the unthrottled peak, the steady-state rate, the percentage retained, when throttling set in, and steady-window stability. **Not scored** — it's a measure of how well a machine holds up under a long workload once it heats up, not of raw speed. |
