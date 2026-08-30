@@ -5,9 +5,20 @@
 # disk and network are not model-attributable. Grown by PR:
 #   loadbearer models --add run1.json run2.json > baseline/models/gpu.toml
 #
-# Seeded 2026-08-30 from the 7 machines that calibrated reference-v1. GPU
-# numbers are noisier than CPU across device generations — treat a GPU
-# reference as indicative until it has several samples.
+# Seeded 2026-08-30 from the 7 machines that calibrated reference-v1;
+# Apple M3 Pro added 2026-08-30 from a 1.1.1 run. GPU numbers are noisier
+# than CPU across device generations — treat a GPU reference as
+# indicative until it has several samples.
+
+[[gpu]]
+model = "Apple M3 Pro"
+aliases = ["M3 Pro"]
+samples = 1
+measured = "2026-08-30"
+tool_version = "1.1.1"
+build = "portable"
+compute_fp32 = 5261
+bandwidth    = 112.5
 
 [[gpu]]
 model = "Intel UHD Graphics 620"

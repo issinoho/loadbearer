@@ -2,6 +2,18 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 1.1.2 - Sun, 30 Aug 2026
+
+- **Apple M3 Pro in the model reference table.** First non-x86 entry
+  (`baseline/models/cpu.toml`, `gpu.toml`), from a 1.1.1 `--duration thorough`
+  run. Its `aes_gcm` / `sha256` figures are low because loadbearer's build
+  doesn't use Arm crypto acceleration — a property of the tool, not the chip.
+- **"vs typical hardware" no longer mis-flags Arm builds.** The "this is a
+  wider build than the reference, expect higher" caveat now fires only for an
+  x86 AVX/AVX2/AVX-512 build (`target-cpu=native`), not for any non-`sse2`
+  `build_isa` — a portable Arm (NEON) run compares straight against the NEON
+  reference.
+
 ## 1.1.1 - Sun, 30 Aug 2026
 
 - **"vs typical hardware" now notes a preset mismatch.** The model reference

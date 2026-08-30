@@ -552,14 +552,15 @@ newer stepping, better cooling, or a native build. **CPU and GPU only** —
 memory, disk and network depend on the RAM kit, the SSD and the OS, not the
 model. It is **not graded** and never touches a score.
 
-The references are measured at `--duration thorough` on the released **portable
-(SSE2)** build. A shorter preset reads systematically off against them, so the
-block says so — `(this run used the short preset; … treat the gap as
-approximate)` — whenever the run's preset isn't `thorough`. A
-`-C target-cpu=native` build (AVX2 / AVX-512) still gets a comparison, flagged as
-indicative — expect its numbers to sit above the reference. `--no-model-ref`
-skips the block; `loadbearer models` prints the whole table; matching is exact
-on the normalised model string, else a distinctive SKU token (`i7-1370P`).
+The references are measured at `--duration thorough` on the released **portable**
+build (SSE2 on x86, NEON on Arm). A shorter preset reads systematically off
+against them, so the block says so — `(this run used the short preset; … treat
+the gap as approximate)` — whenever the run's preset isn't `thorough`. An x86
+`-C target-cpu=native` build (AVX2 / AVX-512) still gets a comparison but is
+flagged indicative — expect its numbers to sit above the reference.
+`--no-model-ref` skips the block; `loadbearer models` prints the whole table;
+matching is exact on the normalised model string, else a distinctive SKU token
+(`i7-1370P`).
 
 Grow the table by PR: collect result files and
 `loadbearer models --add run1.json run2.json > baseline/models/cpu.toml`, then

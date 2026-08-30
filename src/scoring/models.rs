@@ -317,10 +317,13 @@ pub fn for_run(
 
 fn verdict(component: &str, model: &str, delta_pct: f64, build_isa: &str) -> String {
     let c = component.to_uppercase();
-    if !build_isa.is_empty() && build_isa != "sse2" {
+    // The references are portable builds (SSE2 on x86, NEON on Arm). Only a
+    // *wider-than-portable* x86 build — AVX and up, from `target-cpu=native` —
+    // runs vector kernels the reference didn't, so only that gets the caveat.
+    if matches!(build_isa, "avx" | "avx2" | "avx512") {
         return format!(
-            "{c} is {delta_pct:+.0}% vs a typical {model} — but this is a {build_isa} build; \
-             the reference is for the released SSE2 build, so expect higher. Indicative only.",
+            "{c} is {delta_pct:+.0}% vs a typical {model} — but this is a {build_isa} build and \
+             the reference is a portable one, so expect higher. Indicative only.",
         );
     }
     if delta_pct.abs() <= 5.0 {
@@ -688,6 +691,11 @@ mod tests {
         assert!(verdict("cpu", "X", -20.0, "sse2").contains("below par"));
         assert!(verdict("cpu", "X", 15.0, "sse2").contains("above a typical"));
         assert!(verdict("cpu", "X", -20.0, "avx2").contains("Indicative only"));
+        assert!(verdict("cpu", "X", -20.0, "avx512").contains("Indicative only"));
+        // a portable Arm (NEON) build compares straight against a NEON
+        // reference — no x86 "expect higher" caveat
+        assert!(!verdict("cpu", "X", 2.0, "neon").contains("Indicative only"));
+        assert!(verdict("cpu", "X", 2.0, "neon").contains("matches a typical"));
     }
 
     /// Build a `cpu` outcome whose subtests equal `entry`'s reference values.

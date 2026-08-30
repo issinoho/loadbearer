@@ -5,7 +5,27 @@
 # disk and network are not model-attributable. Grown by PR:
 #   loadbearer models --add run1.json run2.json > baseline/models/cpu.toml
 #
-# Seeded 2026-08-30 from the 7 machines that calibrated reference-v1.
+# Seeded 2026-08-30 from the 7 machines that calibrated reference-v1;
+# Apple M3 Pro added 2026-08-30 from a 1.1.1 run (Arm/NEON build — the
+# aes_gcm / sha256 figures reflect loadbearer not using Arm crypto
+# acceleration, not the silicon).
+
+[[cpu]]
+model = "Apple M3 Pro"
+aliases = ["M3 Pro"]
+topology = "12C / 12T"
+samples = 1
+measured = "2026-08-30"
+tool_version = "1.1.1"
+build = "portable"
+int_single   = 14660
+int_multi    = 116023
+float_single = 9129
+float_multi  = 80471
+hash         = 2207
+compress     = 131.5
+aes_gcm      = 189.4
+sha256       = 467.8
 
 [[cpu]]
 model = "Intel Core i7-1370P"
