@@ -178,6 +178,7 @@ fn spawn_worker(init: RunInit, tx: Sender<Msg>) -> JoinHandle<()> {
                 machine.gpu.as_ref().map(|g| g.name.as_str()),
                 &outcomes,
                 &config.build_isa,
+                &config.duration_preset,
             )
         };
         let mut result = ResultFile::assemble(machine, config, outcomes, scored, None);

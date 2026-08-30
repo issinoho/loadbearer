@@ -552,7 +552,10 @@ newer stepping, better cooling, or a native build. **CPU and GPU only** —
 memory, disk and network depend on the RAM kit, the SSD and the OS, not the
 model. It is **not graded** and never touches a score.
 
-The references are measured on the released **portable (SSE2)** build. A
+The references are measured at `--duration thorough` on the released **portable
+(SSE2)** build. A shorter preset reads systematically off against them, so the
+block says so — `(this run used the short preset; … treat the gap as
+approximate)` — whenever the run's preset isn't `thorough`. A
 `-C target-cpu=native` build (AVX2 / AVX-512) still gets a comparison, flagged as
 indicative — expect its numbers to sit above the reference. `--no-model-ref`
 skips the block; `loadbearer models` prints the whole table; matching is exact
@@ -604,6 +607,8 @@ benchmark; use `--only cpu,memory,network` to skip it.
 - `model_ref` — the CPU / GPU measured against their
   [model reference](#vs-typical-hardware), when the model is in the embedded
   table (ungraded). Absent on a build with no match or with `--no-model-ref`.
+  Each entry also carries `run_preset` when the run wasn't `--duration thorough`
+  (the preset the references are measured at).
 
 Because the raw metrics are preserved, a result file can be re-scored later
 against a different baseline, profile or curve with [`loadbearer

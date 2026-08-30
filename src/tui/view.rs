@@ -436,6 +436,15 @@ fn draw_results(f: &mut Frame, scroll: &mut u16, r: &ResultFile, area: Rect) {
                 ),
                 Style::default().fg(DIM),
             )));
+            if !mr.run_preset.is_empty() {
+                lines.push(Line::from(Span::styled(
+                    format!(
+                        "    ({} preset — reference is thorough, which reads lower; gap is approximate)",
+                        mr.run_preset,
+                    ),
+                    Style::default().fg(DIM),
+                )));
+            }
         }
     }
 

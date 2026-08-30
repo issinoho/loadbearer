@@ -399,6 +399,13 @@ fn print_model_ref(refs: &[crate::scoring::models::ModelRef]) {
             r.verdict,
         );
         println!("      {}", deltas.join(" · "));
+        if !r.run_preset.is_empty() {
+            println!(
+                "      (this run used the {} preset; the reference is measured at thorough, \
+                 which reads lower — treat the gap as approximate)",
+                r.run_preset,
+            );
+        }
         if r.samples <= 1 {
             println!(
                 "      (single sample from {} — indicative; add yours with `loadbearer models --add`)",

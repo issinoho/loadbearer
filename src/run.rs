@@ -243,7 +243,13 @@ fn run_plain(
 
     let scored = score_run(&outcomes, baseline, profile, curve_k)?;
     let link = probe_link(args)?;
-    let model_ref = model_ref(args, &machine, &outcomes, &config.build_isa);
+    let model_ref = model_ref(
+        args,
+        &machine,
+        &outcomes,
+        &config.build_isa,
+        &config.duration_preset,
+    );
     let mut result = ResultFile::assemble(machine, config, outcomes, scored, link);
     result.model_ref = model_ref;
 
@@ -273,6 +279,7 @@ fn model_ref(
     machine: &Inventory,
     outcomes: &[BenchmarkOutcome],
     build_isa: &str,
+    run_preset: &str,
 ) -> Vec<crate::scoring::models::ModelRef> {
     if args.no_model_ref {
         return Vec::new();
@@ -282,6 +289,7 @@ fn model_ref(
         machine.gpu.as_ref().map(|g| g.name.as_str()),
         outcomes,
         build_isa,
+        run_preset,
     )
 }
 

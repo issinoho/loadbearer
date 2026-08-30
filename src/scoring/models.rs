@@ -216,6 +216,11 @@ pub struct ModelRef {
     /// ISA of the build that produced this run — `sse2` means the model
     /// reference applies directly; anything else and it's only indicative.
     pub build_isa: String,
+    /// Duration preset of this run. The references are measured at `thorough`;
+    /// a shorter preset reads high across the board, so the gap is only
+    /// approximate. Empty when the preset is unknown or already `thorough`.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub run_preset: String,
     pub subtests: Vec<ModelSubtestDelta>,
     /// Geometric mean of the direction-adjusted per-subtest ratios, as a
     /// percentage — `+` means faster than the model.
@@ -239,6 +244,7 @@ pub fn compare(
     outcome: &BenchmarkOutcome,
     entry: &ModelEntry,
     build_isa: &str,
+    run_preset: &str,
 ) -> Option<ModelRef> {
     let mut subtests = Vec::new();
     let mut ratios = Vec::new();
@@ -271,6 +277,11 @@ pub fn compare(
         samples: entry.samples,
         measured: entry.measured.clone(),
         build_isa: build_isa.to_string(),
+        run_preset: if run_preset == "thorough" {
+            String::new()
+        } else {
+            run_preset.to_string()
+        },
         verdict: verdict(component_id, &entry.model, delta_pct, build_isa),
         delta_pct,
         subtests,
@@ -285,18 +296,19 @@ pub fn for_run(
     gpu_model: Option<&str>,
     raw: &[BenchmarkOutcome],
     build_isa: &str,
+    run_preset: &str,
 ) -> Vec<ModelRef> {
     let table = ModelTable::embedded();
     let mut out = Vec::new();
     if let Some(o) = raw.iter().find(|o| o.id == "cpu")
         && let Some(e) = table.cpu(cpu_model)
-        && let Some(r) = compare("cpu", o, e, build_isa)
+        && let Some(r) = compare("cpu", o, e, build_isa, run_preset)
     {
         out.push(r);
     }
     if let (Some(o), Some(gm)) = (raw.iter().find(|o| o.id == "gpu"), gpu_model)
         && let Some(e) = table.gpu(gm)
-        && let Some(r) = compare("gpu", o, e, build_isa)
+        && let Some(r) = compare("gpu", o, e, build_isa, run_preset)
     {
         out.push(r);
     }
@@ -712,6 +724,7 @@ mod tests {
             None,
             &[outcome_matching(entry)],
             "sse2",
+            "thorough",
         );
         assert_eq!(refs.len(), 1);
         assert_eq!(refs[0].component, "cpu");
@@ -721,6 +734,22 @@ mod tests {
             refs[0].delta_pct
         );
         assert!(refs[0].verdict.contains("matches a typical"));
+        // a thorough run matches the reference preset — no caveat recorded
+        assert_eq!(refs[0].run_preset, "");
+    }
+
+    #[test]
+    fn a_shorter_preset_is_recorded_for_the_caveat() {
+        let t = ModelTable::embedded();
+        let entry = t.cpu("Intel Core i7-1370P").expect("i7-1370P present");
+        let refs = for_run(
+            "13th Gen Intel(R) Core(TM) i7-1370P",
+            None,
+            &[outcome_matching(entry)],
+            "sse2",
+            "short",
+        );
+        assert_eq!(refs[0].run_preset, "short");
     }
 
     #[test]

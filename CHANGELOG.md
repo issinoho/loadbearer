@@ -2,6 +2,16 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 1.1.1 - Sun, 30 Aug 2026
+
+- **"vs typical hardware" now notes a preset mismatch.** The model reference
+  table is measured at `--duration thorough`; a `run` at a shorter preset reads
+  systematically high (or low, once warm) against it. The block now prints
+  `(this run used the <preset> preset; … treat the gap as approximate)` when the
+  run's preset isn't `thorough`, and the result JSON's `model_ref` entries carry
+  a `run_preset` field (omitted when it was `thorough`). Data and matching are
+  unchanged.
+
 ## 1.1.0 - Sun, 30 Aug 2026
 
 - **Model reference table — "vs typical hardware".** loadbearer now ships a
