@@ -40,6 +40,30 @@ pub struct DiskInfo {
     pub removable: bool,
 }
 
+impl Inventory {
+    /// A placeholder inventory for a synthetic result (e.g. a model reference
+    /// piped into `compare`). Only `hostname` / `cpu_model` are usually set by
+    /// the caller.
+    pub fn blank() -> Self {
+        Inventory {
+            hostname: None,
+            os: None,
+            kernel: None,
+            arch: String::new(),
+            cpu_model: String::new(),
+            cpu_vendor: String::new(),
+            cpu_physical_cores: None,
+            cpu_logical_cores: 0,
+            cpu_mhz_spot: 0,
+            ram_bytes: 0,
+            swap_bytes: 0,
+            disks: Vec::new(),
+            gpu: None,
+            battery: None,
+        }
+    }
+}
+
 /// Collect a full inventory snapshot of the current machine.
 pub fn collect() -> Inventory {
     let mut sys = System::new_all();

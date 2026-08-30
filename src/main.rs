@@ -81,6 +81,7 @@ fn command_name(command: &Command) -> &'static str {
         Command::Compare(_) => "compare",
         Command::Score(_) => "score",
         Command::Baseline(_) => "baseline",
+        Command::Models(_) => "models",
         Command::Soak(_) => "soak",
         Command::NetServer(_) => "net-server",
     }
@@ -122,6 +123,7 @@ fn dispatch(cli: Cli) -> Result<()> {
             }
             Ok(())
         }
+        Command::Models(args) => scoring::models::execute(args),
         Command::Soak(args) => soak::execute(args),
         Command::NetServer(args) => benches::net_serve(&args.bind),
     }

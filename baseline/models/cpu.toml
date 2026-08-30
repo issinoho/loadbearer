@@ -1,0 +1,128 @@
+# loadbearer CPU model reference — what a healthy example of each
+# CPU produces on loadbearer's kernels, from the released (portable / SSE2)
+# build at `--duration thorough`. Lets a single run tell you whether a chip is
+# performing to spec. Data, not API (see VERSIONING.md); CPU-only — memory,
+# disk and network are not model-attributable. Grown by PR:
+#   loadbearer models --add run1.json run2.json > baseline/models/cpu.toml
+#
+# Seeded 2026-08-30 from the 7 machines that calibrated reference-v1.
+
+[[cpu]]
+model = "Intel Core i7-1370P"
+aliases = ["i7-1370P"]
+topology = "14C / 20T"
+samples = 1
+measured = "2026-08-30"
+tool_version = "1.0"
+build = "portable"
+int_single   = 15560
+int_multi    = 110100
+float_single = 10050
+float_multi  = 121700
+hash         = 4118
+compress     = 85.97
+aes_gcm      = 1682
+sha256       = 2037
+
+[[cpu]]
+model = "Intel Core i5-8350U"
+aliases = ["i5-8350U"]
+topology = "4C / 8T"
+samples = 1
+measured = "2026-08-30"
+tool_version = "1.0"
+build = "portable"
+int_single   = 6093
+int_multi    = 25180
+float_single = 4746
+float_multi  = 37000
+hash         = 2385
+compress     = 38.77
+aes_gcm      = 736.1
+sha256       = 140.5
+
+[[cpu]]
+model = "Intel N95"
+aliases = ["N95"]
+topology = "4C / 4T"
+samples = 1
+measured = "2026-08-30"
+tool_version = "1.0"
+build = "portable"
+int_single   = 6940
+int_multi    = 21760
+float_single = 6995
+float_multi  = 22450
+hash         = 1843
+compress     = 52.78
+aes_gcm      = 1006
+sha256       = 1999
+
+[[cpu]]
+model = "Intel Core i7-10510U"
+aliases = ["i7-10510U"]
+topology = "4C / 8T"
+samples = 1
+measured = "2026-08-30"
+tool_version = "1.0"
+build = "portable"
+int_single   = 5266
+int_multi    = 16440
+float_single = 4190
+float_multi  = 23470
+hash         = 1971
+compress     = 39.78
+aes_gcm      = 671.5
+sha256       = 153.1
+
+[[cpu]]
+model = "Intel Core i5-6300U"
+aliases = ["i5-6300U"]
+topology = "2C / 4T"
+samples = 1
+measured = "2026-08-30"
+tool_version = "1.0"
+build = "portable"
+int_single   = 6957
+int_multi    = 14430
+float_single = 3551
+float_multi  = 15060
+hash         = 1092
+compress     = 34.64
+aes_gcm      = 565.4
+sha256       = 101
+
+[[cpu]]
+model = "Intel Core i5-5250U"
+aliases = ["i5-5250U"]
+topology = "2C / 4T"
+samples = 1
+measured = "2026-08-30"
+tool_version = "1.0"
+build = "portable"
+int_single   = 5809
+int_multi    = 10400
+float_single = 6821
+float_multi  = 17040
+hash         = 2365
+compress     = 44.8
+aes_gcm      = 604.8
+sha256       = 142.7
+
+[[cpu]]
+model = "Intel Celeron J4005"
+aliases = ["J4005"]
+topology = "2C / 2T"
+samples = 1
+measured = "2026-08-30"
+tool_version = "1.0"
+build = "portable"
+int_single   = 3254
+int_multi    = 3594
+float_single = 5658
+float_multi  = 5639
+hash         = 877.6
+compress     = 31.18
+aes_gcm      = 513
+sha256       = 570.6
+

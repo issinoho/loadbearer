@@ -1,0 +1,51 @@
+# loadbearer GPU model reference — what a healthy example of each
+# GPU produces on loadbearer's kernels, from the released (portable / SSE2)
+# build at `--duration thorough`. Lets a single run tell you whether a chip is
+# performing to spec. Data, not API (see VERSIONING.md); GPU-only — memory,
+# disk and network are not model-attributable. Grown by PR:
+#   loadbearer models --add run1.json run2.json > baseline/models/gpu.toml
+#
+# Seeded 2026-08-30 from the 7 machines that calibrated reference-v1. GPU
+# numbers are noisier than CPU across device generations — treat a GPU
+# reference as indicative until it has several samples.
+
+[[gpu]]
+model = "Intel UHD Graphics 620"
+aliases = ["UHD Graphics 620"]
+samples = 1
+measured = "2026-08-30"
+tool_version = "1.0"
+build = "portable"
+compute_fp32 = 1125
+bandwidth    = 15.51
+
+[[gpu]]
+model = "Intel Iris Xe Graphics"
+aliases = []
+samples = 1
+measured = "2026-08-30"
+tool_version = "1.0"
+build = "portable"
+compute_fp32 = 583.4
+bandwidth    = 51.56
+
+[[gpu]]
+model = "Intel HD Graphics 520"
+aliases = ["HD Graphics 520"]
+samples = 1
+measured = "2026-08-30"
+tool_version = "1.0"
+build = "portable"
+compute_fp32 = 110.2
+bandwidth    = 11.04
+
+[[gpu]]
+model = "Intel UHD Graphics"
+aliases = []
+samples = 1
+measured = "2026-08-30"
+tool_version = "1.0"
+build = "portable"
+compute_fp32 = 87.44
+bandwidth    = 20.07
+

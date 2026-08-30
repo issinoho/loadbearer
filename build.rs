@@ -45,6 +45,33 @@ fn stamp_version() {
         "cargo:rustc-env=LOADBEARER_VERSION={} ({commit} {date}, {target}, {profile})",
         env!("CARGO_PKG_VERSION")
     );
+    println!("cargo:rustc-env=LOADBEARER_BUILD_ISA={}", build_isa());
+}
+
+/// The widest x86 instruction set the build's CPU kernels may use, from
+/// `CARGO_CFG_TARGET_FEATURE`. `sse2` is the portable released build; anything
+/// wider means `-C target-cpu=native` (or custom `RUSTFLAGS`) and higher
+/// float/hash/crypto numbers that a model reference measured on the released
+/// build will not match. Non-x86 targets report their base (`neon`, …).
+fn build_isa() -> String {
+    let feats = env::var("CARGO_CFG_TARGET_FEATURE").unwrap_or_default();
+    let has = |f: &str| feats.split(',').any(|x| x == f);
+    let arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+    if arch == "x86_64" || arch == "x86" {
+        if has("avx512f") {
+            "avx512".into()
+        } else if has("avx2") {
+            "avx2".into()
+        } else if has("avx") {
+            "avx".into()
+        } else {
+            "sse2".into()
+        }
+    } else if has("neon") {
+        "neon".into()
+    } else {
+        arch
+    }
 }
 
 /// Render `loadbearer.1` and the four shell completions into `OUT_DIR`, then

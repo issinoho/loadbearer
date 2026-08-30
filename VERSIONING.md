@@ -10,9 +10,9 @@ polish are **patch**.
 A breaking change to any of these is a major release:
 
 - **The CLI.** The set of subcommands (`run`, `compare`, `score`, `soak`,
-  `info`, `mem`, `list`, `baseline`, `net-server`) and their flags. Removing a
-  subcommand or a flag, renaming one, or changing what a flag takes is breaking.
-  Adding a subcommand or an optional flag is not.
+  `info`, `mem`, `list`, `baseline`, `models`, `net-server`) and their flags.
+  Removing a subcommand or a flag, renaming one, or changing what a flag takes
+  is breaking. Adding a subcommand or an optional flag is not.
 - **The result-file schemas.** Each machine-readable document carries a `schema`
   string:
   - `loadbearer.result/1` — `loadbearer run --output` / `--json`
@@ -38,6 +38,10 @@ A breaking change to any of these is a major release:
   is a normal minor/patch change even though it shifts everyone's absolute
   numbers. A result file keeps its full raw metrics, so any run can be
   re-scored against any baseline with `loadbearer score`.
+- **The model reference table** (`baseline/models/`, embedded) and the
+  `model_ref` "vs typical hardware" block it drives. Also calibration data:
+  entries and values change as more machines are measured, and the block is
+  never folded into a grade.
 - **Human-readable output** — the `--plain` text layout, the TUI, the wording of
   the "why" lines.
 - **The diagnostic log** — file location, line format, which events are logged,

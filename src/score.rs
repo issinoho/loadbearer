@@ -117,6 +117,7 @@ pub fn rescore(
         threads: original.config.threads,
         baseline: baseline.name.clone(),
         only: original.config.only.clone(),
+        build_isa: original.config.build_isa.clone(),
     };
 
     // The output keeps the file's full `raw`; only the scored view is the
@@ -246,6 +247,7 @@ mod tests {
             threads: 4,
             baseline: b.name.clone(),
             only: vec!["cpu".into()],
+            build_isa: String::new(),
         };
         ResultFile::assemble(fake_inventory(), config, raw, scored, None)
     }

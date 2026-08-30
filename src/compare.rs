@@ -26,7 +26,27 @@ pub const COMPARE_SCHEMA: &str = "loadbearer.compare/1";
 
 pub fn execute(args: CompareArgs) -> Result<()> {
     log::info!(target: "loadbearer::compare", "comparing {} result file(s)", args.files.len());
-    let machines = load(&args.files)?;
+    let mut machines = load(&args.files)?;
+
+    if let Some(query) = &args.against {
+        let table = crate::scoring::models::ModelTable::embedded();
+        let (kind, entry) = table
+            .cpu(query)
+            .map(|e| ("cpu", e))
+            .or_else(|| table.gpu(query).map(|e| ("gpu", e)))
+            .ok_or_else(|| anyhow::anyhow!("no model reference matches {query:?}"))?;
+        let file = crate::scoring::models::synthetic_result(kind, entry)?;
+        machines.push(Machine {
+            label: format!("{} (ref)", entry.model),
+            path: "(model reference)".to_string(),
+            file,
+        });
+    }
+
+    if machines.len() < 2 {
+        bail!("compare needs at least two machines — pass another result file or --against MODEL");
+    }
+
     let comparison = compare(&machines)?;
     for w in &comparison.warnings {
         log::warn!(target: "loadbearer::compare", "{w}");
@@ -357,10 +377,15 @@ fn soak_comparison(machines: &[Machine]) -> Option<SoakComparison> {
 
 fn config_warnings(machines: &[Machine]) -> Vec<String> {
     let mut w = Vec::new();
+    // A synthetic model-reference machine (--against) has no real run config;
+    // don't warn about its "reference" preset / OS etc.
+    let real: Vec<&Machine> = machines
+        .iter()
+        .filter(|m| m.file.config.duration_preset != "reference")
+        .collect();
     let distinct = |f: &dyn Fn(&Machine) -> String| -> Vec<String> {
-        machines
-            .iter()
-            .map(f)
+        real.iter()
+            .map(|m| f(m))
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect()

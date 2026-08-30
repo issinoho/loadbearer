@@ -2,6 +2,30 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 1.1.0 - Sun, 30 Aug 2026
+
+- **Model reference table — "vs typical hardware".** loadbearer now ships a
+  small table of per-CPU/GPU-model expected raw values
+  (`baseline/models/cpu.toml`, `gpu.toml`, embedded), seeded from the seven
+  machines that calibrated `reference-v1`. When a `run`'s CPU or GPU model
+  matches, the report adds a **vs typical hardware** block: the geometric mean
+  of the per-subtest deltas against that model's reference, plus a verdict
+  (matches / below par — check thermals / above par). CPU and GPU only, and
+  **not graded**. `--no-model-ref` skips it. The table is calibration data, not
+  part of the stability contract (`VERSIONING.md`).
+- **`loadbearer models`.** Prints the embedded table; `loadbearer models MODEL`
+  shows one entry; `--as-result` emits a synthetic result file for a model;
+  `--add FILE ...` regenerates the TOML from result files (geomean per model)
+  for review and commit.
+- **`compare --against MODEL`.** Adds a synthetic machine straight from the
+  model reference table (CPU and GPU only), so a result can be compared against
+  a chip you don't have. `compare` now accepts a single result file when
+  `--against` supplies the second machine.
+- **`config.build_isa` in result files.** Records the widest x86 instruction set
+  the CPU kernels may use (`sse2` for the released build, `avx2` / `avx512` for
+  a `target-cpu=native` build); model references only apply directly to an
+  `sse2` build. Empty in files written before 1.1.
+
 ## 1.0.0 - Sat, 29 Aug 2026
 
 First stable release. From here, [`VERSIONING.md`](VERSIONING.md) is the semver

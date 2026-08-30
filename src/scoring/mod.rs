@@ -11,6 +11,7 @@
 //! middle of grade B.
 
 mod baseline;
+pub mod models;
 mod profiles;
 
 use std::collections::BTreeMap;
@@ -126,6 +127,12 @@ pub struct RunConfig {
     pub baseline: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub only: Vec<String>,
+    /// Widest x86 instruction set the CPU kernels may use — `sse2` for the
+    /// portable released build, `avx2` / `avx512` for a `target-cpu=native`
+    /// build. Model references only apply to a `sse2` build. Empty in result
+    /// files written before 1.1.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub build_isa: String,
 }
 
 /// Result of an optional `--net-target` link probe. Not scored — it measures
@@ -157,6 +164,10 @@ pub struct ResultFile {
     /// retention; measured and shown but not folded into any grade.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub soak: Option<crate::soak::SoakResult>,
+    /// The CPU / GPU components measured against their model reference, when
+    /// the machine's model is in the embedded table. Not graded.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub model_ref: Vec<models::ModelRef>,
 }
 
 impl ResultFile {
@@ -180,6 +191,7 @@ impl ResultFile {
             overall: scored.overall,
             link,
             soak: None,
+            model_ref: Vec::new(),
         }
     }
 }
@@ -487,6 +499,7 @@ mod tests {
             threads: 8,
             baseline: b.name.clone(),
             only: vec![],
+            build_isa: String::new(),
         };
         let result = ResultFile::assemble(fake_inventory(), config, outcomes, scored, None);
 
@@ -513,6 +526,7 @@ mod tests {
             threads: 8,
             baseline: b.name.clone(),
             only: vec![],
+            build_isa: String::new(),
         };
         ResultFile::assemble(fake_inventory(), config, outcomes, scored, None)
     }

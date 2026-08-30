@@ -135,6 +135,7 @@ pub fn execute(args: RunArgs) -> Result<()> {
         threads: ctx.threads,
         baseline: baseline.name.clone(),
         only: r.only.iter().map(|s| s.trim().to_lowercase()).collect(),
+        build_isa: env!("LOADBEARER_BUILD_ISA").to_string(),
     };
 
     let interactive = std::io::stdout().is_terminal() && !args.plain && !args.json;
@@ -182,6 +183,7 @@ fn run_interactive(
         machine,
         config,
         soak: soak_config(args),
+        no_model_ref: args.no_model_ref,
     };
 
     match tui::run(init)? {
@@ -241,7 +243,9 @@ fn run_plain(
 
     let scored = score_run(&outcomes, baseline, profile, curve_k)?;
     let link = probe_link(args)?;
+    let model_ref = model_ref(args, &machine, &outcomes, &config.build_isa);
     let mut result = ResultFile::assemble(machine, config, outcomes, scored, link);
+    result.model_ref = model_ref;
 
     if args.json {
         result.soak = run_soak(args);
@@ -260,6 +264,25 @@ fn run_plain(
         }
     }
     Ok(())
+}
+
+/// The machine's CPU / GPU measured against their model references, unless
+/// `--no-model-ref` was given or no ISA was recorded as non-portable.
+fn model_ref(
+    args: &RunArgs,
+    machine: &Inventory,
+    outcomes: &[BenchmarkOutcome],
+    build_isa: &str,
+) -> Vec<crate::scoring::models::ModelRef> {
+    if args.no_model_ref {
+        return Vec::new();
+    }
+    crate::scoring::models::for_run(
+        &machine.cpu_model,
+        machine.gpu.as_ref().map(|g| g.name.as_str()),
+        outcomes,
+        build_isa,
+    )
 }
 
 /// The soak configuration implied by `--soak` / `--soak-duration`, or `None`.

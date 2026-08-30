@@ -34,6 +34,8 @@ pub struct RunInit {
     pub config: RunConfig,
     /// When set, a sustained-load phase runs after scoring and streams samples.
     pub soak: Option<crate::soak::SoakConfig>,
+    /// Suppress the CPU / GPU model-reference comparison.
+    pub no_model_ref: bool,
 }
 
 /// Run the interactive session. `Ok(Some(result))` on completion, `Ok(None)` if
@@ -143,6 +145,7 @@ fn spawn_worker(init: RunInit, tx: Sender<Msg>) -> JoinHandle<()> {
             machine,
             config,
             soak,
+            no_model_ref,
             ..
         } = init;
 
@@ -167,7 +170,18 @@ fn spawn_worker(init: RunInit, tx: Sender<Msg>) -> JoinHandle<()> {
                 return;
             }
         };
+        let model_ref = if no_model_ref {
+            Vec::new()
+        } else {
+            crate::scoring::models::for_run(
+                &machine.cpu_model,
+                machine.gpu.as_ref().map(|g| g.name.as_str()),
+                &outcomes,
+                &config.build_isa,
+            )
+        };
         let mut result = ResultFile::assemble(machine, config, outcomes, scored, None);
+        result.model_ref = model_ref;
 
         // Sustained-load phase: stream a sample per second to the UI, then
         // fold the analysed result into the result file. A cancel during the

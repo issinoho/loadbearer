@@ -356,6 +356,10 @@ pub fn print_scored_report(result: &ResultFile) {
         );
     }
 
+    if !result.model_ref.is_empty() {
+        print_model_ref(&result.model_ref);
+    }
+
     if let Some(b) = &result.machine.battery {
         print_battery_block(b);
     }
@@ -375,6 +379,32 @@ pub fn print_scored_report(result: &ResultFile) {
 
     if let Some(soak) = &result.soak {
         print_soak_block(soak);
+    }
+}
+
+/// "vs typical hardware" — how the CPU / GPU compare to a healthy example of
+/// their model. Not graded.
+fn print_model_ref(refs: &[crate::scoring::models::ModelRef]) {
+    println!("\n  vs typical hardware");
+    for r in refs {
+        let deltas: Vec<String> = r
+            .subtests
+            .iter()
+            .map(|s| format!("{} {:+.0}%", s.id, s.delta_pct))
+            .collect();
+        println!(
+            "    {:<4} {:+.0}%   {}",
+            r.component.to_uppercase(),
+            r.delta_pct,
+            r.verdict,
+        );
+        println!("      {}", deltas.join(" · "));
+        if r.samples <= 1 {
+            println!(
+                "      (single sample from {} — indicative; add yours with `loadbearer models --add`)",
+                r.measured,
+            );
+        }
     }
 }
 

@@ -82,6 +82,9 @@ pub enum Command {
     Score(ScoreArgs),
     /// Print the built-in baseline, or generate one by averaging result files.
     Baseline(BaselineArgs),
+    /// Show the embedded CPU / GPU model reference table, or regenerate it by
+    /// averaging result files.
+    Models(ModelsArgs),
     /// Hold every core under sustained load and report throughput retention
     /// (thermal / power-limit throttling). Not scored.
     Soak(SoakArgs),
@@ -185,6 +188,10 @@ pub struct RunArgs {
     #[arg(long, value_name = "SECS", requires = "soak")]
     pub soak_duration: Option<u64>,
 
+    /// Don't compare the CPU / GPU against their model reference.
+    #[arg(long)]
+    pub no_model_ref: bool,
+
     /// Write the result JSON to a file.
     #[arg(long, value_name = "FILE")]
     pub output: Option<PathBuf>,
@@ -219,6 +226,27 @@ pub struct BaselineArgs {
 }
 
 #[derive(Args, Debug)]
+pub struct ModelsArgs {
+    /// Show just this model (matched the same way as a live run).
+    #[arg(value_name = "MODEL")]
+    pub model: Option<String>,
+
+    /// Result files to fold into the table (geometric mean per model). Prints
+    /// the updated `cpu.toml` / `gpu.toml` to stdout — review and commit.
+    #[arg(long = "add", value_name = "FILE", num_args = 1..)]
+    pub add: Vec<PathBuf>,
+
+    /// Emit a synthetic `loadbearer.result/1` for MODEL (CPU + GPU only), for
+    /// piping into `loadbearer compare`.
+    #[arg(long, requires = "model")]
+    pub as_result: bool,
+
+    /// JSON instead of the text table (ignored with --as-result / --add).
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Args, Debug)]
 pub struct ScoreArgs {
     /// A result file written by `loadbearer run --output`.
     #[arg(value_name = "FILE")]
@@ -248,9 +276,15 @@ pub struct ScoreArgs {
 
 #[derive(Args, Debug)]
 pub struct CompareArgs {
-    /// Result files to compare (two or more).
-    #[arg(required = true, num_args = 2.., value_name = "FILE")]
+    /// Result files to compare. Two or more, or one plus `--against`.
+    #[arg(required = true, num_args = 1.., value_name = "FILE")]
     pub files: Vec<PathBuf>,
+
+    /// Add a synthetic machine from the model reference table (CPU + GPU only),
+    /// e.g. `--against "i7-1370P"`. Lets you compare against a chip you don't
+    /// have.
+    #[arg(long, value_name = "MODEL")]
+    pub against: Option<String>,
 
     /// Emit a plain-text table instead of the TUI.
     #[arg(long)]

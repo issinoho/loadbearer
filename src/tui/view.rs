@@ -412,6 +412,33 @@ fn draw_results(f: &mut Frame, scroll: &mut u16, r: &ResultFile, area: Rect) {
         )));
     }
 
+    if !r.model_ref.is_empty() {
+        lines.push(Line::raw(""));
+        lines.push(Line::from(Span::styled(
+            "vs typical hardware".to_string(),
+            Style::default().add_modifier(Modifier::BOLD),
+        )));
+        for mr in &r.model_ref {
+            lines.push(Line::raw(format!(
+                "  {:<4} {:+.0}%   {}",
+                mr.component.to_uppercase(),
+                mr.delta_pct,
+                mr.verdict,
+            )));
+            lines.push(Line::from(Span::styled(
+                format!(
+                    "    {}",
+                    mr.subtests
+                        .iter()
+                        .map(|s| format!("{} {:+.0}%", s.id, s.delta_pct))
+                        .collect::<Vec<_>>()
+                        .join(" · "),
+                ),
+                Style::default().fg(DIM),
+            )));
+        }
+    }
+
     if let Some(b) = &r.machine.battery {
         lines.push(Line::raw(""));
         lines.push(Line::from(Span::styled(

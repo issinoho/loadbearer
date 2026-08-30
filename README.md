@@ -230,13 +230,14 @@ that `loadbearer compare` can diff against another machine's.
 
 ```
 loadbearer run        [OPTIONS]
-loadbearer compare    FILE FILE [FILE ...] [--plain] [--json]
+loadbearer compare    FILE [FILE ...] [--against MODEL] [--plain] [--json]
 loadbearer score      FILE [--baseline FILE] [--profile NAME] [--curve-k FLOAT] [--output FILE] [--json]
 loadbearer soak       [--duration SECS] [--threads N] [--seed N] [--output FILE] [--json]
 loadbearer info       [--json]
 loadbearer mem        [--limit N] [--swap] [--json]
 loadbearer list
 loadbearer baseline   [FILE ...] [--name NAME] [--description TEXT]
+loadbearer models     [MODEL] [--add FILE ...] [--as-result] [--json]
 loadbearer net-server [--bind ADDR]
 ```
 
@@ -244,7 +245,9 @@ loadbearer net-server [--bind ADDR]
   an interactive terminal; plain text or JSON otherwise.
 - **`compare`** — head-to-head of two or more result files: per-metric deltas,
   per-component and overall verdict. Built from the **raw** metrics, so it does
-  not depend on the baseline or curve the files were scored with.
+  not depend on the baseline or curve the files were scored with. `--against
+  MODEL` adds a synthetic machine straight from the model reference table (CPU
+  and GPU only), so you can line a result up against a chip you don't have.
 - **`score`** — recompute a result file's grade against a different baseline,
   profile or curve, without re-running anything. Point it at a baseline you
   built from your own hardware (`--baseline our-fleet.toml`) and the absolute
@@ -271,6 +274,13 @@ loadbearer net-server [--bind ADDR]
 - **`baseline`** — with no arguments, prints the built-in baseline. Given result
   files, emits a new baseline TOML whose values are the geometric mean of each
   metric across those files (see [Recalibrating](#recalibrating-the-baseline)).
+- **`models`** — prints the embedded CPU / GPU model reference table (what a
+  healthy example of each model produces on loadbearer's kernels). Given a
+  `MODEL` it shows just that entry, matched the same way a live `run` matches;
+  `--as-result` emits a synthetic result file for it (for piping into
+  `compare`). Given `--add FILE ...` it regenerates `cpu.toml` / `gpu.toml` from
+  result files — geometric mean per model — and prints them for review (see
+  ["vs typical hardware"](#vs-typical-hardware)). CPU / GPU only.
 - **`net-server`** — runs the server side of the optional `--net-target` link
   test; leave it running on one machine and point another machine's
   `loadbearer run --net-target` at it. Listens on `0.0.0.0:47913` by default.
@@ -290,6 +300,7 @@ loadbearer net-server [--bind ADDR]
 | `--soak` | After the graded run, hold every core under sustained load and report throughput retention (thermal / power-limit throttling). Adds ~90 s. Reported in its own block and the result JSON's `soak` field; **not graded**. |
 | `--soak-duration SECS` | Duration for `--soak` (default 90; range 15–1800). |
 | `--no-gpu` | Never touch the GPU: skip the `gpu` component **and** the OpenCL probe that `info` / `run` otherwise perform, so `OpenCL.dll` is never loaded. A global flag — works with any subcommand. Useful for fleet deployment where a stale ICD loader could stall enumeration. |
+| `--no-model-ref` | Skip the ["vs typical hardware"](#vs-typical-hardware) block — don't compare the CPU / GPU against their model reference. |
 | `--output FILE` | Write the full result as a versioned JSON file. Works alongside the TUI or plain output. |
 | `--plain` | Disable the TUI and emit the plain-text report. Implied automatically when stdout is not a terminal. |
 | `--json` | Disable the TUI and emit only the result JSON to stdout. |
@@ -304,14 +315,17 @@ finishes, then the process exits). On the results screen: `↑`/`↓`/`PgUp`/`Pg
 
 | Option | Description |
 | --- | --- |
-| `FILE ...` | Two or more result files written by `loadbearer run --output`. |
+| `FILE ...` | Result files written by `loadbearer run --output` — two or more, or one plus `--against`. |
+| `--against MODEL` | Add a synthetic machine built from the model reference table (CPU and GPU only), e.g. `--against "i7-1370P"`. Lets you compare a result against a chip you don't have. |
 | `--plain` | Force the plain-text table. The default is a scrollable TUI when stdout is a terminal, the plain table otherwise. |
 | `--json` | Emit the comparison as structured JSON (`schema` `"loadbearer.compare/1"`, `tool_version`, `machines`, `components`, `overall`, `warnings`, `soak`). |
 
 The first file is the reference; every other machine's metrics are shown as a
 direction-adjusted percentage relative to it (`+28%` always means "better").
 `compare` warns when the files used different presets, baselines or curves, and
-skips any component or subtest that isn't present in every file.
+skips any component or subtest that isn't present in every file. A machine added
+with `--against` carries only CPU and GPU metrics, so the other components drop
+out of that comparison.
 
 ```
   metric                           A: thinkpad-x280 B: precision-5560
@@ -516,6 +530,39 @@ becomes `high` (< 3%), `medium` (< 8%) or `low`. Components inherit the weakest
 flag among their subtests, and low-confidence components are called out in the
 "why". Use `--duration thorough` to tighten a noisy result.
 
+### vs typical hardware
+
+The baseline tells you where a machine lands against a fixed reference; the
+**model reference table** tells you whether *this* chip is performing to spec for
+what it is. loadbearer ships a small table of per-model expected raw values —
+`baseline/models/cpu.toml` and `gpu.toml`, embedded in the binary — and when a
+`run`'s CPU or GPU model matches an entry, the report adds a **vs typical
+hardware** block:
+
+```
+  vs typical hardware
+    CPU  -3%   CPU matches a typical Intel Core i5-8350U
+      int_single -5% · int_multi +0% · float_single -4% · hash +2% · …
+```
+
+It's the geometric mean of the per-subtest deltas against the model's reference
+values (`+` is faster), with a verdict: within ±5% is "matches"; well below par
+points you at thermals, the power profile and background load; well above is a
+newer stepping, better cooling, or a native build. **CPU and GPU only** —
+memory, disk and network depend on the RAM kit, the SSD and the OS, not the
+model. It is **not graded** and never touches a score.
+
+The references are measured on the released **portable (SSE2)** build. A
+`-C target-cpu=native` build (AVX2 / AVX-512) still gets a comparison, flagged as
+indicative — expect its numbers to sit above the reference. `--no-model-ref`
+skips the block; `loadbearer models` prints the whole table; matching is exact
+on the normalised model string, else a distinctive SKU token (`i7-1370P`).
+
+Grow the table by PR: collect result files and
+`loadbearer models --add run1.json run2.json > baseline/models/cpu.toml`, then
+review the diff and commit. Like the baseline, the table is calibration data,
+not part of the [stability contract](VERSIONING.md).
+
 ### Profiles
 
 | Profile | Weighting |
@@ -546,12 +593,17 @@ benchmark; use `--only cpu,memory,network` to skip it.
 
 - `machine` — the full inventory (as `loadbearer info --json`), including the
   GPU and battery when the machine has them.
-- `config` — profile, preset, curve-k, seed, thread count, baseline name.
+- `config` — profile, preset, curve-k, seed, thread count, baseline name, and
+  `build_isa` (the widest x86 instruction set the CPU kernels may use — `sse2`
+  for the released build, `avx2` / `avx512` for a `target-cpu=native` build).
 - `raw` — every subtest's per-run values and summary statistics, unscored.
 - `components` / `overall` — the scored, graded results.
 - `link` — the `--net-target` link probe, if one ran (ungraded).
 - `soak` — the `--soak` sustained-load result, if one ran (ungraded): every
   per-second sample plus the derived peak / steady / retained / onset figures.
+- `model_ref` — the CPU / GPU measured against their
+  [model reference](#vs-typical-hardware), when the model is in the embedded
+  table (ungraded). Absent on a build with no match or with `--no-model-ref`.
 
 Because the raw metrics are preserved, a result file can be re-scored later
 against a different baseline, profile or curve with [`loadbearer
