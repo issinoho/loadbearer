@@ -80,7 +80,7 @@
 
     <div class="term term-hero">
       <div class="term-bar"><i></i><i></i><i></i><em>loadbearer run</em></div>
-<pre>loadbearer 1.0.0 — assessment
+<pre>loadbearer 1.1.1 — assessment
 
   Machine   ThinkPad-X280 · i5-8350U · 8 threads · 7.0 GiB RAM
   Profile   general · curve k=0.5 · baseline reference-v1
@@ -106,7 +106,11 @@
 
   Why:
     - held back by Disk (score 835)
-    - low measurement confidence in: Disk</pre>
+    - low measurement confidence in: Disk
+
+  vs typical hardware  <span class="dim">· not graded</span>
+    CPU  -1%   CPU matches a typical Intel Core i5-8350U
+      <span class="dim">int_multi +0% · float_multi +0% · hash +0% · aes_gcm -4% · sha256 -2% · …</span></pre>
     </div>
   </div>
 </header>
@@ -133,7 +137,9 @@
         with a plain-language note on what moved it. Network, the GPU (FP32 +
         VRAM bandwidth, via OpenCL), battery health, and the sustained-load test
         are shown alongside — OS, optional hardware, wear, cooling — so they
-        don't skew the grade.</p>
+        don't skew the grade. When the CPU or GPU model is in the reference
+        table, a <b>vs typical hardware</b> line says whether it's performing to
+        spec for its model — also ungraded.</p>
       </article>
 
       <article class="card">
@@ -187,7 +193,7 @@
     <div class="gallery">
       <figure class="term">
         <figcaption class="term-bar"><i></i><i></i><i></i><em>loadbearer compare x280.json desktop.json --plain</em></figcaption>
-<pre>loadbearer 1.0.0 — compare (2 machines)
+<pre>loadbearer 1.1.1 — compare (2 machines)
 
   A  ThinkPad-X280   Intel(R) Core(TM) i5-8350U
   B  dev-desktop     AMD Ryzen 9 7900X
@@ -214,7 +220,7 @@
       <div class="gallery-col">
         <figure class="term">
           <figcaption class="term-bar"><i></i><i></i><i></i><em>loadbearer info</em></figcaption>
-<pre>loadbearer 1.0.0 — machine inventory
+<pre>loadbearer 1.1.1 — machine inventory
 
 Host
   Hostname        ThinkPad-X280
