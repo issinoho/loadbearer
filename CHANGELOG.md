@@ -2,6 +2,16 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 1.1.3 - Mon, 31 Aug 2026
+
+- **Intel Core i7-1265U in the model reference table.** Adds a `[[cpu]]` entry
+  to `baseline/models/cpu.toml` (10C/12T, from a 1.1.2 `--duration thorough`
+  run), so a `run` on a 12th-gen Core U chip now gets a "vs typical hardware"
+  block. No GPU entry: this part's Iris Xe shares a name with the P-series iGPU
+  already in the table but runs well under it on a 15 W envelope, so folding the
+  two together would misrepresent both. Calibration data, not part of the
+  stability contract (`VERSIONING.md`).
+
 ## 1.1.2 - Sun, 30 Aug 2026
 
 - **Apple M3 Pro in the model reference table.** First non-x86 entry

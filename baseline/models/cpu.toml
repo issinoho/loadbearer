@@ -9,6 +9,7 @@
 # Apple M3 Pro added 2026-08-30 from a 1.1.1 run (Arm/NEON build — the
 # aes_gcm / sha256 figures reflect loadbearer not using Arm crypto
 # acceleration, not the silicon).
+# Intel Core i7-1265U added 2026-08-31 from a 1.1.2 thorough run.
 
 [[cpu]]
 model = "Apple M3 Pro"
@@ -43,6 +44,23 @@ hash         = 4118
 compress     = 85.97
 aes_gcm      = 1682
 sha256       = 2037
+
+[[cpu]]
+model = "Intel Core i7-1265U"
+aliases = ["i7-1265U"]
+topology = "10C / 12T"
+samples = 1
+measured = "2026-08-31"
+tool_version = "1.1.2"
+build = "portable"
+int_single   = 12517
+int_multi    = 43858
+float_single = 8552
+float_multi  = 54218
+hash         = 3641
+compress     = 74.79
+aes_gcm      = 1422
+sha256       = 695.4
 
 [[cpu]]
 model = "Intel Core i5-8350U"
