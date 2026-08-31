@@ -193,7 +193,7 @@ section.alt .card { background: var(--panel-2); }
 .muted-note { color: var(--muted); font-size: 14.5px; margin-top: 20px; max-width: 70ch; }
 
 /* ---------- install ---------- */
-.install-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.install-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
 .install-card {
   background: var(--bg);
   border: 1px solid var(--border-soft);

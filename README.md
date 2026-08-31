@@ -24,7 +24,9 @@ it works just as well from a script or CI job. Every invocation also writes a
 
 Primarily built for and released on **Windows** (a self-contained `.exe`, no
 runtime to install — see [Install](#install)); Linux is supported as a
-first-class runtime target and is what most development happens on.
+first-class runtime target and is what most development happens on. **macOS on
+Apple Silicon** builds and runs from source — every component, including the
+OpenCL GPU probe — it just isn't a pre-built download yet.
 
 **Website:** <https://loadbearer.issinoho.com/> — the short version, with
 screenshots.
@@ -116,6 +118,15 @@ baseline's four-iGPU GPU anchor is.
   stable Rust toolchain (1.88+). `O_DIRECT` on the target filesystem gets you
   device-accurate disk numbers; loadbearer falls back to buffered I/O and says so
   when it can't.
+- **macOS on Apple Silicon (arm64)** — build from source with the same
+  toolchain (`cargo build --release`); no pre-built binary yet, and not run in
+  CI. Verified on an M3 Pro; all five components work, GPU via the system
+  OpenCL framework. The CPU
+  kernels use the portable NEON path; `aes_gcm` and `sha256` come in low because
+  the build doesn't use Arm's crypto instructions — a property of the tool, not
+  the chip. There's no unbuffered-I/O path on macOS, so the disk figures fall
+  back to buffered reads (page-cache-influenced) with a note in the result.
+  Intel Macs aren't a target but should build.
 - No admin/root privileges and no config required to run. Nothing leaves the
   machine unless you explicitly pass `--net-target`; the network benchmark itself
   is loopback only.
@@ -174,6 +185,23 @@ extract it, and run `./loadbearer`. Or install straight from source with Cargo:
 cargo install --git https://github.com/issinoho/loadbearer --locked
 ```
 
+### macOS (Apple Silicon)
+
+No pre-built binary yet — build from source with the same Cargo command:
+
+```
+cargo install --git https://github.com/issinoho/loadbearer --locked
+```
+
+Runs on Apple Silicon (arm64) — verified on an M3 Pro. All five components
+work — CPU, memory, disk, network and the OpenCL GPU probe against Apple's
+built-in `OpenCL.framework`. Two things to know about the numbers: the CPU `aes_gcm` /
+`sha256` subtests read low because the build doesn't use Arm crypto
+instructions, and the disk figures are buffered (there's no `O_DIRECT`
+equivalent wired up for macOS), noted in the result. `loadbearer run` is
+otherwise the same as anywhere else, and the model reference table has an
+Apple M3 Pro entry to compare against.
+
 ### From source
 
 ```
@@ -183,15 +211,18 @@ cargo build --release
 ./target/release/loadbearer info
 ```
 
-For CPU numbers that use your machine's widest vector instructions (AVX2/AVX-512
-where available) rather than the portable SSE2 baseline, build with:
+On x86, for CPU numbers that use your machine's widest vector instructions
+(AVX2/AVX-512 where available) rather than the portable SSE2 baseline, build
+with:
 
 ```
 RUSTFLAGS="-C target-cpu=native" cargo build --release
 ```
 
 The absolute numbers go up; relative grades stay meaningful **as long as both
-machines you're comparing are built the same way**.
+machines you're comparing are built the same way**. On Apple Silicon the
+portable build already targets NEON and there's no wider tier, so a plain
+`cargo build --release` is the native build.
 
 ### Shell completions and man page
 
@@ -598,8 +629,9 @@ benchmark; use `--only cpu,memory,network` to skip it.
 - `machine` — the full inventory (as `loadbearer info --json`), including the
   GPU and battery when the machine has them.
 - `config` — profile, preset, curve-k, seed, thread count, baseline name, and
-  `build_isa` (the widest x86 instruction set the CPU kernels may use — `sse2`
-  for the released build, `avx2` / `avx512` for a `target-cpu=native` build).
+  `build_isa` (the vector instruction set the CPU kernels may use — `sse2` for
+  the released x86 build, `avx` / `avx2` / `avx512` for a `target-cpu=native`
+  x86 build, `neon` on Apple Silicon / Arm).
 - `raw` — every subtest's per-run values and summary statistics, unscored.
 - `components` / `overall` — the scored, graded results.
 - `link` — the `--net-target` link probe, if one ran (ungraded).

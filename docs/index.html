@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>loadbearer — grade any machine, and know which one is faster</title>
-<meta name="description" content="loadbearer is a single-binary command-line tool that benchmarks a machine's CPU, memory, disk, network stack and GPU, scores every measurement against a shared reference baseline, and grades each component — and the whole machine — on an S-to-F scale. Its compare mode reads two result files and tells you which machine wins, by how much, and why; a sustained-load test shows how much speed a machine keeps once it throttles. No GUI, no network calls, no runtime. Windows and Linux.">
+<meta name="description" content="loadbearer is a single-binary command-line tool that benchmarks a machine's CPU, memory, disk, network stack and GPU, scores every measurement against a shared reference baseline, and grades each component — and the whole machine — on an S-to-F scale. Its compare mode reads two result files and tells you which machine wins, by how much, and why; a sustained-load test shows how much speed a machine keeps once it throttles. No GUI, no network calls, no runtime. Windows, Linux, and macOS on Apple Silicon.">
 
 <link rel="canonical" href="https://loadbearer.issinoho.com/">
 <link rel="icon" type="image/svg+xml" href="assets/logo-mark.svg">
 
 <meta property="og:type" content="website">
 <meta property="og:title" content="loadbearer — grade any machine, and know which one is faster">
-<meta property="og:description" content="Benchmarks CPU, memory, disk, network and GPU, scores every metric against a shared baseline, and grades the machine on an S-to-F scale. compare mode: which of two machines wins, by how much, and why. Plus a sustained-load throttle test. Single binary, no network calls, Windows + Linux.">
+<meta property="og:description" content="Benchmarks CPU, memory, disk, network and GPU, scores every metric against a shared baseline, and grades the machine on an S-to-F scale. compare mode: which of two machines wins, by how much, and why. Plus a sustained-load throttle test. Single binary, no network calls. Windows, Linux, macOS (Apple Silicon).">
 <meta property="og:url" content="https://loadbearer.issinoho.com/">
 <meta property="og:image" content="https://loadbearer.issinoho.com/assets/og-image.svg">
 <meta property="og:image:type" content="image/svg+xml">
@@ -56,7 +56,7 @@
 <header class="hero" id="top">
   <div class="container hero-grid">
     <div>
-      <span class="eyebrow">Free &amp; open source · MIT · Windows + Linux</span>
+      <span class="eyebrow">Free &amp; open source · MIT · Windows · Linux · macOS</span>
       <h1>Know which machine is faster&nbsp;— <span>and why</span>.</h1>
       <p class="lead">
         <strong>loadbearer</strong> benchmarks a machine's CPU, memory, disk and
@@ -70,6 +70,7 @@
       <div class="hero-ctas">
         <a class="btn btn-primary" data-dl="windows" id="dl-hero" href="https://github.com/issinoho/loadbearer/releases/latest">Download for Windows</a>
         <a class="btn btn-ghost" data-dl="linux" href="https://github.com/issinoho/loadbearer/releases/latest">Linux tarball</a>
+        <a class="btn btn-ghost" href="https://github.com/issinoho/loadbearer#macos-apple-silicon">macOS: build from source</a>
         <a class="btn btn-ghost" href="https://github.com/issinoho/loadbearer">View on GitHub</a>
       </div>
       <p class="hero-meta">
@@ -80,7 +81,7 @@
 
     <div class="term term-hero">
       <div class="term-bar"><i></i><i></i><i></i><em>loadbearer run</em></div>
-<pre>loadbearer 1.1.1 — assessment
+<pre>loadbearer 1.1.2 — assessment
 
   Machine   ThinkPad-X280 · i5-8350U · 8 threads · 7.0 GiB RAM
   Profile   general · curve k=0.5 · baseline reference-v1
@@ -193,7 +194,7 @@
     <div class="gallery">
       <figure class="term">
         <figcaption class="term-bar"><i></i><i></i><i></i><em>loadbearer compare x280.json desktop.json --plain</em></figcaption>
-<pre>loadbearer 1.1.1 — compare (2 machines)
+<pre>loadbearer 1.1.2 — compare (2 machines)
 
   A  ThinkPad-X280   Intel(R) Core(TM) i5-8350U
   B  dev-desktop     AMD Ryzen 9 7900X
@@ -220,7 +221,7 @@
       <div class="gallery-col">
         <figure class="term">
           <figcaption class="term-bar"><i></i><i></i><i></i><em>loadbearer info</em></figcaption>
-<pre>loadbearer 1.1.1 — machine inventory
+<pre>loadbearer 1.1.2 — machine inventory
 
 Host
   Hostname        ThinkPad-X280
@@ -329,7 +330,8 @@ Disks
       <h2>Download a binary, or build it</h2>
       <p>Every tagged release ships a self-contained <code>loadbearer.exe</code>
       for Windows and a Linux tarball, built from
-      <a href="https://github.com/issinoho/loadbearer">the same source</a> by CI.</p>
+      <a href="https://github.com/issinoho/loadbearer">the same source</a> by CI.
+      macOS on Apple Silicon builds and runs from that same source.</p>
     </div>
 
     <div class="install-grid">
@@ -356,9 +358,21 @@ Disks
       </div>
 
       <div class="install-card">
+        <h3>🍎 macOS (Apple Silicon)</h3>
+        <p>No pre-built binary yet — build from source with the same command.
+        All five components work, GPU via Apple's OpenCL framework. The CPU
+        <code>aes_gcm</code> / <code>sha256</code> figures read low (no Arm
+        crypto instructions in the build) and disk I/O is buffered, both noted
+        in the result.</p>
+        <pre>cargo install --git https://github.com/issinoho/loadbearer --locked</pre>
+        <a class="btn btn-ghost" href="https://github.com/issinoho/loadbearer#macos-apple-silicon">macOS notes</a>
+      </div>
+
+      <div class="install-card">
         <h3>🛠️ From source</h3>
-        <p>Needs a recent stable Rust toolchain. For CPU kernels that use your
-        machine's widest vectors:</p>
+        <p>Needs a recent stable Rust toolchain. On x86, for CPU kernels that
+        use your machine's widest vectors (on Apple Silicon a plain release
+        build is already native):</p>
         <pre>RUSTFLAGS="-C target-cpu=native" \
   cargo build --release</pre>
         <a class="btn btn-ghost" href="https://github.com/issinoho/loadbearer#readme">Build guide</a>
