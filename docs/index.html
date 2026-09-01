@@ -192,6 +192,7 @@
     </div>
 
     <div class="gallery">
+      <div class="gallery-col">
       <figure class="term">
         <figcaption class="term-bar"><i></i><i></i><i></i><em>loadbearer compare x280.json desktop.json --plain</em></figcaption>
 <pre>loadbearer 1.1.3 — compare (2 machines)
@@ -218,6 +219,25 @@
            (ahead on cpu +90%, memory +55%, network +60%).</pre>
       </figure>
 
+      <figure class="term">
+        <figcaption class="term-bar"><i></i><i></i><i></i><em>loadbearer run &nbsp;·&nbsp; live</em></figcaption>
+<pre>loadbearer — running          <span class="dim">elapsed 0:41</span>
+
+  CPU
+    Integer, single-core   <span class="acc">██████████</span> done   9153 Mops/s <span class="g-b">✓</span>
+    Integer, all cores     <span class="acc">██████████</span> done  36932 Mops/s <span class="g-b">✓</span>
+    Float, single-core     <span class="acc">██████░░░░</span> 3/5    7101 MFLOP/s
+    Float, all cores       <span class="dim">░░░░░░░░░░</span>
+  Memory
+    Sequential read        <span class="dim">░░░░░░░░░░</span>
+  Disk
+    Sequential write       <span class="dim">░░░░░░░░░░</span>
+
+  <span class="acc">████████░░░░░░░░░░░░░░░</span> 38% · elapsed 0:41 · eta 1:06
+  q  quit</pre>
+      </figure>
+      </div>
+
       <div class="gallery-col">
         <figure class="term">
           <figcaption class="term-bar"><i></i><i></i><i></i><em>loadbearer info</em></figcaption>
@@ -242,24 +262,6 @@ Battery
 
 Disks
   /               ext4   SSD   232.6 GiB total,  47.3 GiB free</pre>
-        </figure>
-
-        <figure class="term">
-          <figcaption class="term-bar"><i></i><i></i><i></i><em>loadbearer run &nbsp;·&nbsp; live</em></figcaption>
-<pre>loadbearer — running          <span class="dim">elapsed 0:41</span>
-
-  CPU
-    Integer, single-core   <span class="acc">██████████</span> done   9153 Mops/s <span class="g-b">✓</span>
-    Integer, all cores     <span class="acc">██████████</span> done  36932 Mops/s <span class="g-b">✓</span>
-    Float, single-core     <span class="acc">██████░░░░</span> 3/5    7101 MFLOP/s
-    Float, all cores       <span class="dim">░░░░░░░░░░</span>
-  Memory
-    Sequential read        <span class="dim">░░░░░░░░░░</span>
-  Disk
-    Sequential write       <span class="dim">░░░░░░░░░░</span>
-
-  <span class="acc">████████░░░░░░░░░░░░░░░</span> 38% · elapsed 0:41 · eta 1:06
-  q  quit</pre>
         </figure>
 
         <figure class="term">
