@@ -10,6 +10,25 @@
 # aes_gcm / sha256 figures reflect loadbearer not using Arm crypto
 # acceleration, not the silicon).
 # Intel Core i7-1265U added 2026-08-31 from a 1.1.2 thorough run.
+# Apple M4 added 2026-09-01 from a 1.1.3 thorough run (Arm/NEON build — same
+# aes_gcm / sha256 caveat as the M3 Pro).
+
+[[cpu]]
+model = "Apple M4"
+aliases = ["M4"]
+topology = "10C / 10T"
+samples = 1
+measured = "2026-09-01"
+tool_version = "1.1.3"
+build = "portable"
+int_single   = 22056
+int_multi    = 126535
+float_single = 10115
+float_multi  = 73714
+hash         = 2344
+compress     = 153
+aes_gcm      = 224
+sha256       = 575
 
 [[cpu]]
 model = "Apple M3 Pro"

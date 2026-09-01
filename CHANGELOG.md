@@ -2,6 +2,16 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 1.1.4 - Tue, 1 Sep 2026
+
+- **Apple M4 in the model reference table.** Adds `[[cpu]]` and `[[gpu]]`
+  entries (`baseline/models/cpu.toml`, `gpu.toml`) from a 1.1.3 `--duration
+  thorough` run on an M4 (10C/10T, 8-core GPU), so a `run` on a base M4 now
+  gets a "vs typical hardware" block. Its `aes_gcm` / `sha256` figures are low
+  because loadbearer's build doesn't use Arm crypto acceleration — a property
+  of the tool, not the chip, same as the M3 Pro. Calibration data, not part of
+  the stability contract (`VERSIONING.md`).
+
 ## 1.1.3 - Mon, 31 Aug 2026
 
 - **Intel Core i7-1265U in the model reference table.** Adds a `[[cpu]]` entry
