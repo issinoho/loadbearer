@@ -44,14 +44,23 @@ manual step needed for it on future releases.
 **Windows code signing is a separate manual step, not part of this flow.**
 CI always ships the Windows `.zip` unsigned (the Certum cloud cert has no
 unattended-CI signing mode — see `CODE_SIGNING_POLICY.md`). Verified working
-on v1.2.2 (2026-09-04). Iain runs `scripts/sign-windows-release.ps1 -Version
-X.Y.Z -Thumbprint 6B58FE5ED40A67A23A27BEB25C4337ADEA26B9F9` on Windows
-(SimplySign Desktop + `signtool`) sometime after the tag push, which re-signs
-`loadbearer.exe`, re-uploads the archive, and updates `SHA256SUMS` on the
-release. Not something to do from here: it needs a live, logged-in SimplySign
-session, which this environment doesn't have. Thumbprint is for the cert
-valid to 2027-09-04 — drop `-Thumbprint` (falls back to `signtool /a`) or
-update it after renewal.
+on v1.2.2 (2026-09-04). Iain runs `scripts/publish-loadbearer.ps1 X.Y.Z` on
+Windows (SimplySign Desktop + `signtool`) sometime after the tag push, which
+re-signs `loadbearer.exe`, re-uploads the archive, and updates `SHA256SUMS`
+on the release. That's a preflight wrapper — it knows the thumbprint, finds
+`signtool` under the Windows Kits if it isn't on PATH, and refuses early on
+a missing release, a still-draft release, a closed SimplySign session, or
+`-UpdateWinget` without a `WINGET_TOKEN` (which the inner script otherwise
+only notices *after* signing and uploading). It calls
+`scripts/sign-windows-release.ps1`, which takes `-Version`/`-Thumbprint`
+directly if you need it. Not something to do from here: it needs a live,
+logged-in SimplySign session, which this environment doesn't have. The
+thumbprint defaulted in both scripts is for the cert valid to 2027-09-04 —
+update it there and in `CODE_SIGNING_POLICY.md` after renewal.
+
+Re-signing an already-signed archive is refused (`-Force` overrides): it
+would change the archive's hash a second time and invalidate whatever
+pinned the first, the winget manifest above all.
 
 Versioning (semver from 1.0.0 — see `VERSIONING.md` for the covered surface):
 breaking change to the CLI or a `schema`-tagged JSON format → **major**; new

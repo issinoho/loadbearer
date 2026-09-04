@@ -61,7 +61,8 @@ param(
     [string]$Version,
     [string]$Thumbprint,
     [string]$Repo = "issinoho/loadbearer",
-    [switch]$UpdateWinget
+    [switch]$UpdateWinget,
+    [switch]$Force
 )
 
 $ErrorActionPreference = "Stop"
@@ -90,6 +91,24 @@ try {
     Expand-Archive -Path $zipName -DestinationPath "extracted" -Force
     $exePath = Join-Path "extracted" "$archiveName\loadbearer.exe"
     if (-not (Test-Path $exePath)) { throw "$exePath not found inside the archive -- unexpected layout" }
+
+    # Refuse to sign twice. Signing changes the archive's bytes, so a
+    # second pass produces a *third* hash and silently invalidates whatever
+    # pinned the second -- the winget manifest most of all, which is
+    # submitted with the signed archive's hash. Checked here, before
+    # signtool runs, so a wasted run costs a download rather than a
+    # SimplySign session.
+    $already = Get-AuthenticodeSignature $exePath
+    if ($already.Status -eq "Valid" -and -not $Force) {
+        throw ("loadbearer.exe in $zipName is already signed, by " +
+               "$($already.SignerCertificate.Subject). Re-signing would change the " +
+               "archive's hash again and break anything pinning the current one. " +
+               "Pass -Force if that is genuinely what you want -- after a certificate " +
+               "renewal, say -- and remember to update the winget manifest afterwards.")
+    }
+    if ($already.Status -eq "Valid") {
+        Write-Warning "Overwriting an existing valid signature because -Force was given."
+    }
 
     Write-Host "-- Signing $exePath"
     $signArgs = @(

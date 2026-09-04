@@ -11,7 +11,9 @@ machine rather than a fresh GitHub-hosted runner. So the release workflow
 (`.github/workflows/release.yml`) always publishes the Windows `.zip`
 **unsigned**, and the maintainer re-signs `loadbearer.exe` locally afterward
 from Windows with SimplySign Desktop + `signtool`
-([`scripts/sign-windows-release.ps1`](scripts/sign-windows-release.ps1)),
+([`scripts/publish-loadbearer.ps1`](scripts/publish-loadbearer.ps1), a
+preflight wrapper around
+[`scripts/sign-windows-release.ps1`](scripts/sign-windows-release.ps1)),
 which re-uploads the signed archive and an updated `SHA256SUMS` in place of
 the unsigned ones. A Linux equivalent exists
 ([`scripts/sign-windows-release.sh`](scripts/sign-windows-release.sh), via
