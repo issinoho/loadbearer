@@ -21,6 +21,10 @@ on:
 
 permissions:
   contents: write
+  # For actions/attest-build-provenance: mint an OIDC token and write the
+  # attestation to the repo. The `release` job doesn't use these; harmless.
+  id-token: write
+  attestations: write
 
 jobs:
   build:
@@ -122,6 +126,21 @@ jobs:
           else
             tar czf "../${name}.tar.gz" "${name}"
           fi
+
+      # Signed build-provenance attestation for the release archive: ties it to
+      # this exact workflow run, commit and repository. Verifiable with no
+      # certificate via `gh attestation verify <file> --repo issinoho/loadbearer`
+      # (trust root is GitHub's Sigstore). Runs per matrix leg — Windows attests
+      # the .zip, Linux the .tar.gz. Bump the major as newer releases land.
+      - name: Attest build provenance
+        # Skip on a throwaway workflow_dispatch build (same gate as the release
+        # job) so a test run leaves no public attestation behind.
+        if: github.event_name == 'push' || inputs.publish_release
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            loadbearer-*.zip
+            loadbearer-*.tar.gz
 
       - uses: actions/upload-artifact@v7
         with:

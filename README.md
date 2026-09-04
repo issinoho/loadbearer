@@ -182,17 +182,23 @@ fleet (PDQ / Intune / GPO) see
 [Fleet Deployment](https://github.com/issinoho/loadbearer/wiki/Fleet-Deployment)
 in the wiki.
 
-**Code signing policy.** Free code signing on Windows is provided by
-[SignPath.io](https://signpath.io), certificate by the
-[SignPath Foundation](https://signpath.org). What is signed, how to verify it,
-and the signing roles are in
+**Build provenance.** Every release archive carries a signed
+[build provenance attestation](https://docs.github.com/actions/security-guides/using-artifact-attestations)
+tying it to the exact CI run and commit. Verify any download — signed or not,
+Windows or Linux — with `gh attestation verify <file> --repo issinoho/loadbearer`
+(no certificate needed; trust root is GitHub's Sigstore).
+
+**Code signing policy.** What is signed, the build-provenance attestation, how to
+verify each, and the signing roles are in
 [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md).
 
 ### Linux
 
 Download `loadbearer-<version>-x86_64-unknown-linux-gnu.tar.gz` from the
 [latest release](https://github.com/issinoho/loadbearer/releases/latest),
-extract it, and run `./loadbearer`. Or install straight from source with Cargo:
+extract it, and run `./loadbearer`. Optionally check it against `SHA256SUMS`, or
+`gh attestation verify loadbearer-*-x86_64-unknown-linux-gnu.tar.gz --repo issinoho/loadbearer`.
+Or install straight from source with Cargo:
 
 ```
 cargo install --git https://github.com/issinoho/loadbearer --locked
