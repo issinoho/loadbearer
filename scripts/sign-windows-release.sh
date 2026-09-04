@@ -2,6 +2,18 @@
 # Re-sign an already-published loadbearer Windows release with the Certum
 # Open Source Code Signing certificate (SimplySign, cloud-held), from Linux.
 #
+# CURRENTLY BLOCKED (2026-09-04): Certum's Linux PKCS#11 module
+# (/opt/proCertumSmartSign/libSimplySignPKCS11.so, resolving to
+# /usr/lib64/libSimplySignPKCS.so) segfaults inside its own
+# PKCS1Pem2RSAPubKey -> BN_num_bits() when reading the certificate, on
+# Ubuntu with OpenSSL 3.5 -- reproduced with both the openssl "provider"
+# and "engine" PKCS#11 bridges, so it's a bug/incompatibility in Certum's
+# module itself, not this script or osslsigncode. sign-windows-release.ps1
+# (Windows + signtool) is the working path until Certum support resolves
+# this or a container with an older OpenSSL is set up. Kept here for when
+# that's fixed -- the download/repackage/checksum/upload plumbing below
+# was dry-run verified against a real release and is not the problem.
+#
 # CI (.github/workflows/release.yml) always ships the Windows binary
 # unsigned -- the Certum cert has no unattended-CI API, only an interactive
 # SimplySign Desktop session. So signing is a manual, local, post-publish

@@ -40,9 +40,8 @@ from here. The first winget submission is manual — see `packaging/winget/`.
 **Windows code signing is a separate manual step, not part of this flow.**
 CI always ships the Windows `.zip` unsigned (the Certum cloud cert has no
 unattended-CI signing mode — see `CODE_SIGNING_POLICY.md`). Iain runs
-`scripts/sign-windows-release.sh --version X.Y.Z` (Linux, SimplySign Desktop +
-`osslsigncode`) — or the Windows/`signtool` equivalent,
-`sign-windows-release.ps1` — sometime after the tag push, which re-signs
+`scripts/sign-windows-release.ps1 -Version X.Y.Z` on Windows (SimplySign
+Desktop + `signtool`) sometime after the tag push, which re-signs
 `loadbearer.exe`, re-uploads the archive, and updates `SHA256SUMS` on the
 release. Not something to do from here: it needs a live, logged-in SimplySign
 session, which this environment doesn't have.

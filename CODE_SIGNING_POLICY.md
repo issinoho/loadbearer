@@ -9,13 +9,16 @@ has no unattended-signing API: it only unlocks through an interactive
 SimplySign Desktop session, which needs a persistent, already-authenticated
 machine rather than a fresh GitHub-hosted runner. So the release workflow
 (`.github/workflows/release.yml`) always publishes the Windows `.zip`
-**unsigned**, and the maintainer re-signs `loadbearer.exe` locally afterward —
-from Linux with SimplySign Desktop + `osslsigncode`
-([`scripts/sign-windows-release.sh`](scripts/sign-windows-release.sh)), or
+**unsigned**, and the maintainer re-signs `loadbearer.exe` locally afterward
 from Windows with SimplySign Desktop + `signtool`
-([`scripts/sign-windows-release.ps1`](scripts/sign-windows-release.ps1)) —
-either of which re-uploads the signed archive and an updated `SHA256SUMS` in
-place of the unsigned ones.
+([`scripts/sign-windows-release.ps1`](scripts/sign-windows-release.ps1)),
+which re-uploads the signed archive and an updated `SHA256SUMS` in place of
+the unsigned ones. A Linux equivalent exists
+([`scripts/sign-windows-release.sh`](scripts/sign-windows-release.sh), via
+SimplySign Desktop for Linux + `osslsigncode`) but is currently blocked —
+Certum's Linux PKCS#11 module segfaults reading the certificate against a
+current OpenSSL, a bug in their module, not this tooling — so Windows is the
+working path for now.
 
 **Practically:** a release may be unsigned for a short window right after it's
 tagged, until that manual step runs. Check for yourself with
