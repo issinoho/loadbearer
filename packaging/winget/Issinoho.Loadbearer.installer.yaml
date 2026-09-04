@@ -15,7 +15,7 @@ NestedInstallerFiles:
   - RelativeFilePath: loadbearer-1.2.1-x86_64-pc-windows-msvc\loadbearer.exe
     PortableCommandAlias: loadbearer
 UpgradeBehavior: uninstallPrevious
-ReleaseDate: 2026-09-04
+ReleaseDate: "2026-09-04"
 Installers:
   - Architecture: x64
     InstallerUrl: https://github.com/issinoho/loadbearer/releases/download/v1.2.1/loadbearer-1.2.1-x86_64-pc-windows-msvc.zip
