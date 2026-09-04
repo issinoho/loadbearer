@@ -175,11 +175,22 @@ Write-Host "  certificate present: $($cert.Subject.Split(',')[0]) (expires $($ce
 Write-Host ""
 Write-Host "Signing" -ForegroundColor Cyan
 
-$signArgs = @('-Version', $Version, '-Thumbprint', $Thumbprint, '-Repo', $Repo)
-if ($UpdateWinget) { $signArgs += '-UpdateWinget' }
-if ($Force) { $signArgs += '-Force' }
-& $signScript @signArgs
-if ($LASTEXITCODE -ne 0) { throw "sign-windows-release.ps1 failed." }
+# A hashtable, not an array: splatting an array passes its elements
+# positionally, so "-Thumbprint" would arrive as a value rather than as
+# a parameter name and binding would fail outright.
+$signParams = @{
+    Version    = $Version
+    Thumbprint = $Thumbprint
+    Repo       = $Repo
+}
+if ($UpdateWinget) { $signParams.UpdateWinget = $true }
+if ($Force) { $signParams.Force = $true }
+
+# No $LASTEXITCODE check here: the inner script throws on failure and
+# that propagates, whereas $LASTEXITCODE holds whatever its last *native*
+# command returned -- which is nonzero for failures it deliberately
+# tolerates, such as an absent SHA256SUMS.asc.
+& $signScript @signParams
 
 Write-Host ""
 Write-Host "Done. loadbearer $Version is signed on the $tag release." -ForegroundColor Green
