@@ -62,6 +62,35 @@ attestation. That's expected, not a tampering signal: for the Windows archive,
 the Authenticode signature (above) and the current `SHA256SUMS` are the
 things to trust, not the original CI attestation.
 
+## GPG signature
+
+CI also detached-signs `SHA256SUMS` (as it first publishes it) with a GPG key
+dedicated to loadbearer releases — not Iain's personal key:
+
+- Fingerprint: `400F 0EDE 6DC5 8B44 D73C  9EB0 BB61 A33B CE78 3563`
+- Public key: [`loadbearer-release-signing.asc`](loadbearer-release-signing.asc)
+  in this repo
+
+```
+gpg --import loadbearer-release-signing.asc
+gpg --verify SHA256SUMS.asc SHA256SUMS
+```
+
+`gpg` will warn the key "is not certified with a trusted signature" — normal
+for a key you haven't personally vouched for in GPG's web-of-trust sense;
+check the fingerprint above matches rather than relying on that warning.
+
+**Only present for the checksums CI built.** Once the Windows archive is
+manually re-signed, `SHA256SUMS` is regenerated to match it and
+`SHA256SUMS.asc` is removed rather than left stale — its absence on a release
+means the Windows re-sign already ran, not that anything is wrong. While
+present, it covers the Linux tarball's line for as long as that file exists;
+the build provenance attestation above covers the Linux tarball for the
+*entire* life of the release regardless, so treat GPG as an alternative for
+anyone who'd rather trust a key than GitHub's Sigstore instance, not the only
+option. No-op in CI until the `GPG_PRIVATE_KEY` / `GPG_PASSPHRASE` secrets are
+set.
+
 ## Checksums
 
 Every release publishes `SHA256SUMS`, covering each archive **and** the bare

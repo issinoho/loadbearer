@@ -113,6 +113,11 @@ jobs:
     needs: build
     if: github.event_name == 'push' || inputs.publish_release
     runs-on: ubuntu-latest
+    env:
+      # Detached GPG signature over SHA256SUMS (covers every archive and the
+      # bare executable inside each, transitively). No-op when unset.
+      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
     steps:
       - uses: actions/checkout@v7
 
@@ -155,6 +160,25 @@ jobs:
               | sed "s#-#loadbearer  (inside $t)#" >> SHA256SUMS
           done
           cat SHA256SUMS
+
+      - name: Sign SHA256SUMS with GPG
+        # Detached, ASCII-armored signature covering every archive and the
+        # bare executable inside each. The Windows archive itself later gets
+        # re-signed by hand and SHA256SUMS regenerated to match (see
+        # CODE_SIGNING_POLICY.md) -- this GPG signature is CI's own, over
+        # whatever SHA256SUMS looked like at publish time, and stays whatever
+        # it was signed against; verify against the SHA256SUMS actually
+        # attached to the release, not a cached copy.
+        if: env.GPG_PRIVATE_KEY != ''
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
+            --detach-sign --armor release-assets/SHA256SUMS
+          gpg --verify release-assets/SHA256SUMS.asc release-assets/SHA256SUMS
+
+      - name: Note when shipping without a GPG signature
+        if: env.GPG_PRIVATE_KEY == ''
+        run: echo "GPG_PRIVATE_KEY not set - SHA256SUMS ships unsigned."
 
       - name: Create/update the GitHub Release
         uses: softprops/action-gh-release@v3

@@ -149,6 +149,14 @@ cat SHA256SUMS
 echo "-- Uploading the signed archive + updated checksums to the release"
 gh release upload "$tag" "$zip_name" "SHA256SUMS" --repo "$repo" --clobber
 
+# CI's GPG signature (if any) covers the SHA256SUMS it built, which this just
+# replaced -- drop the now-stale .asc rather than leave it silently failing
+# to verify. Harmless if it wasn't there (GPG signing is opt-in in CI).
+if gh release view "$tag" --repo "$repo" --json assets --jq '.assets[].name' | grep -qx "SHA256SUMS.asc"; then
+  echo "-- Removing the now-stale SHA256SUMS.asc (signed the pre-resign checksums)"
+  gh release delete-asset "$tag" "SHA256SUMS.asc" --repo "$repo" --yes
+fi
+
 cat <<EOF
 
 Done. $zip_name on the $tag release is now signed; SHA256SUMS matches it.

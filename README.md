@@ -211,8 +211,12 @@ expected, not a red flag. Full details, including why, are in
 
 Download `loadbearer-<version>-x86_64-unknown-linux-gnu.tar.gz` from the
 [latest release](https://github.com/issinoho/loadbearer/releases/latest),
-extract it, and run `./loadbearer`. Optionally check it against `SHA256SUMS`, or
-`gh attestation verify loadbearer-*-x86_64-unknown-linux-gnu.tar.gz --repo issinoho/loadbearer`.
+extract it, and run `./loadbearer`. Optionally check it against `SHA256SUMS`,
+`gh attestation verify loadbearer-*-x86_64-unknown-linux-gnu.tar.gz --repo issinoho/loadbearer`,
+or — if you'd rather trust a key than GitHub's Sigstore instance —
+`gpg --verify SHA256SUMS.asc SHA256SUMS` against the [release signing
+key](loadbearer-release-signing.asc) (see
+[CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md) for the fingerprint).
 Or install straight from source with Cargo:
 
 ```

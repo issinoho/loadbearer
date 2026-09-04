@@ -394,7 +394,8 @@ Disks
       <b>Verifying a download:</b> Windows releases are signed by hand shortly
       after publishing (a Certum Open Source Code Signing certificate — check
       with <code>Get-AuthenticodeSignature</code>), and every release also
-      carries a build-provenance attestation and <code>SHA256SUMS</code> —
+      carries a build-provenance attestation, a GPG-signed
+      <code>SHA256SUMS</code>, and the checksums themselves —
       <a href="https://github.com/issinoho/loadbearer/blob/main/CODE_SIGNING_POLICY.md">CODE_SIGNING_POLICY.md</a>.
     </p>
   </div>
@@ -413,8 +414,8 @@ Disks
     <p class="footer-note">
       <strong>Verifying a download:</strong> Windows releases are signed by
       hand (Certum Open Source Code Signing) shortly after publishing; every
-      release also carries a build-provenance attestation and
-      <code>SHA256SUMS</code> —
+      release also carries a build-provenance attestation, a GPG-signed
+      <code>SHA256SUMS</code>, and the checksums themselves —
       <a href="https://github.com/issinoho/loadbearer/blob/main/CODE_SIGNING_POLICY.md">details</a>.
     </p>
   </div>

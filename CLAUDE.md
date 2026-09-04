@@ -33,9 +33,13 @@ Clippy on CI's toolchain is sometimes stricter than a local one — if in doubt
 
 `.github/workflows/release.yml` fires on the `v*` tag and builds+attaches the
 Windows `.zip` and Linux `.tar.gz`, attaches a build-provenance attestation to
-each, and (once `WINGET_TOKEN` is set and `Issinoho.Loadbearer` exists in
+each, GPG-signs `SHA256SUMS` (`SHA256SUMS.asc`, once `GPG_PRIVATE_KEY` /
+`GPG_PASSPHRASE` are set — key details in `CODE_SIGNING_POLICY.md`), and
+(once `WINGET_TOKEN` is set and `Issinoho.Loadbearer` exists in
 `microsoft/winget-pkgs`) opens the winget version-bump PR. Nothing else to do
 from here. The first winget submission is manual — see `packaging/winget/`.
+The GPG signature is CI-automated, unlike Windows code signing below — no
+manual step needed for it on future releases.
 
 **Windows code signing is a separate manual step, not part of this flow.**
 CI always ships the Windows `.zip` unsigned (the Certum cloud cert has no

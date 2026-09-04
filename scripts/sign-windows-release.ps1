@@ -129,6 +129,16 @@ try {
     gh release upload $tag $zipName "SHA256SUMS" --repo $Repo --clobber
     if ($LASTEXITCODE -ne 0) { throw "gh release upload failed (exit $LASTEXITCODE)" }
 
+    # CI's GPG signature (if any) covers the SHA256SUMS it built, which this
+    # just replaced -- a stale .asc sitting on the release would silently fail
+    # to verify against the new file instead of just being absent. Drop it if
+    # present; harmless if it wasn't there (GPG signing is opt-in in CI).
+    $existing = gh release view $tag --repo $Repo --json assets --jq ".assets[].name" 2>$null
+    if ($existing -contains "SHA256SUMS.asc") {
+        Write-Host "-- Removing the now-stale SHA256SUMS.asc (signed the pre-resign checksums)"
+        gh release delete-asset $tag "SHA256SUMS.asc" --repo $Repo --yes
+    }
+
     Write-Host ""
     Write-Host "Done. $zipName on the $tag release is now signed; SHA256SUMS matches it."
     Write-Host "Note: the build-provenance attestation on this release still points at the" -ForegroundColor Yellow
