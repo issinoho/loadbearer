@@ -2,6 +2,17 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 1.2.1 - Fri, 4 Sep 2026
+
+- **Build provenance attestations.** Every release archive now carries a signed
+  [build provenance
+  attestation](https://docs.github.com/actions/security-guides/using-artifact-attestations)
+  binding it to the exact CI run, commit and workflow that produced it. Verify
+  any download — Windows or Linux, signed or not — with
+  `gh attestation verify <file> --repo issinoho/loadbearer`; no certificate
+  needed, the trust root is GitHub's Sigstore. See
+  [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md).
+
 ## 1.2.0 - Fri, 4 Sep 2026
 
 - **Informational subtests.** A new tier of measurement that is shown under its
