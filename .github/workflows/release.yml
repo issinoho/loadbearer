@@ -204,3 +204,33 @@ jobs:
           body_path: release-notes.md
           generate_release_notes: true
           files: release-assets/*
+
+  # Open the version-bump PR against microsoft/winget-pkgs for this release.
+  # `wingetcreate update` pulls the existing manifest, swaps in the new version /
+  # URL / hash and submits — so the package must already exist there (do the
+  # first submission by hand from packaging/winget/; see its README). No-op
+  # until the WINGET_TOKEN secret (a classic PAT with `public_repo`) is set, and
+  # only on real tag pushes.
+  winget:
+    needs: release
+    if: github.event_name == 'push'
+    runs-on: windows-latest
+    env:
+      WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+    steps:
+      - name: Submit to winget-pkgs
+        if: env.WINGET_TOKEN != ''
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          $url = "https://github.com/issinoho/loadbearer/releases/download/${{ github.ref_name }}/loadbearer-$version-x86_64-pc-windows-msvc.zip"
+          Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+          .\wingetcreate.exe update Issinoho.Loadbearer `
+            --version $version `
+            --urls "$url" `
+            --submit `
+            --token $env:WINGET_TOKEN
+
+      - name: Note when the winget token is unset
+        if: env.WINGET_TOKEN == ''
+        run: echo "WINGET_TOKEN not set - skipping the winget-pkgs submission."

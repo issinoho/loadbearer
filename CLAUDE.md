@@ -32,7 +32,10 @@ Clippy on CI's toolchain is sometimes stricter than a local one — if in doubt
 5. Push with tags: `git push <remote> main --follow-tags`.
 
 `.github/workflows/release.yml` fires on the `v*` tag and builds+attaches the
-Windows `.zip` and Linux `.tar.gz`. Nothing else to do.
+Windows `.zip` and Linux `.tar.gz`, attaches a build-provenance attestation to
+each, and (once `WINGET_TOKEN` is set and `Issinoho.Loadbearer` exists in
+`microsoft/winget-pkgs`) opens the winget version-bump PR. Nothing else to do.
+The first winget submission is manual — see `packaging/winget/`.
 
 Versioning (semver from 1.0.0 — see `VERSIONING.md` for the covered surface):
 breaking change to the CLI or a `schema`-tagged JSON format → **major**; new

@@ -148,7 +148,15 @@ baseline's four-iGPU GPU anchor is.
 
 ### Windows
 
-Download `loadbearer-<version>-x86_64-pc-windows-msvc.zip` from the
+Once loadbearer is in the [Windows Package
+Manager](https://github.com/microsoft/winget-pkgs) (submission in progress):
+
+```
+winget install Issinoho.Loadbearer
+```
+
+which puts `loadbearer` on your `PATH`. Otherwise, download
+`loadbearer-<version>-x86_64-pc-windows-msvc.zip` from the
 [latest release](https://github.com/issinoho/loadbearer/releases/latest), unzip
 it anywhere, and run `loadbearer.exe` from a terminal (PowerShell or Command
 Prompt):
