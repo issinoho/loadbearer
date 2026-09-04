@@ -12,6 +12,11 @@ portable command.
 
 ## First submission (one-off, manual)
 
+**Status:** submitted as
+[microsoft/winget-pkgs#429367](https://github.com/microsoft/winget-pkgs/pull/429367)
+(2026-09-04). Awaiting the automated validation + a moderator. Once it merges,
+set `WINGET_TOKEN` (below) and every later version is submitted by CI.
+
 The three YAML files here are the seed manifest for **PackageVersion 1.2.1**.
 Submit them as a pull request to `microsoft/winget-pkgs` under
 `manifests/i/Issinoho/Loadbearer/1.2.1/`. Easiest path:
