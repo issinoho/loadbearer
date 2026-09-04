@@ -1,5 +1,6 @@
 //! Memory benchmark: sequential bandwidth (read, write, copy) and random-access
-//! latency.
+//! latency, plus an informational cache-latency ladder (~L1/L2/L3 working sets)
+//! and latency measured while other cores stream reads.
 //!
 //! ## Methodology
 //!
@@ -97,6 +98,10 @@ impl Benchmark for MemoryBenchmark {
             SubtestSpec::scored("bw_copy", "Copy (memcpy)", "GiB/s", Hi),
             SubtestSpec::scored("bw_read_mt", "Sequential read, all cores", "GiB/s", Hi),
             SubtestSpec::scored("latency", "Random access latency", "ns", Lo),
+            SubtestSpec::info("lat_l1", "Latency, ~L1 (16 KiB)", "ns", Lo),
+            SubtestSpec::info("lat_l2", "Latency, ~L2 (256 KiB)", "ns", Lo),
+            SubtestSpec::info("lat_l3", "Latency, ~L3 (6 MiB)", "ns", Lo),
+            SubtestSpec::info("lat_loaded", "Latency under bandwidth load", "ns", Lo),
         ]
     }
 
@@ -151,6 +156,17 @@ impl Benchmark for MemoryBenchmark {
                 let cycle = sattolo_cycle(nodes, ctx.seed ^ 0xEE);
                 latency_ns(&cycle, budget)
             }
+            // Fixed-size pointer chases that name the cache level they most
+            // likely land in. Informational: real cache sizes vary, so the
+            // labels are approximate and there is no baseline anchor.
+            "lat_l1" => latency_ns(&sattolo_cycle(L1_NODES, ctx.seed ^ 0x101), budget),
+            "lat_l2" => latency_ns(&sattolo_cycle(L2_NODES, ctx.seed ^ 0x102), budget),
+            "lat_l3" => latency_ns(&sattolo_cycle(L3_NODES, ctx.seed ^ 0x103), budget),
+            "lat_loaded" => {
+                let nodes = (bytes / 4).max(1 << 20);
+                let cycle = sattolo_cycle(nodes, ctx.seed ^ 0x104);
+                loaded_latency_ns(&cycle, ctx.threads, ctx.seed ^ 0x105, budget)
+            }
             other => bail!("unknown memory subtest: {other}"),
         })
     }
@@ -159,10 +175,47 @@ impl Benchmark for MemoryBenchmark {
         self.notes.lock().unwrap().clone()
     }
 
-    /// Every memory subtest is single-threaded except the all-core read.
+    /// Single-threaded (and so core-pinned) except the all-core read and the
+    /// under-load latency test, which need their sibling threads on other cores.
     fn single_threaded(&self, subtest_id: &str) -> bool {
-        subtest_id != "bw_read_mt"
+        !matches!(subtest_id, "bw_read_mt" | "lat_loaded")
     }
+}
+
+/// Node counts (`u32` each) for the cache-ladder latency probes: 16 KiB, 256 KiB
+/// and 6 MiB working sets.
+const L1_NODES: usize = 16 * 1024 / 4;
+const L2_NODES: usize = 256 * 1024 / 4;
+const L3_NODES: usize = 6 * 1024 * 1024 / 4;
+
+/// Chase `cycle` on one thread while `threads - 1` others stream reads over
+/// their own out-of-cache buffers, so the reported latency includes contention
+/// for the memory controller. Falls back to an unloaded chase on a 1-core box.
+fn loaded_latency_ns(cycle: &[u32], threads: usize, seed: u64, budget: Duration) -> f64 {
+    use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
+
+    let load_threads = threads.saturating_sub(1);
+    if load_threads == 0 {
+        return latency_ns(cycle, budget);
+    }
+    // 32 MiB per streamer — past any last-level cache, bounded so many cores
+    // don't exhaust RAM.
+    const LOAD_WORDS: usize = 32 * 1024 * 1024 / 8;
+    let stop = AtomicBool::new(false);
+    std::thread::scope(|s| {
+        for w in 0..load_threads {
+            let stop = &stop;
+            s.spawn(move || {
+                let buf = filled_words(LOAD_WORDS, seed ^ (w as u64 + 1));
+                while !stop.load(Relaxed) {
+                    read_bandwidth(&buf, Duration::from_millis(40));
+                }
+            });
+        }
+        let ns = latency_ns(cycle, budget);
+        stop.store(true, Relaxed);
+        ns
+    })
 }
 
 fn filled_words(words: usize, seed: u64) -> Vec<u64> {
@@ -287,6 +340,22 @@ mod tests {
         assert!(latency_ns(&cyc, short) > 0.0);
         assert!(bench.run_subtest("bw_read", &ctx()).unwrap() > 0.0);
         assert!(bench.run_subtest("bw_read_mt", &ctx()).unwrap() > 0.0);
+    }
+
+    #[test]
+    fn cache_ladder_and_loaded_latency_run_and_order_sanely() {
+        let bench = MemoryBenchmark::new();
+        let mut c = ctx();
+        c.threads = 2;
+        let l1 = bench.run_subtest("lat_l1", &c).unwrap();
+        let l3 = bench.run_subtest("lat_l3", &c).unwrap();
+        let loaded = bench.run_subtest("lat_loaded", &c).unwrap();
+        for (id, v) in [("lat_l1", l1), ("lat_l3", l3), ("lat_loaded", loaded)] {
+            assert!(v.is_finite() && v > 0.0, "{id} -> {v}");
+        }
+        // A bigger working set can only be slower to chase; wide margin for a
+        // noisy CI box.
+        assert!(l3 > l1 * 1.2, "l1={l1} l3={l3}");
     }
 
     #[test]
