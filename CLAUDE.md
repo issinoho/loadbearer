@@ -34,8 +34,15 @@ Clippy on CI's toolchain is sometimes stricter than a local one — if in doubt
 `.github/workflows/release.yml` fires on the `v*` tag and builds+attaches the
 Windows `.zip` and Linux `.tar.gz`, attaches a build-provenance attestation to
 each, and (once `WINGET_TOKEN` is set and `Issinoho.Loadbearer` exists in
-`microsoft/winget-pkgs`) opens the winget version-bump PR. Nothing else to do.
-The first winget submission is manual — see `packaging/winget/`.
+`microsoft/winget-pkgs`) opens the winget version-bump PR. Nothing else to do
+from here. The first winget submission is manual — see `packaging/winget/`.
+
+**Windows code signing is a separate manual step, not part of this flow.**
+CI always ships the Windows `.zip` unsigned (the Certum cloud cert has no
+unattended-CI signing mode — see `CODE_SIGNING_POLICY.md`). Iain runs
+`scripts/sign-windows-release.ps1 -Version X.Y.Z` on his own machine sometime
+after the tag push, which re-signs `loadbearer.exe`, re-uploads the archive,
+and updates `SHA256SUMS` on the release. Not something to do from here.
 
 Versioning (semver from 1.0.0 — see `VERSIONING.md` for the covered surface):
 breaking change to the CLI or a `schema`-tagged JSON format → **major**; new

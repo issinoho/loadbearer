@@ -41,12 +41,6 @@ jobs:
             bin: loadbearer
             archive: tar.gz
     runs-on: ${{ matrix.os }}
-    env:
-      # Set to enable Windows code signing via SignPath (Foundation OSS tier).
-      # Unset (forks, or before the SignPath project is approved) → the release
-      # ships unsigned, exactly as before.
-      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
-      SIGNPATH_ORGANIZATION_ID: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
     steps:
       - uses: actions/checkout@v7
 
@@ -58,47 +52,12 @@ jobs:
       - name: Build
         run: cargo build --release --locked --target ${{ matrix.target }}
 
-      # --- Windows code signing (SignPath) -----------------------------------
-      # The unsigned exe is uploaded as its own artifact; SignPath verifies it
-      # came from this workflow run, signs it, and hands back the signed copy,
-      # which is swapped in before packaging so SHA256SUMS covers the signed
-      # binary. All three steps no-op when SIGNPATH_API_TOKEN is unset.
-      - name: Upload the unsigned exe for signing
-        id: unsigned-exe
-        if: matrix.os == 'windows-latest' && env.SIGNPATH_API_TOKEN != ''
-        uses: actions/upload-artifact@v7
-        with:
-          name: unsigned-exe
-          path: target/${{ matrix.target }}/release/loadbearer.exe
-          if-no-files-found: error
-
-      - name: Sign the exe (SignPath)
-        id: signpath
-        if: matrix.os == 'windows-latest' && env.SIGNPATH_API_TOKEN != ''
-        uses: signpath/github-action-submit-signing-request@v1
-        with:
-          api-token: ${{ env.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ env.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: loadbearer
-          signing-policy-slug: release-signing
-          artifact-configuration-slug: exe
-          github-artifact-id: ${{ steps.unsigned-exe.outputs.artifact-id }}
-          wait-for-completion: true
-          output-artifact-directory: signed
-
-      - name: Swap in the signed exe and verify
-        if: steps.signpath.outcome == 'success'
-        shell: pwsh
-        run: |
-          Copy-Item signed/loadbearer.exe "target/${{ matrix.target }}/release/loadbearer.exe" -Force
-          $sig = Get-AuthenticodeSignature "target/${{ matrix.target }}/release/loadbearer.exe"
-          $sig | Format-List Status, StatusMessage, SignerCertificate
-          if ($sig.Status -ne 'Valid') { throw "Authenticode status: $($sig.Status)" }
-
-      - name: Note when shipping unsigned
-        if: matrix.os == 'windows-latest' && env.SIGNPATH_API_TOKEN == ''
-        run: echo "SIGNPATH_API_TOKEN not set — the Windows binary ships unsigned."
-
+      # No CI code signing: the Certum SimplySign cloud cert has no unattended
+      # API — it only unlocks via a SimplySign Desktop session, which needs a
+      # persistent, already-authenticated machine (not a fresh hosted runner).
+      # CI always ships this exe unsigned; the maintainer re-signs it locally
+      # after publish with scripts/sign-windows-release.ps1 and replaces the
+      # release assets. See CODE_SIGNING_POLICY.md.
       - name: Package
         shell: bash
         run: |

@@ -344,11 +344,14 @@ Disks
       <div class="install-card">
         <h3>🪟 Windows (x86-64)</h3>
         <p>Unzip and run <code>loadbearer.exe</code> from a terminal.
-        The binary is not code-signed: SmartScreen will prompt
-        (<em>More info → Run anyway</em>) and Smart App Control blocks it
-        outright — run it on a machine without SAC, or build from source.
-        Every release publishes a build-provenance attestation and
-        <code>SHA256SUMS</code> for verification.</p>
+        Releases are Authenticode-signed with a Certum Open Source Code
+        Signing certificate, applied by hand shortly after each release
+        publishes — so a build can be briefly unsigned right after tagging;
+        check with <code>Get-AuthenticodeSignature</code>. An unsigned build
+        gets a SmartScreen prompt (<em>More info → Run anyway</em>) and is
+        blocked outright by Smart App Control — run it on a machine without
+        SAC, or build from source. Every release also publishes a
+        build-provenance attestation and <code>SHA256SUMS</code>.</p>
         <a class="btn btn-primary" data-dl="windows" href="https://github.com/issinoho/loadbearer/releases/latest">Download .zip</a>
       </div>
 
@@ -388,9 +391,10 @@ Disks
       <a href="https://github.com/issinoho/loadbearer/wiki">wiki</a> is the deep
       dive — every benchmark kernel, the scoring maths worked through,
       <code>compare</code> internals, and recalibrating the baseline.
-      <b>Verifying a download:</b> the Windows binary is not code-signed; each
-      release carries a build-provenance attestation and <code>SHA256SUMS</code>
-      —
+      <b>Verifying a download:</b> Windows releases are signed by hand shortly
+      after publishing (a Certum Open Source Code Signing certificate — check
+      with <code>Get-AuthenticodeSignature</code>), and every release also
+      carries a build-provenance attestation and <code>SHA256SUMS</code> —
       <a href="https://github.com/issinoho/loadbearer/blob/main/CODE_SIGNING_POLICY.md">CODE_SIGNING_POLICY.md</a>.
     </p>
   </div>
@@ -407,8 +411,9 @@ Disks
       <a href="https://github.com/issinoho/loadbearer/blob/main/LICENSE">License</a>
     </div>
     <p class="footer-note">
-      <strong>Verifying a download:</strong> the Windows binary is not
-      code-signed; every release carries a build-provenance attestation and
+      <strong>Verifying a download:</strong> Windows releases are signed by
+      hand (Certum Open Source Code Signing) shortly after publishing; every
+      release also carries a build-provenance attestation and
       <code>SHA256SUMS</code> —
       <a href="https://github.com/issinoho/loadbearer/blob/main/CODE_SIGNING_POLICY.md">details</a>.
     </p>

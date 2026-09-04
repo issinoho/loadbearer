@@ -167,32 +167,44 @@ loadbearer.exe run
 
 Put the folder on your `PATH` if you want to call `loadbearer` from anywhere.
 
-**The Windows binary is not code-signed.** It carries no Authenticode
-signature. Verify a download by its build provenance (below) and `SHA256SUMS`.
+**Code signing.** The Windows binary is Authenticode-signed with a Certum Open
+Source Code Signing certificate — but by the maintainer, by hand, shortly
+after each release publishes, not by CI (the cloud certificate has no
+unattended-CI signing mode). A release can therefore be briefly unsigned right
+after it's tagged; check for yourself rather than assuming:
+
+```powershell
+Get-AuthenticodeSignature .\loadbearer.exe | Format-List Status, SignerCertificate
+```
 
 **Smart App Control.** On Windows 11 with Smart App Control on (the default on
 clean installs), a binary that isn't signed *and* known-good is blocked outright
 — "An Application Control policy has blocked this file" — with **no allow-list
-or file-hash exception**. Run it on a machine without SAC (Windows Sandbox works;
-SAC doesn't apply inside it), or build from source.
+or file-hash exception**. A signed build clears this; an unsigned one needs a
+machine without SAC (Windows Sandbox works; SAC doesn't apply inside it), or
+build from source.
 
-**SmartScreen.** Without SAC, SmartScreen shows an "unrecognized app" prompt the
+**SmartScreen.** An unsigned binary shows an "unrecognized app" prompt the
 first time — **More info → Run anyway**, or `Unblock-File .\loadbearer.exe`.
+Once signed, this is an OV certificate, so the prompt eases as the certificate
+accumulates download reputation rather than clearing immediately.
 
-**Locked-down estates (WDAC / AppLocker).** These honour explicit rules: add a
-**file-hash** rule for `loadbearer.exe` — the exact SHA-256 is in the release's
-`SHA256SUMS`, or `Get-FileHash loadbearer.exe`. Hash rules work on an unsigned
-binary; Smart App Control ignores them. For running it unattended across a fleet
-(PDQ / Intune / GPO) see
+**Locked-down estates (WDAC / AppLocker).** These honour explicit rules: once
+signed, add a **publisher** rule for the Certum certificate; otherwise (or as a
+fallback) a **file-hash** rule for `loadbearer.exe` — the exact SHA-256 is in
+the release's `SHA256SUMS`, or `Get-FileHash loadbearer.exe`. Hash rules work
+on an unsigned binary; Smart App Control ignores both kinds of rule. For
+running it unattended across a fleet (PDQ / Intune / GPO) see
 [Fleet Deployment](https://github.com/issinoho/loadbearer/wiki/Fleet-Deployment)
 in the wiki.
 
-**Build provenance.** Every release archive carries a signed
-[build provenance attestation](https://docs.github.com/actions/security-guides/using-artifact-attestations)
-tying it to the exact CI run and commit. Verify any download — Windows or Linux
-— with `gh attestation verify <file> --repo issinoho/loadbearer` (no certificate
-needed; trust root is GitHub's Sigstore). Details, plus the WDAC/AppLocker hash
-recipe, are in
+**Build provenance.** Every release archive, as CI first builds it, carries a
+signed [build provenance attestation](https://docs.github.com/actions/security-guides/using-artifact-attestations)
+tying it to the exact CI run and commit — `gh attestation verify <file> --repo issinoho/loadbearer`
+(no certificate needed; trust root is GitHub's Sigstore). This keeps working
+for the Linux tarball for the life of the release; it stops matching the
+Windows `.zip` once that's been re-signed, since signing changes its bytes —
+expected, not a red flag. Full details, including why, are in
 [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md).
 
 ### Linux
