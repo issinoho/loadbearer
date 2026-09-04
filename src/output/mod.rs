@@ -314,6 +314,18 @@ pub fn print_scored_report(result: &ResultFile) {
                 st.confidence.as_str(),
             );
         }
+        if !c.informational.is_empty() {
+            println!("    informational (not graded)");
+            for st in &c.informational {
+                println!(
+                    "      {:<22} {:>11.1} {:<8}          {}",
+                    st.label,
+                    st.value,
+                    st.unit,
+                    st.confidence.as_str(),
+                );
+            }
+        }
         for note in &c.notes {
             println!("    note: {note}");
         }

@@ -36,54 +36,14 @@ impl Benchmark for CpuBenchmark {
     fn subtests(&self) -> Vec<SubtestSpec> {
         const HI: Direction = Direction::HigherIsBetter;
         vec![
-            SubtestSpec {
-                id: "int_single",
-                label: "Integer, single-core",
-                unit: "Mops/s",
-                direction: HI,
-            },
-            SubtestSpec {
-                id: "int_multi",
-                label: "Integer, all cores",
-                unit: "Mops/s",
-                direction: HI,
-            },
-            SubtestSpec {
-                id: "float_single",
-                label: "Float, single-core",
-                unit: "MFLOP/s",
-                direction: HI,
-            },
-            SubtestSpec {
-                id: "float_multi",
-                label: "Float, all cores",
-                unit: "MFLOP/s",
-                direction: HI,
-            },
-            SubtestSpec {
-                id: "hash",
-                label: "BLAKE3 hash",
-                unit: "MiB/s",
-                direction: HI,
-            },
-            SubtestSpec {
-                id: "compress",
-                label: "DEFLATE compress",
-                unit: "MiB/s",
-                direction: HI,
-            },
-            SubtestSpec {
-                id: "aes_gcm",
-                label: "AES-256-GCM encrypt",
-                unit: "MiB/s",
-                direction: HI,
-            },
-            SubtestSpec {
-                id: "sha256",
-                label: "SHA-256 hash",
-                unit: "MiB/s",
-                direction: HI,
-            },
+            SubtestSpec::scored("int_single", "Integer, single-core", "Mops/s", HI),
+            SubtestSpec::scored("int_multi", "Integer, all cores", "Mops/s", HI),
+            SubtestSpec::scored("float_single", "Float, single-core", "MFLOP/s", HI),
+            SubtestSpec::scored("float_multi", "Float, all cores", "MFLOP/s", HI),
+            SubtestSpec::scored("hash", "BLAKE3 hash", "MiB/s", HI),
+            SubtestSpec::scored("compress", "DEFLATE compress", "MiB/s", HI),
+            SubtestSpec::scored("aes_gcm", "AES-256-GCM encrypt", "MiB/s", HI),
+            SubtestSpec::scored("sha256", "SHA-256 hash", "MiB/s", HI),
         ]
     }
 

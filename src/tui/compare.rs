@@ -482,6 +482,7 @@ mod tests {
             values: vec![9000.0, 12000.0],
             rel: vec![1.0, 1.333],
             best: 1,
+            scored: true,
         };
         let comp = ComponentComparison {
             id: "cpu".into(),

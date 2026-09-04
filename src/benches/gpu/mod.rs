@@ -206,18 +206,8 @@ impl Benchmark for GpuBenchmark {
     fn subtests(&self) -> Vec<SubtestSpec> {
         use Direction::HigherIsBetter as Hi;
         vec![
-            SubtestSpec {
-                id: "compute_fp32",
-                label: "FP32 compute (FMA)",
-                unit: "GFLOP/s",
-                direction: Hi,
-            },
-            SubtestSpec {
-                id: "bandwidth",
-                label: "VRAM read bandwidth",
-                unit: "GiB/s",
-                direction: Hi,
-            },
+            SubtestSpec::scored("compute_fp32", "FP32 compute (FMA)", "GFLOP/s", Hi),
+            SubtestSpec::scored("bandwidth", "VRAM read bandwidth", "GiB/s", Hi),
         ]
     }
 

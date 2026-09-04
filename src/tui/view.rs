@@ -369,6 +369,18 @@ fn draw_results(f: &mut Frame, scroll: &mut u16, r: &ResultFile, area: Rect) {
                 Style::default().fg(DIM),
             )));
         }
+        for st in &c.informational {
+            lines.push(Line::from(Span::styled(
+                format!(
+                    "    {:<name_w$} {:>11} {:<7}         {}",
+                    truncate(&format!("{} (info)", st.label), name_w),
+                    fmt_val(st.value),
+                    st.unit,
+                    st.confidence.as_str(),
+                ),
+                Style::default().fg(DIM).add_modifier(Modifier::DIM),
+            )));
+        }
         for note in &c.notes {
             lines.push(Line::from(Span::styled(
                 format!("    note: {note}"),
@@ -621,6 +633,7 @@ mod tests {
                     value: *value,
                     stats: Stats::from_runs(vec![*value]),
                     confidence: Confidence::Medium,
+                    scored: true,
                 }),
             }));
         }

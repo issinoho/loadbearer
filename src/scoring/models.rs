@@ -453,6 +453,7 @@ pub fn synthetic_result(kind: &str, entry: &ModelEntry) -> Result<crate::scoring
                 value: v,
                 stats: Stats::from_runs(vec![v]),
                 confidence: Confidence::High,
+                scored: true,
             })
         })
         .collect();
@@ -712,6 +713,7 @@ mod tests {
                     value: v,
                     stats: Stats::from_runs(vec![v]),
                     confidence: Confidence::High,
+                    scored: true,
                 })
             })
             .collect();

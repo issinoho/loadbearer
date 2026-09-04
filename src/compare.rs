@@ -94,6 +94,9 @@ pub struct SubtestComparison {
     pub rel: Vec<f64>,
     /// Index of the machine that did best on this subtest.
     pub best: usize,
+    /// `false` for an informational subtest — shown with its per-metric delta
+    /// but kept out of the component and overall rollup.
+    pub scored: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -282,6 +285,7 @@ fn compare(machines: &[Machine]) -> Result<Comparison> {
                 values,
                 rel,
                 best,
+                scored: st0.scored,
             });
         }
 
@@ -294,7 +298,15 @@ fn compare(machines: &[Machine]) -> Result<Comparison> {
         }
 
         let rel: Vec<f64> = (0..n)
-            .map(|mi| geomean(&subtests.iter().map(|s| s.rel[mi]).collect::<Vec<_>>()))
+            .map(|mi| {
+                geomean(
+                    &subtests
+                        .iter()
+                        .filter(|s| s.scored)
+                        .map(|s| s.rel[mi])
+                        .collect::<Vec<_>>(),
+                )
+            })
             .collect();
         let best = argmax(&rel);
         components.push(ComponentComparison {

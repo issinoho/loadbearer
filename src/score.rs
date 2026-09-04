@@ -223,6 +223,7 @@ mod tests {
             value,
             stats: Stats::from_runs(vec![value]),
             confidence: crate::engine::stats::Confidence::High,
+            scored: true,
         }
     }
 

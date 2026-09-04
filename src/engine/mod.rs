@@ -32,6 +32,46 @@ pub struct SubtestSpec {
     pub label: &'static str,
     pub unit: &'static str,
     pub direction: Direction,
+    /// `true` if this subtest is looked up in the baseline and folded into the
+    /// component and overall grade. `false` for an *informational* subtest:
+    /// still measured, kept in `raw`, shown in output and usable by `compare`,
+    /// but never scored — used for metrics the baseline hasn't been calibrated
+    /// for yet.
+    pub scored: bool,
+}
+
+impl SubtestSpec {
+    /// A graded subtest — its value is scored against the baseline.
+    pub const fn scored(
+        id: &'static str,
+        label: &'static str,
+        unit: &'static str,
+        direction: Direction,
+    ) -> Self {
+        Self {
+            id,
+            label,
+            unit,
+            direction,
+            scored: true,
+        }
+    }
+
+    /// An informational subtest — measured and shown, never scored.
+    pub const fn info(
+        id: &'static str,
+        label: &'static str,
+        unit: &'static str,
+        direction: Direction,
+    ) -> Self {
+        Self {
+            id,
+            label,
+            unit,
+            direction,
+            scored: false,
+        }
+    }
 }
 
 /// Thoroughness preset. Controls iteration counts and the per-run time budget.
@@ -153,6 +193,15 @@ pub struct SubtestOutcome {
     pub value: f64,
     pub stats: Stats,
     pub confidence: Confidence,
+    /// Mirrors [`SubtestSpec::scored`]. Informational subtests (`false`) are
+    /// kept here for fidelity but skipped by the scoring stage. Defaults to
+    /// `true` when absent, so result files written before 1.2 still score.
+    #[serde(default = "default_true")]
+    pub scored: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -244,6 +293,7 @@ pub fn run_benchmark(
             value: stats.median,
             stats,
             confidence,
+            scored: spec.scored,
         };
         progress.on_event(ProgressEvent::SubtestDone {
             id: spec.id,

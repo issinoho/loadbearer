@@ -1,5 +1,5 @@
-//! Disk benchmark: sequential write/read throughput and random 4 KiB IOPS, at
-//! queue depth 1.
+//! Disk benchmark: sequential write/read throughput and random 4 KiB IOPS at
+//! queue depth 1, plus informational deep-queue random IOPS.
 //!
 //! ## Methodology
 //!
@@ -13,8 +13,10 @@
 //! the page cache. When the platform or filesystem refuses unbuffered access the
 //! benchmark falls back to buffered I/O and records a note; read numbers on such
 //! a machine may be cache-influenced. Sequential writes always end with an
-//! `fsync`, so `Sequential write` is durable-write throughput. All subtests are
-//! single-threaded / QD1.
+//! `fsync`, so `Sequential write` is durable-write throughput. The scored
+//! subtests are single-threaded / QD1; `rand_read_qd` / `rand_write_qd` run
+//! several concurrent QD1 workers against one shared handle to approximate a
+//! deep queue, and are informational (not scored — the baseline has no anchor).
 
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
@@ -221,30 +223,12 @@ impl Benchmark for DiskBenchmark {
     fn subtests(&self) -> Vec<SubtestSpec> {
         use Direction::HigherIsBetter as Hi;
         vec![
-            SubtestSpec {
-                id: "seq_write",
-                label: "Sequential write",
-                unit: "MiB/s",
-                direction: Hi,
-            },
-            SubtestSpec {
-                id: "seq_read",
-                label: "Sequential read",
-                unit: "MiB/s",
-                direction: Hi,
-            },
-            SubtestSpec {
-                id: "rand_read",
-                label: "Random 4K read",
-                unit: "IOPS",
-                direction: Hi,
-            },
-            SubtestSpec {
-                id: "rand_write",
-                label: "Random 4K write",
-                unit: "IOPS",
-                direction: Hi,
-            },
+            SubtestSpec::scored("seq_write", "Sequential write", "MiB/s", Hi),
+            SubtestSpec::scored("seq_read", "Sequential read", "MiB/s", Hi),
+            SubtestSpec::scored("rand_read", "Random 4K read", "IOPS", Hi),
+            SubtestSpec::scored("rand_write", "Random 4K write", "IOPS", Hi),
+            SubtestSpec::info("rand_read_qd", "Random 4K read, deep queue", "IOPS", Hi),
+            SubtestSpec::info("rand_write_qd", "Random 4K write, deep queue", "IOPS", Hi),
         ]
     }
 
@@ -271,6 +255,22 @@ impl Benchmark for DiskBenchmark {
             "rand_write" => {
                 let (file, _direct) = self.open_write(&path)?;
                 rand_write(&file, size, budget, ctx.seed ^ 0x22)?
+            }
+            "rand_read_qd" => {
+                let qd = queue_depth(ctx);
+                self.note(format!(
+                    "deep-queue random I/O approximated with {qd} concurrent QD1 workers"
+                ));
+                let (file, _direct) = self.open_read(&path, size)?;
+                rand_read_qd(&file, size, budget, ctx.seed ^ 0x33, qd)?
+            }
+            "rand_write_qd" => {
+                let qd = queue_depth(ctx);
+                self.note(format!(
+                    "deep-queue random I/O approximated with {qd} concurrent QD1 workers"
+                ));
+                let (file, _direct) = self.open_write(&path)?;
+                rand_write_qd(&file, size, budget, ctx.seed ^ 0x44, qd)?
             }
             other => bail!("unknown disk subtest: {other}"),
         })
@@ -363,6 +363,92 @@ fn rand_write(file: &File, size: u64, budget: Duration, seed: u64) -> io::Result
     Ok(rate)
 }
 
+/// Effective queue depth for the deep-queue random-I/O subtests: enough
+/// outstanding requests to let an NVMe drive's parallelism show, bounded so a
+/// many-core box doesn't drown the device in threads.
+fn queue_depth(ctx: &RunContext) -> usize {
+    ctx.threads.saturating_mul(4).clamp(4, 32)
+}
+
+/// Per-worker sub-seed so each concurrent QD1 stream hits a different sequence
+/// of blocks.
+fn worker_seed(seed: u64, worker: usize) -> u64 {
+    seed ^ (worker as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15)
+}
+
+/// Random 4 KiB reads with `qd` concurrent QD1 workers against one shared file
+/// handle — positional `pread`, so no shared cursor. Sums the workers' IOPS to
+/// approximate a single deep-queue stream.
+fn rand_read_qd(file: &File, size: u64, budget: Duration, seed: u64, qd: usize) -> io::Result<f64> {
+    let blocks = size / BLOCK as u64;
+    std::thread::scope(|scope| -> io::Result<f64> {
+        let handles: Vec<_> = (0..qd)
+            .map(|w| {
+                scope.spawn(move || {
+                    let mut buf = AlignedBuf::new(BLOCK);
+                    let mut rng = SplitMix64::new(worker_seed(seed, w));
+                    timed_ops(budget, 64, || {
+                        let off = rng.below(blocks) * BLOCK as u64;
+                        platform::pread_exact(file, buf.as_mut_slice(), off)?;
+                        Ok(())
+                    })
+                })
+            })
+            .collect();
+        let mut total = 0.0;
+        for h in handles {
+            total += h
+                .join()
+                .map_err(|_| io::Error::other("disk deep-queue read worker panicked"))??;
+        }
+        Ok(total)
+    })
+}
+
+/// Random 4 KiB writes with `qd` concurrent QD1 workers; each worker fsyncs on
+/// the shared `WRITE_SYNC_EVERY` cadence, and a final `sync_all` lands the rest.
+fn rand_write_qd(
+    file: &File,
+    size: u64,
+    budget: Duration,
+    seed: u64,
+    qd: usize,
+) -> io::Result<f64> {
+    let blocks = size / BLOCK as u64;
+    let rate = std::thread::scope(|scope| -> io::Result<f64> {
+        let handles: Vec<_> = (0..qd)
+            .map(|w| {
+                scope.spawn(move || {
+                    let ws = worker_seed(seed, w);
+                    let mut buf = AlignedBuf::new(BLOCK);
+                    SplitMix64::new(ws ^ 0xDEAD).fill_bytes(buf.as_mut_slice());
+                    let mut rng = SplitMix64::new(ws);
+                    let mut since_sync = 0u64;
+                    timed_ops(budget, 64, || {
+                        let off = rng.below(blocks) * BLOCK as u64;
+                        platform::pwrite_all(file, buf.as_slice(), off)?;
+                        since_sync += 1;
+                        if since_sync >= WRITE_SYNC_EVERY {
+                            file.sync_all()?;
+                            since_sync = 0;
+                        }
+                        Ok(())
+                    })
+                })
+            })
+            .collect();
+        let mut total = 0.0;
+        for h in handles {
+            total += h
+                .join()
+                .map_err(|_| io::Error::other("disk deep-queue write worker panicked"))??;
+        }
+        Ok(total)
+    })?;
+    file.sync_all()?;
+    Ok(rate)
+}
+
 /// Run `pass` repeatedly until `budget` elapses; return bytes/sec as MiB/s.
 fn timed_bytes<F>(budget: Duration, mut pass: F) -> io::Result<f64>
 where
@@ -436,7 +522,14 @@ mod tests {
                 size: 8 * 1024 * 1024,
             });
         }
-        for id in ["seq_write", "seq_read", "rand_read", "rand_write"] {
+        for id in [
+            "seq_write",
+            "seq_read",
+            "rand_read",
+            "rand_write",
+            "rand_read_qd",
+            "rand_write_qd",
+        ] {
             let v = bench.run_subtest(id, &ctx(&dir)).unwrap();
             assert!(v.is_finite() && v > 0.0, "{id} -> {v}");
         }
@@ -470,6 +563,39 @@ mod tests {
         assert!(unrelated.exists());
         assert!(weird.exists());
 
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn queue_depth_scales_with_threads_and_is_bounded() {
+        let mut c = ctx(Path::new("/tmp"));
+        c.threads = 1;
+        assert_eq!(queue_depth(&c), 4);
+        c.threads = 4;
+        assert_eq!(queue_depth(&c), 16);
+        c.threads = 64;
+        assert_eq!(queue_depth(&c), 32);
+    }
+
+    #[test]
+    fn deep_queue_random_read_is_in_the_same_ballpark_as_qd1() {
+        let dir = std::env::temp_dir().join(format!("lb-disk-qd-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let bench = DiskBenchmark::new();
+        {
+            let mut g = bench.scratch.lock().unwrap();
+            let path = dir.join("mini");
+            fill_scratch(&path, 16 * 1024 * 1024, 7).unwrap();
+            *g = Some(Scratch {
+                path,
+                size: 16 * 1024 * 1024,
+            });
+        }
+        let qd1 = bench.run_subtest("rand_read", &ctx(&dir)).unwrap();
+        let qdn = bench.run_subtest("rand_read_qd", &ctx(&dir)).unwrap();
+        // Concurrency should never make it dramatically worse; on real NVMe it
+        // is far higher. Loose bound so a busy CI box doesn't flake.
+        assert!(qdn > qd1 * 0.4, "qd1={qd1} qdn={qdn}");
         std::fs::remove_dir_all(&dir).ok();
     }
 

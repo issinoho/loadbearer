@@ -51,30 +51,10 @@ impl Benchmark for NetworkBenchmark {
     fn subtests(&self) -> Vec<SubtestSpec> {
         use Direction::{HigherIsBetter as Hi, LowerIsBetter as Lo};
         vec![
-            SubtestSpec {
-                id: "tcp_stream",
-                label: "TCP throughput, single stream",
-                unit: "GiB/s",
-                direction: Hi,
-            },
-            SubtestSpec {
-                id: "tcp_parallel",
-                label: "TCP throughput, all streams",
-                unit: "GiB/s",
-                direction: Hi,
-            },
-            SubtestSpec {
-                id: "tcp_rtt",
-                label: "TCP round-trip latency",
-                unit: "us",
-                direction: Lo,
-            },
-            SubtestSpec {
-                id: "udp_pps",
-                label: "UDP send rate",
-                unit: "Kpps",
-                direction: Hi,
-            },
+            SubtestSpec::scored("tcp_stream", "TCP throughput, single stream", "GiB/s", Hi),
+            SubtestSpec::scored("tcp_parallel", "TCP throughput, all streams", "GiB/s", Hi),
+            SubtestSpec::scored("tcp_rtt", "TCP round-trip latency", "us", Lo),
+            SubtestSpec::scored("udp_pps", "UDP send rate", "Kpps", Hi),
         ]
     }
 

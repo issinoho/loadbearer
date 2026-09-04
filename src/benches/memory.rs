@@ -92,36 +92,11 @@ impl Benchmark for MemoryBenchmark {
     fn subtests(&self) -> Vec<SubtestSpec> {
         use Direction::{HigherIsBetter as Hi, LowerIsBetter as Lo};
         vec![
-            SubtestSpec {
-                id: "bw_read",
-                label: "Sequential read",
-                unit: "GiB/s",
-                direction: Hi,
-            },
-            SubtestSpec {
-                id: "bw_write",
-                label: "Sequential write",
-                unit: "GiB/s",
-                direction: Hi,
-            },
-            SubtestSpec {
-                id: "bw_copy",
-                label: "Copy (memcpy)",
-                unit: "GiB/s",
-                direction: Hi,
-            },
-            SubtestSpec {
-                id: "bw_read_mt",
-                label: "Sequential read, all cores",
-                unit: "GiB/s",
-                direction: Hi,
-            },
-            SubtestSpec {
-                id: "latency",
-                label: "Random access latency",
-                unit: "ns",
-                direction: Lo,
-            },
+            SubtestSpec::scored("bw_read", "Sequential read", "GiB/s", Hi),
+            SubtestSpec::scored("bw_write", "Sequential write", "GiB/s", Hi),
+            SubtestSpec::scored("bw_copy", "Copy (memcpy)", "GiB/s", Hi),
+            SubtestSpec::scored("bw_read_mt", "Sequential read, all cores", "GiB/s", Hi),
+            SubtestSpec::scored("latency", "Random access latency", "ns", Lo),
         ]
     }
 

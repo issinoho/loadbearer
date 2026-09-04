@@ -92,6 +92,19 @@ fn yes() -> bool {
 /// fold into a hardware grade. `compare` still uses their raw metrics.
 pub const UNGRADED_COMPONENTS: &[&str] = &["network", "gpu"];
 
+/// An informational subtest: measured and shown, but with no baseline to
+/// compare against, so no ratio, score or grade. See [`SubtestSpec::info`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InfoSubtest {
+    pub id: String,
+    pub label: String,
+    pub unit: String,
+    #[serde(rename = "direction")]
+    pub direction: Direction,
+    pub value: f64,
+    pub confidence: Confidence,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScoredComponent {
     pub id: String,
@@ -104,6 +117,10 @@ pub struct ScoredComponent {
     /// Weakest confidence among the component's subtests.
     pub confidence: Confidence,
     pub subtests: Vec<ScoredSubtest>,
+    /// Subtests of this component that were measured but not scored (no
+    /// baseline). Shown in output and usable by `compare`; never affect a grade.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub informational: Vec<InfoSubtest>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub notes: Vec<String>,
 }
@@ -217,7 +234,21 @@ pub fn score_run(
     let mut components = Vec::with_capacity(outcomes.len());
     for bench in outcomes {
         let mut subtests = Vec::with_capacity(bench.subtests.len());
+        let mut informational = Vec::new();
         for st in &bench.subtests {
+            if !st.scored {
+                // No baseline entry to look up — carried for fidelity and
+                // `compare`, but never folded into a grade.
+                informational.push(InfoSubtest {
+                    id: st.id.clone(),
+                    label: st.label.clone(),
+                    unit: st.unit.clone(),
+                    direction: st.direction,
+                    value: st.value,
+                    confidence: st.confidence,
+                });
+                continue;
+            }
             let reference = baseline.lookup(&bench.id, &st.id).inspect_err(|e| {
                 log::error!(target: "loadbearer::scoring", "baseline lookup failed for {}/{}: {e}", bench.id, st.id)
             })?;
@@ -266,6 +297,7 @@ pub fn score_run(
             graded,
             confidence,
             subtests,
+            informational,
             notes: bench.notes.clone(),
         });
     }
@@ -379,6 +411,11 @@ pub fn baseline_from_results(
     for result in results {
         for component in &result.raw {
             for st in &component.subtests {
+                // Informational subtests have no baseline by design — don't let
+                // a recalibration silently promote them.
+                if !st.scored {
+                    continue;
+                }
                 acc.entry(component.id.clone())
                     .or_default()
                     .entry(st.id.clone())
@@ -439,6 +476,7 @@ mod tests {
             value,
             stats: Stats::from_runs(vec![value]),
             confidence: Confidence::High,
+            scored: true,
         }
     }
 
