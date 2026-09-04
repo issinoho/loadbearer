@@ -2,6 +2,34 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 1.2.0 - Fri, 4 Sep 2026
+
+- **Informational subtests.** A new tier of measurement that is shown under its
+  component as "informational (not graded)", carried in `raw` (with
+  `"scored": false`) and usable by `compare`, but with no baseline entry and no
+  effect on any score — for metrics the reference baseline hasn't been
+  calibrated for. Grades and overall scores are unchanged; pre-1.2 result files
+  still score.
+- **Disk deep-queue random I/O** (`rand_read_qd` / `rand_write_qd`,
+  informational). Several concurrent QD1 workers against one shared handle
+  approximate a deep queue, so an NVMe drive that needs parallelism to shine is
+  no longer indistinguishable from SATA.
+- **Memory cache-latency ladder + latency under load** (informational).
+  `lat_l1` / `lat_l2` / `lat_l3` are pointer chases over fixed 16 KiB / 256 KiB
+  / 6 MiB working sets; `lat_loaded` is the DRAM-size chase run while the other
+  cores stream reads. A single run now shows the L1→L2→L3→DRAM curve, not just
+  one number.
+- **CPU integer thread-scaling curve** (informational). `int_scale_2` … up to
+  just under the logical CPU count, so you can see where scaling falls off
+  (SMT, an E-core tier, a turbo/thermal wall) between the `int_single` and
+  `int_multi` endpoints.
+- **Clock / power telemetry.** Every run samples CPU frequency (all platforms)
+  and Intel RAPL package power (Linux) and reports a one-line `Clocks …`
+  summary plus a `telemetry` block in the JSON. A run whose clocks fall away is
+  marked *thermally limited*, and the "vs typical hardware" verdict then warns
+  that a low delta may be the cooling, not the chip. `--no-telemetry` opts out;
+  macOS has no unprivileged source and reports `unavailable`.
+
 ## 1.1.4 - Tue, 1 Sep 2026
 
 - **Apple M4 in the model reference table.** Adds `[[cpu]]` and `[[gpu]]`

@@ -81,23 +81,27 @@
 
     <div class="term term-hero">
       <div class="term-bar"><i></i><i></i><i></i><em>loadbearer run</em></div>
-<pre>loadbearer 1.1.4 — assessment
+<pre>loadbearer 1.2.0 — assessment
 
   Machine   ThinkPad-X280 · i5-8350U · 8 threads · 7.0 GiB RAM
   Profile   general · curve k=0.5 · baseline reference-v1
+  Clocks 3.4→3.4 GHz (min 3.3) · steady
 
   CPU       <b class="g-b">984  [B]</b>  <span class="bar">████████████████░░░░░░░</span>
     Integer, all cores     25180.3 Mops/s   1.43x  1194  high
     Float, all cores       36997.5 MFLOP/s  1.61x  1267  high
     BLAKE3 hash             2384.6 MiB/s    1.27x  1128  high
+    <span class="dim">informational  Integer, 4 threads   24880 Mops/s</span>
 
   MEMORY    <b class="g-b">947  [B]</b>  <span class="bar">███████████████░░░░░░░░</span>
     Sequential read            8.9 GiB/s    0.83x   913  medium
     Random access latency    181.8 ns       0.81x   901  high
+    <span class="dim">informational  ~L1 1.1 ns · ~L2 3.4 ns · ~L3 14.9 ns</span>
 
   DISK      <b class="g-c">835  [C]</b>  <span class="bar">█████████████░░░░░░░░░░</span>
     Sequential read          380.4 MiB/s    0.67x   816  high
     Random 4K write         7601.6 IOPS     0.70x   838  low
+    <span class="dim">informational  Random 4K read, deep queue  61044 IOPS</span>
 
   NETWORK   <b class="g-a">1219  [A]</b>  <span class="bar">████████████████████░░</span>  <span class="dim">· not in overall</span>
     TCP round-trip latency    54.6 us       0.73x   853  low
@@ -195,7 +199,7 @@
       <div class="gallery-col">
       <figure class="term">
         <figcaption class="term-bar"><i></i><i></i><i></i><em>loadbearer compare x280.json desktop.json --plain</em></figcaption>
-<pre>loadbearer 1.1.4 — compare (2 machines)
+<pre>loadbearer 1.2.0 — compare (2 machines)
 
   A  ThinkPad-X280   Intel(R) Core(TM) i5-8350U
   B  dev-desktop     AMD Ryzen 9 7900X
@@ -241,7 +245,7 @@
       <div class="gallery-col">
         <figure class="term">
           <figcaption class="term-bar"><i></i><i></i><i></i><em>loadbearer info</em></figcaption>
-<pre>loadbearer 1.1.4 — machine inventory
+<pre>loadbearer 1.2.0 — machine inventory
 
 Host
   Hostname        ThinkPad-X280

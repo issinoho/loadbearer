@@ -43,6 +43,7 @@ loadbearer 1.0.0 — assessment
 
   Machine   ThinkPad-X280 · Intel(R) Core(TM) i5-8350U CPU @ 1.70GHz · 8 threads · 7.0 GiB RAM
   Profile   general · curve k=0.5 · baseline reference-v1 · thorough preset
+  Clocks 3.4→3.4 GHz (min 3.3, max 3.6) · steady
 
   CPU         984  [B]   ████████████████░░░░░░░░
     Integer, single-core          6092.9 Mops/s     0.95x     973  high
@@ -53,6 +54,9 @@ loadbearer 1.0.0 — assessment
     DEFLATE compress                38.8 MiB/s      0.87x     935  high
     AES-256-GCM encrypt            736.1 MiB/s      0.97x     984  high
     SHA-256 hash                   140.5 MiB/s      0.39x     628  high
+    informational (not graded)
+      Integer, 2 threads          12160.0 Mops/s          high
+      Integer, 4 threads          24880.0 Mops/s          high
 
   MEMORY      947  [B]   ███████████████░░░░░░░░░
     Sequential read                  8.9 GiB/s      0.83x     913  medium
@@ -60,12 +64,21 @@ loadbearer 1.0.0 — assessment
     Copy (memcpy)                    7.2 GiB/s      1.11x    1054  medium
     Sequential read, all cores        10.4 GiB/s      0.64x     798  medium
     Random access latency          181.8 ns         0.81x     901  high
+    informational (not graded)
+      Latency, ~L1 (16 KiB)          1.1 ns                high
+      Latency, ~L2 (256 KiB)         3.4 ns                high
+      Latency, ~L3 (6 MiB)          14.9 ns                high
+      Latency under bandwidth load   214.7 ns              high
 
   DISK        835  [C]   █████████████░░░░░░░░░░░
     Sequential write               175.5 MiB/s      0.51x     716  medium
     Sequential read                380.4 MiB/s      0.67x     816  high
     Random 4K read                8093.8 IOPS       0.99x     994  medium
     Random 4K write               7601.6 IOPS       0.70x     838  low
+    informational (not graded)
+      Random 4K read, deep queue  61044.0 IOPS            high
+      Random 4K write, deep queue 22713.0 IOPS            medium
+    note: deep-queue random I/O approximated with 32 concurrent QD1 workers
 
   NETWORK    1219  [A]   ████████████████████░░░░   · measured, not in the overall
     TCP throughput, single stream         3.2 GiB/s      1.63x    1275  medium
@@ -254,6 +267,16 @@ security tooling to belong in a hardware grade. A letter grade is assigned from
 the score, and a short "why" names the components that moved it and any
 low-confidence measurements.
 
+Some rows are **informational** — shown under their component as "informational
+(not graded)", carried in the JSON and usable by `compare`, but with no baseline
+entry and no effect on any score. They cover things the baseline hasn't been
+calibrated for: the CPU thread-scaling points (`Integer, 2/4/… threads`), the
+memory cache-latency ladder (`~L1/L2/L3`) and latency under load, and deep-queue
+random disk IOPS. Each run also samples CPU clocks (and, on Linux, package
+power) and prints a one-line `Clocks …` summary; when a run was thermally
+limited it says so and flags the "vs typical hardware" verdict. `--no-telemetry`
+turns the sampling off.
+
 The result is printed, and — with `--output` — written as a versioned JSON file
 that `loadbearer compare` can diff against another machine's.
 
@@ -332,6 +355,7 @@ loadbearer net-server [--bind ADDR]
 | `--soak-duration SECS` | Duration for `--soak` (default 90; range 15–1800). |
 | `--no-gpu` | Never touch the GPU: skip the `gpu` component **and** the OpenCL probe that `info` / `run` otherwise perform, so `OpenCL.dll` is never loaded. A global flag — works with any subcommand. Useful for fleet deployment where a stale ICD loader could stall enumeration. |
 | `--no-model-ref` | Skip the ["vs typical hardware"](#vs-typical-hardware) block — don't compare the CPU / GPU against their model reference. |
+| `--no-telemetry` | Don't sample CPU clocks / package power during the run (no `Clocks …` line, no `telemetry` field, no thermal-limit flag). |
 | `--output FILE` | Write the full result as a versioned JSON file. Works alongside the TUI or plain output. |
 | `--plain` | Disable the TUI and emit the plain-text report. Implied automatically when stdout is not a terminal. |
 | `--json` | Disable the TUI and emit only the result JSON to stdout. |

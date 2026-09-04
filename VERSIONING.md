@@ -42,6 +42,13 @@ A breaking change to any of these is a major release:
   `model_ref` "vs typical hardware" block it drives. Also calibration data:
   entries and values change as more machines are measured, and the block is
   never folded into a grade.
+- **Informational subtests** — rows shown under a component as "informational
+  (not graded)" and carried in `raw` with `"scored": false` (CPU thread-scaling
+  points, the memory cache-latency ladder, deep-queue disk IOPS, …). Which ones
+  exist, their ids and their values may change in any release, and any may later
+  be promoted to a scored subtest when the baseline is recalibrated. The
+  `telemetry` block (sampled CPU clocks / package power) is likewise indicative,
+  not API.
 - **Human-readable output** — the `--plain` text layout, the TUI, the wording of
   the "why" lines.
 - **The diagnostic log** — file location, line format, which events are logged,
