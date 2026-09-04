@@ -2,6 +2,16 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 1.2.2 - Fri, 4 Sep 2026
+
+- **Intel Core Ultra 7 366H in the model reference table.** Adds a `[[cpu]]`
+  entry to `baseline/models/cpu.toml` (16C/16T, from a 1.2.0 `--duration
+  thorough` run), so a `run` on a Panther Lake H-series Core Ultra chip now
+  gets a "vs typical hardware" block. CPU only: the iGPU enumerates as the
+  generic "Intel Graphics", a name shared across every Core Ultra generation,
+  so it can't key a GPU entry. Calibration data, not part of the stability
+  contract (`VERSIONING.md`).
+
 ## 1.2.1 - Fri, 4 Sep 2026
 
 - **Build provenance attestations.** Every release archive now carries a signed
