@@ -167,37 +167,32 @@ loadbearer.exe run
 
 Put the folder on your `PATH` if you want to call `loadbearer` from anywhere.
 
+**The Windows binary is not code-signed.** It carries no Authenticode
+signature. Verify a download by its build provenance (below) and `SHA256SUMS`.
+
 **Smart App Control.** On Windows 11 with Smart App Control on (the default on
 clean installs), a binary that isn't signed *and* known-good is blocked outright
 — "An Application Control policy has blocked this file" — with **no allow-list
 or file-hash exception**. Run it on a machine without SAC (Windows Sandbox works;
-SAC doesn't apply inside it), or build from source. Releases are
-Authenticode-signed through [SignPath.io](https://signpath.io)'s free programme
-for open source (certificate by the [SignPath Foundation](https://signpath.org)),
-but SAC also wants download reputation — a freshly-signed build may still be
-blocked until that accrues.
+SAC doesn't apply inside it), or build from source.
 
 **SmartScreen.** Without SAC, SmartScreen shows an "unrecognized app" prompt the
-first time — **More info → Run anyway**, or `Unblock-File .\loadbearer.exe`. This
-eases as the signing certificate accumulates reputation.
+first time — **More info → Run anyway**, or `Unblock-File .\loadbearer.exe`.
 
 **Locked-down estates (WDAC / AppLocker).** These honour explicit rules: add a
-**publisher** rule for the SignPath Foundation certificate, or a **file-hash**
-rule for `loadbearer.exe` — the exact SHA-256 is in the release's `SHA256SUMS`,
-or `Get-FileHash loadbearer.exe`. Hash rules work on an unsigned binary;
-Smart App Control ignores both kinds of rule. For running it unattended across a
-fleet (PDQ / Intune / GPO) see
+**file-hash** rule for `loadbearer.exe` — the exact SHA-256 is in the release's
+`SHA256SUMS`, or `Get-FileHash loadbearer.exe`. Hash rules work on an unsigned
+binary; Smart App Control ignores them. For running it unattended across a fleet
+(PDQ / Intune / GPO) see
 [Fleet Deployment](https://github.com/issinoho/loadbearer/wiki/Fleet-Deployment)
 in the wiki.
 
 **Build provenance.** Every release archive carries a signed
 [build provenance attestation](https://docs.github.com/actions/security-guides/using-artifact-attestations)
-tying it to the exact CI run and commit. Verify any download — signed or not,
-Windows or Linux — with `gh attestation verify <file> --repo issinoho/loadbearer`
-(no certificate needed; trust root is GitHub's Sigstore).
-
-**Code signing policy.** What is signed, the build-provenance attestation, how to
-verify each, and the signing roles are in
+tying it to the exact CI run and commit. Verify any download — Windows or Linux
+— with `gh attestation verify <file> --repo issinoho/loadbearer` (no certificate
+needed; trust root is GitHub's Sigstore). Details, plus the WDAC/AppLocker hash
+recipe, are in
 [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md).
 
 ### Linux

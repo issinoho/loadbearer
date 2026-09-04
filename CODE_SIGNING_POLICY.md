@@ -1,33 +1,27 @@
-# Code signing policy
+# Verifying a download
 
-Free code signing on Windows is provided by [SignPath.io](https://signpath.io),
-certificate by the [SignPath Foundation](https://signpath.org).
+## Code signing
 
-## What is signed
+loadbearer's release binaries are **not code-signed**. There is no Authenticode
+signature on the Windows executable and no equivalent on the Linux binary.
+Downloads are verified instead by their **build provenance attestation** and by
+`SHA256SUMS` (below).
 
-- **`loadbearer.exe`** inside the `x86_64-pc-windows-msvc` release archive is
-  Authenticode-signed **when Windows signing is enabled** (the CI
-  `SIGNPATH_API_TOKEN` secret is set). The signature is applied in CI (GitHub
-  Actions, `.github/workflows/release.yml`) via SignPath's origin-verified
-  signing service — SignPath independently checks that the artifact was built by
-  this repository's release workflow from a `v*` tag before signing it. Until a
-  certificate is in place the Windows binary ships **unsigned**, and the build
-  provenance attestation below is the trust anchor.
-- The Linux binary is **not** Authenticode-signed (there is no equivalent trust
-  anchor); verify it with the provenance attestation and `SHA256SUMS`.
-- Every release publishes `SHA256SUMS` covering each archive and the bare
-  executable inside it, **and** a signed build provenance attestation for each
-  archive.
+On Windows this means SmartScreen shows an "unrecognized app" prompt
+(**More info → Run anyway**), and Windows 11 **Smart App Control** — on by
+default on clean installs — blocks the binary outright with no exception. Run it
+on a machine without SAC (Windows Sandbox works), or build from source. See the
+[README](README.md#windows) for the full rundown.
 
 ## Build provenance
 
 Every release archive (`loadbearer-<version>-<target>.{zip,tar.gz}`) carries a
 signed [build provenance
 attestation](https://docs.github.com/actions/security-guides/using-artifact-attestations)
-produced by the release workflow. It cryptographically binds the archive to the
-exact GitHub Actions run, commit and workflow that built it; the trust root is
-GitHub's own Sigstore instance, so verification needs **no certificate** and
-works on the signed and unsigned binaries alike.
+produced by the release workflow (`.github/workflows/release.yml`). It
+cryptographically binds the archive to the exact GitHub Actions run, commit and
+workflow that built it; the trust root is GitHub's own Sigstore instance, so
+verification needs **no certificate**.
 
 Verify a download with the GitHub CLI (`gh` ≥ 2.49):
 
@@ -36,27 +30,29 @@ gh attestation verify loadbearer-<version>-<target>.zip --repo issinoho/loadbear
 ```
 
 A `PASS` (`sigstore.dev` issuer, `issinoho/loadbearer` source repo) means the
-file is byte-for-byte what CI built from this repository — offline verification
-is available with `gh attestation verify --bundle`.
+file is byte-for-byte what CI built from this repository. Offline verification is
+available with `gh attestation verify --bundle`.
 
-## How to verify a Windows download
+## Checksums
+
+Every release also publishes `SHA256SUMS`, covering each archive **and** the
+bare executable inside it:
 
 ```powershell
-# Provenance (works whether or not the binary is Authenticode-signed):
-gh attestation verify .\loadbearer-<version>-x86_64-pc-windows-msvc.zip --repo issinoho/loadbearer
-
-# Authenticode signature, when Windows signing is enabled for the release:
-Get-AuthenticodeSignature .\loadbearer.exe | Format-List
-# Status : Valid   SignerCertificate subject : SignPath Foundation
-(Get-FileHash .\loadbearer.exe).Hash   # compare against SHA256SUMS on the release
+(Get-FileHash .\loadbearer.exe).Hash        # Windows
+```
+```
+sha256sum loadbearer                        # Linux
 ```
 
-## Roles
+Compare against the matching line in the release's `SHA256SUMS`.
 
-loadbearer is maintained by a single person (Iain Smith,
-<iain@issinoho.com>), who is the sole **author**, **reviewer** and
-**approver**. Every signing request is approved manually, per release, in the
-SignPath UI — an unattended build cannot produce a signed binary.
+## Locked-down estates (WDAC / AppLocker)
+
+With no publisher signature there is no publisher rule to write. Use a
+**file-hash** allow rule for `loadbearer.exe` — the exact SHA-256 is the
+`loadbearer.exe (inside …)` line in `SHA256SUMS`, or `Get-FileHash`. Hash rules
+work on an unsigned binary; Smart App Control ignores them.
 
 ## Privacy
 

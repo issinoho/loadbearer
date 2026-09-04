@@ -344,14 +344,11 @@ Disks
       <div class="install-card">
         <h3>🪟 Windows (x86-64)</h3>
         <p>Unzip and run <code>loadbearer.exe</code> from a terminal.
-        Windows builds are Authenticode-signed via
-        <a href="https://signpath.io">SignPath.io</a>'s free programme for open
-        source (certificate by the
-        <a href="https://signpath.org">SignPath Foundation</a>); until the
-        certificate builds reputation, SmartScreen may still prompt
-        (<em>More info → Run anyway</em>) and Smart App Control can block it —
-        run it on a machine without SAC, or build from source. Each release
-        publishes <code>SHA256SUMS</code>.</p>
+        The binary is not code-signed: SmartScreen will prompt
+        (<em>More info → Run anyway</em>) and Smart App Control blocks it
+        outright — run it on a machine without SAC, or build from source.
+        Every release publishes a build-provenance attestation and
+        <code>SHA256SUMS</code> for verification.</p>
         <a class="btn btn-primary" data-dl="windows" href="https://github.com/issinoho/loadbearer/releases/latest">Download .zip</a>
       </div>
 
@@ -391,8 +388,9 @@ Disks
       <a href="https://github.com/issinoho/loadbearer/wiki">wiki</a> is the deep
       dive — every benchmark kernel, the scoring maths worked through,
       <code>compare</code> internals, and recalibrating the baseline.
-      <b>Code signing policy:</b> Windows builds are signed via SignPath.io,
-      certificate by the SignPath Foundation —
+      <b>Verifying a download:</b> the Windows binary is not code-signed; each
+      release carries a build-provenance attestation and <code>SHA256SUMS</code>
+      —
       <a href="https://github.com/issinoho/loadbearer/blob/main/CODE_SIGNING_POLICY.md">CODE_SIGNING_POLICY.md</a>.
     </p>
   </div>
@@ -409,9 +407,9 @@ Disks
       <a href="https://github.com/issinoho/loadbearer/blob/main/LICENSE">License</a>
     </div>
     <p class="footer-note">
-      <strong>Code signing policy:</strong> free Windows code signing provided by
-      <a href="https://signpath.io">SignPath.io</a>, certificate by the
-      <a href="https://signpath.org">SignPath Foundation</a> —
+      <strong>Verifying a download:</strong> the Windows binary is not
+      code-signed; every release carries a build-provenance attestation and
+      <code>SHA256SUMS</code> —
       <a href="https://github.com/issinoho/loadbearer/blob/main/CODE_SIGNING_POLICY.md">details</a>.
     </p>
   </div>
