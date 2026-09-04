@@ -192,6 +192,10 @@ pub struct RunArgs {
     #[arg(long)]
     pub no_model_ref: bool,
 
+    /// Don't sample CPU clocks / package power during the run.
+    #[arg(long)]
+    pub no_telemetry: bool,
+
     /// Write the result JSON to a file.
     #[arg(long, value_name = "FILE")]
     pub output: Option<PathBuf>,

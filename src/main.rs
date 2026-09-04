@@ -12,6 +12,7 @@ mod run;
 mod score;
 mod scoring;
 mod soak;
+mod telemetry;
 mod tui;
 mod util;
 

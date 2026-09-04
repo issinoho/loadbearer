@@ -185,6 +185,11 @@ pub struct ResultFile {
     /// the machine's model is in the embedded table. Not graded.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub model_ref: Vec<models::ModelRef>,
+    /// CPU clock / package-power telemetry sampled during the benchmark pass.
+    /// Metadata only — never scored. Absent when disabled (`--no-telemetry`)
+    /// or unsupported on the platform.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub telemetry: Option<crate::telemetry::RunTelemetry>,
 }
 
 impl ResultFile {
@@ -209,6 +214,7 @@ impl ResultFile {
             link,
             soak: None,
             model_ref: Vec::new(),
+            telemetry: None,
         }
     }
 }

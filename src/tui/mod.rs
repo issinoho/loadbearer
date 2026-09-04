@@ -36,6 +36,8 @@ pub struct RunInit {
     pub soak: Option<crate::soak::SoakConfig>,
     /// Suppress the CPU / GPU model-reference comparison.
     pub no_model_ref: bool,
+    /// Suppress CPU clock / package-power sampling during the run.
+    pub no_telemetry: bool,
 }
 
 /// Run the interactive session. `Ok(Some(result))` on completion, `Ok(None)` if
@@ -146,11 +148,13 @@ fn spawn_worker(init: RunInit, tx: Sender<Msg>) -> JoinHandle<()> {
             config,
             soak,
             no_model_ref,
+            no_telemetry,
             ..
         } = init;
 
         log::debug!(target: "loadbearer::tui", "worker thread started");
         let mut progress = ChannelProgress::new(tx.clone());
+        let sampler = crate::telemetry::Sampler::start(!no_telemetry);
         let mut outcomes = Vec::with_capacity(selected.len());
         for bench in &selected {
             match run_benchmark(bench.as_ref(), &ctx, &mut progress) {
@@ -162,6 +166,7 @@ fn spawn_worker(init: RunInit, tx: Sender<Msg>) -> JoinHandle<()> {
                 }
             }
         }
+        let telemetry = sampler.finish();
 
         let scored = match score_run(&outcomes, &baseline, profile, curve_k) {
             Ok(scored) => scored,
@@ -183,6 +188,7 @@ fn spawn_worker(init: RunInit, tx: Sender<Msg>) -> JoinHandle<()> {
         };
         let mut result = ResultFile::assemble(machine, config, outcomes, scored, None);
         result.model_ref = model_ref;
+        result.telemetry = telemetry;
 
         // Sustained-load phase: stream a sample per second to the UI, then
         // fold the analysed result into the result file. A cancel during the

@@ -184,6 +184,7 @@ fn run_interactive(
         config,
         soak: soak_config(args),
         no_model_ref: args.no_model_ref,
+        no_telemetry: args.no_telemetry,
     };
 
     match tui::run(init)? {
@@ -236,10 +237,12 @@ fn run_plain(
     }
 
     let mut progress = PlainProgress::new();
+    let sampler = crate::telemetry::Sampler::start(!args.no_telemetry);
     let mut outcomes: Vec<BenchmarkOutcome> = Vec::new();
     for bench in selected {
         outcomes.push(run_benchmark(bench.as_ref(), ctx, &mut progress)?);
     }
+    let telemetry = sampler.finish();
 
     let scored = score_run(&outcomes, baseline, profile, curve_k)?;
     let link = probe_link(args)?;
@@ -252,6 +255,7 @@ fn run_plain(
     );
     let mut result = ResultFile::assemble(machine, config, outcomes, scored, link);
     result.model_ref = model_ref;
+    result.telemetry = telemetry;
 
     if args.json {
         result.soak = run_soak(args);

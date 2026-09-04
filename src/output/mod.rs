@@ -288,6 +288,9 @@ pub fn print_scored_report(result: &ResultFile) {
         "  Profile   {} · curve k={} · baseline {} · {} preset",
         cfg.profile, cfg.curve_k, cfg.baseline, cfg.duration_preset,
     );
+    if let Some(line) = result.telemetry.as_ref().and_then(|t| t.summary()) {
+        println!("  {line}");
+    }
 
     for c in &result.components {
         let tail = if c.graded {
@@ -370,6 +373,12 @@ pub fn print_scored_report(result: &ResultFile) {
 
     if !result.model_ref.is_empty() {
         print_model_ref(&result.model_ref);
+        if result.telemetry.as_ref().is_some_and(|t| t.thermal_limited) {
+            println!(
+                "    note: clocks fell during this run — a low delta may be the cooling, \
+                 not the chip; re-run --duration thorough on mains"
+            );
+        }
     }
 
     if let Some(b) = &result.machine.battery {
