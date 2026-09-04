@@ -78,12 +78,15 @@ sha256sum loadbearer                        # Linux
 
 ## Locked-down estates (WDAC / AppLocker)
 
-Once a release is signed, add a **publisher** rule for the Certum certificate
-(CN "Open Source Developer Iain Smith"). Before that, or as a fallback, use a
-**file-hash** rule for `loadbearer.exe` — the exact SHA-256 is the
-`loadbearer.exe (inside …)` line in `SHA256SUMS`, or `Get-FileHash`. Hash
-rules work on an unsigned binary; Smart App Control ignores both kinds of
-rule.
+Once a release is signed, add a **publisher** rule for the Certum certificate:
+
+- Subject: `CN=Open Source Developer Iain Smith, O=Open Source Developer, L=Carluke, S=South Lanarkshire, C=GB`
+- Issuer: `CN=Certum Code Signing 2021 CA, O=Asseco Data Systems S.A., C=PL`
+
+Before that, or as a fallback, use a **file-hash** rule for `loadbearer.exe`
+— the exact SHA-256 is the `loadbearer.exe (inside …)` line in `SHA256SUMS`,
+or `Get-FileHash`. Hash rules work on an unsigned binary; Smart App Control
+ignores both kinds of rule.
 
 ## Roles
 
