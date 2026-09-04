@@ -16,7 +16,7 @@ pub use network::{link_probe, serve as net_serve};
 /// with [`gpu_probe`] (see `run::select_benchmarks`).
 pub fn all() -> Vec<Box<dyn Benchmark>> {
     vec![
-        Box::new(cpu::CpuBenchmark),
+        Box::new(cpu::CpuBenchmark::new()),
         Box::new(memory::MemoryBenchmark::new()),
         Box::new(disk::DiskBenchmark::new()),
         Box::new(network::NetworkBenchmark),

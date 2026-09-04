@@ -1,6 +1,7 @@
 //! CPU benchmark: integer and floating-point throughput (single- and all-core),
 //! plus two representative real-world kernels — BLAKE3 hashing and DEFLATE
-//! compression.
+//! compression — and an informational integer thread-scaling curve
+//! (`int_scale_2` … up to just under the logical CPU count).
 //!
 //! ## Methodology
 //!
@@ -22,7 +23,29 @@ use anyhow::{Result, bail};
 use crate::engine::{Benchmark, Direction, RunContext, SubtestSpec, parallel_sum, throughput};
 use crate::util::{MIB, SplitMix64};
 
-pub struct CpuBenchmark;
+pub struct CpuBenchmark {
+    /// Logical CPU count, used to decide which thread-scaling points to emit.
+    logical: usize,
+}
+
+/// Thread counts for the informational integer-scaling curve. A point is
+/// emitted only when it sits strictly between the `int_single` (1) and
+/// `int_multi` (all) endpoints.
+const SCALE_POINTS: &[(usize, &str, &str)] = &[
+    (2, "int_scale_2", "Integer, 2 threads"),
+    (4, "int_scale_4", "Integer, 4 threads"),
+    (8, "int_scale_8", "Integer, 8 threads"),
+    (16, "int_scale_16", "Integer, 16 threads"),
+    (32, "int_scale_32", "Integer, 32 threads"),
+];
+
+impl CpuBenchmark {
+    pub fn new() -> Self {
+        Self {
+            logical: std::thread::available_parallelism().map_or(1, |n| n.get()),
+        }
+    }
+}
 
 impl Benchmark for CpuBenchmark {
     fn id(&self) -> &'static str {
@@ -35,7 +58,7 @@ impl Benchmark for CpuBenchmark {
 
     fn subtests(&self) -> Vec<SubtestSpec> {
         const HI: Direction = Direction::HigherIsBetter;
-        vec![
+        let mut v = vec![
             SubtestSpec::scored("int_single", "Integer, single-core", "Mops/s", HI),
             SubtestSpec::scored("int_multi", "Integer, all cores", "Mops/s", HI),
             SubtestSpec::scored("float_single", "Float, single-core", "MFLOP/s", HI),
@@ -44,7 +67,13 @@ impl Benchmark for CpuBenchmark {
             SubtestSpec::scored("compress", "DEFLATE compress", "MiB/s", HI),
             SubtestSpec::scored("aes_gcm", "AES-256-GCM encrypt", "MiB/s", HI),
             SubtestSpec::scored("sha256", "SHA-256 hash", "MiB/s", HI),
-        ]
+        ];
+        for &(n, id, label) in SCALE_POINTS {
+            if n < self.logical {
+                v.push(SubtestSpec::info(id, label, "Mops/s", HI));
+            }
+        }
+        v
     }
 
     fn run_subtest(&self, subtest_id: &str, ctx: &RunContext) -> Result<f64> {
@@ -58,7 +87,13 @@ impl Benchmark for CpuBenchmark {
             "compress" => compress_rate(budget, ctx.seed),
             "aes_gcm" => aes_gcm_rate(budget, ctx.seed),
             "sha256" => sha256_rate(budget, ctx.seed),
-            other => bail!("unknown cpu subtest: {other}"),
+            other => match other
+                .strip_prefix("int_scale_")
+                .and_then(|s| s.parse::<usize>().ok())
+            {
+                Some(n) => parallel_sum(n, || integer_rate(budget)),
+                None => bail!("unknown cpu subtest: {other}"),
+            },
         })
     }
 
@@ -256,26 +291,37 @@ mod tests {
 
     #[test]
     fn every_subtest_produces_a_positive_rate() {
-        let bench = CpuBenchmark;
-        let short = Duration::from_millis(20);
+        let bench = CpuBenchmark::new();
         for spec in bench.subtests() {
-            let value = match spec.id {
-                "int_single" => integer_rate(short),
-                "int_multi" => parallel_sum(2, || integer_rate(short)),
-                "float_single" => float_rate(short),
-                "float_multi" => parallel_sum(2, || float_rate(short)),
-                "hash" => hash_rate(short, 1),
-                "compress" => compress_rate(short, 1),
-                "aes_gcm" => aes_gcm_rate(short, 1),
-                "sha256" => sha256_rate(short, 1),
-                other => panic!("unhandled subtest {other}"),
-            };
+            let value = bench.run_subtest(spec.id, &ctx()).unwrap();
             assert!(value.is_finite() && value > 0.0, "{} -> {value}", spec.id);
         }
     }
 
     #[test]
+    fn scaling_points_sit_between_the_endpoints() {
+        let ids = |logical: usize| {
+            CpuBenchmark { logical }
+                .subtests()
+                .into_iter()
+                .filter_map(|s| s.id.strip_prefix("int_scale_").map(str::to_string))
+                .collect::<Vec<_>>()
+        };
+        assert!(ids(1).is_empty());
+        assert!(ids(2).is_empty());
+        assert_eq!(ids(4), ["2"]);
+        assert_eq!(ids(8), ["2", "4"]);
+        assert_eq!(ids(12), ["2", "4", "8"]);
+        assert_eq!(ids(64), ["2", "4", "8", "16", "32"]);
+    }
+
+    #[test]
     fn dispatch_rejects_unknown_subtest() {
-        assert!(CpuBenchmark.run_subtest("nope", &ctx()).is_err());
+        assert!(CpuBenchmark::new().run_subtest("nope", &ctx()).is_err());
+        assert!(
+            CpuBenchmark::new()
+                .run_subtest("int_scale_x", &ctx())
+                .is_err()
+        );
     }
 }
