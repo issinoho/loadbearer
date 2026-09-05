@@ -69,7 +69,8 @@ things to trust, not the original CI attestation.
 CI also detached-signs `SHA256SUMS` (as it first publishes it) with a GPG key
 dedicated to loadbearer releases — not Iain's personal key:
 
-- Fingerprint: `400F 0EDE 6DC5 8B44 D73C  9EB0 BB61 A33B CE78 3563`
+- Fingerprint: `C348 2C91 6797 D77F 3892  6A77 273E 45FB 7B21 B6C2`
+  (RSA 4096, expires 2028-09-04)
 - Public key: [`loadbearer-release-signing.asc`](loadbearer-release-signing.asc)
   in this repo
 

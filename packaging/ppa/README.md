@@ -11,22 +11,25 @@ have **no network**, so the source has to carry every crate with it.
 
 ## One-time setup
 
-1. **A GPG key registered with Launchpad.** Use the existing loadbearer
-   release-signing key — `BB61A33BCE783563`, the one CI signs `SHA256SUMS`
-   with (see `CODE_SIGNING_POLICY.md`). Nothing separate needs generating, but
-   its private half only exists wherever it was created; `gpg --list-secret-keys
-   BB61A33BCE783563` tells you whether the machine you are on has it.
+1. **A GPG key registered with Launchpad.** Use the loadbearer release-signing
+   key — `273E45FB7B21B6C2`, the one CI signs `SHA256SUMS` with (see
+   `CODE_SIGNING_POLICY.md`). Its private half lives in `~/.gnupg` on the
+   development machine; `gpg --list-secret-keys 273E45FB7B21B6C2` should show a
+   `sec` line.
 
-   Launchpad fetches the key rather than taking it inline, so publish it first:
+   Launchpad fetches the key from a keyserver rather than taking it inline, so
+   publish it first:
 
    ```
-   gpg --keyserver keyserver.ubuntu.com --send-keys BB61A33BCE783563
+   gpg --keyserver keyserver.ubuntu.com --send-keys 273E45FB7B21B6C2
    ```
 
    Then paste the fingerprint at <https://launchpad.net/~/+editpgpkeys>.
-   Launchpad confirms by emailing a token encrypted to the key, which lands at
-   the address in its UID (`iain@issinoho.com`) — decrypt it and follow the
-   link. Not instant, so do it before you need it.
+   Launchpad confirms by emailing a token **encrypted to the key**, which is
+   why this one carries an encryption subkey and not just a signing one — a
+   sign-only key cannot complete the step. The mail goes to the address in the
+   key's UID (`iain@issinoho.com`); decrypt it and follow the link. Not
+   instant, so do it before you need it.
 
 2. **Create the PPA** at <https://launchpad.net/~issinoho/+activate-ppa>, named
    `loadbearer`. That gives `ppa:issinoho/loadbearer`.
