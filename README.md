@@ -215,7 +215,13 @@ sudo apt install loadbearer
 ```
 
 Upgrades then arrive through `apt` along with everything else on the machine.
-Built for 22.04 (jammy), 24.04 (noble) and 26.04 (resolute), amd64.
+Built for 22.04 (jammy), 24.04 (noble) and 26.04 (resolute), on amd64 and
+arm64.
+
+On arm64 the CPU `aes_gcm` and `sha256` subtests read low, because the build
+doesn't use Arm crypto instructions — the same caveat as
+[macOS (Apple Silicon)](#macos-apple-silicon) below. Those two subtests aren't
+comparable against an x86 machine's; the rest of the run is.
 
 ### Debian / Ubuntu (standalone `.deb`)
 

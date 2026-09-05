@@ -356,14 +356,17 @@ Disks
       </div>
 
       <div class="install-card">
-        <h3>🐧 Linux (x86-64)</h3>
-        <p>On Ubuntu 22.04, 24.04 or 26.04, install from the PPA and get
-        updates through <code>apt</code> with everything else:</p>
+        <h3>🐧 Linux</h3>
+        <p>On Ubuntu 22.04, 24.04 or 26.04 — amd64 or arm64 — install from the
+        PPA and get updates through <code>apt</code> with everything else:</p>
         <pre>sudo add-apt-repository ppa:issinoho/loadbearer
 sudo apt install loadbearer</pre>
-        <p>Elsewhere: extract the tarball and run <code>./loadbearer</code>, or
-        grab the standalone <code>.deb</code> attached to each release, or
-        install from source:</p>
+        <p>On arm64 the CPU <code>aes_gcm</code> and <code>sha256</code>
+        subtests read low, as on Apple Silicon — the build doesn't use Arm
+        crypto instructions, and the result says so.</p>
+        <p>Elsewhere: extract the x86-64 tarball and run
+        <code>./loadbearer</code>, or grab the standalone <code>.deb</code>
+        attached to each release, or install from source:</p>
         <pre>cargo install --git https://github.com/issinoho/loadbearer --locked</pre>
         <a class="btn btn-ghost" data-dl="linux" href="https://github.com/issinoho/loadbearer/releases/latest">Download .tar.gz</a>
       </div>
