@@ -50,8 +50,10 @@ dput ppa:issinoho/loadbearer ../ppa-1.2.2/loadbearer_1.2.2-1~noble1_source.chang
 dput ppa:issinoho/loadbearer ../ppa-1.2.2/loadbearer_1.2.2-1~resolute1_source.changes
 ```
 
-Run them. Launchpad emails an acceptance or rejection within a minute or two,
-then queues the builds; watch them at
+The script itself takes about five minutes -- roughly half vendoring and
+writing the tarball, half lintian walking the 267 vendored crates. Run the
+`dput` lines it prints. Launchpad emails an acceptance or rejection within a
+minute or two, then queues the builds; watch them at
 <https://launchpad.net/~issinoho/+archive/ubuntu/loadbearer/+packages>. A full
 build takes roughly ten minutes per series.
 
@@ -71,12 +73,19 @@ not accept the result.
   is present and points cargo at it, so the same `debian/` works both on a
   networked CI runner and on a Launchpad builder.
 
-- **Prunes prebuilt binaries** from the vendor tree. Raw, it is about 440 MB,
-  three quarters of which is Windows import libraries (`.a`/`.lib`) that a
-  Launchpad builder will never link against. Removing them invalidates cargo's
-  per-file hashes, so each `.cargo-checksum.json` is rewritten with an empty
-  `files` map — cargo's documented way of saying "this crate was repackaged,
-  check the `.crate` hash only". The result is a ~36 MB `.orig.tar.gz`.
+- **Prunes prebuilt binaries** from the vendor tree. Raw it is about 440 MB,
+  of which some 154 MB is Windows import libraries (`.a`/`.lib`) that a
+  Launchpad builder will never link against; most of the rest is the generated
+  Rust source of the `windows` crates, which compresses away to almost nothing.
+  Removing files invalidates cargo's per-file hashes, so each
+  `.cargo-checksum.json` is rewritten with an empty `files` map — cargo's
+  documented way of saying "this crate was repackaged, check the `.crate` hash
+  only". The result is a ~36 MB `.orig.tar.gz`.
+
+  The per-crate `Cargo.toml.orig` files go the same way. Nothing reads them at
+  build time, and `dh_clean` deletes every `*.orig` in the tree during the
+  clean step — so keeping them would make the build tree diverge from the
+  tarball as soon as anything was built from it.
 
 - **Builds one orig tarball and reuses it for every series.** Launchpad keys
   the tarball by filename and rejects a second upload of the same name with

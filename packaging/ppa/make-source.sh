@@ -106,13 +106,20 @@ rm -rf "$SRCDIR/debian"
 echo "==> vendoring crates (this needs network; the builders will not have it)"
 ( cd "$SRCDIR" && cargo vendor --locked --versioned-dirs vendor >/dev/null )
 
-# A raw vendor tree is ~440 MB, three quarters of which is prebuilt Windows
-# import libraries that a Launchpad builder will never link against. Drop every
-# such blob: it keeps the upload to a sane size and keeps precompiled binaries
-# out of a source package, which is what a source package is for.
+# A raw vendor tree is ~440 MB, of which ~154 MB is prebuilt Windows import
+# libraries that a Launchpad builder will never link against. Drop every such
+# blob: it keeps the upload to a sane size and keeps precompiled binaries out
+# of a source package, which is what a source package is for.
+#
+# Cargo.toml.orig goes too. cargo vendor writes one beside each crate's
+# normalised Cargo.toml and nothing in a build reads it, but dh_clean deletes
+# every *.orig in the tree during the clean step -- so leaving them in makes
+# the build tree diverge from the tarball the moment anything is built from it,
+# and buries the real dpkg-source output under one deletion warning per crate.
 echo "==> pruning prebuilt binaries from vendor/"
 find "$SRCDIR/vendor" -type f \
-	\( -name '*.a' -o -name '*.lib' -o -name '*.dll' -o -name '*.exe' -o -name '*.pdb' \) \
+	\( -name '*.a' -o -name '*.lib' -o -name '*.dll' -o -name '*.exe' -o -name '*.pdb' \
+	   -o -name 'Cargo.toml.orig' \) \
 	-delete
 
 # Removing files invalidates the per-file hashes cargo checks on every build.

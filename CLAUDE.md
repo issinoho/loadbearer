@@ -113,7 +113,7 @@ Transient `Could not resolve host: github.com` happens — just retry.
   goes offline and points cargo at it — which is how the PPA source package
   carries its dependencies onto a network-less Launchpad builder.
 - `packaging/ppa/` — `make-source.sh` builds the per-series signed source
-  packages (vendors the crates, prunes the ~330 MB of prebuilt Windows blobs,
+  packages (vendors the crates, prunes the ~154 MB of prebuilt Windows blobs,
   one shared `.orig.tar.gz`, `1.2.2-1~noble1` versioning); `README.md` there is
   the full procedure. Manual, like Windows signing — it needs the GPG key.
   Nothing about it runs in CI.
