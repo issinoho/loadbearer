@@ -68,6 +68,15 @@ git rev-parse --verify --quiet "$REF^{commit}" >/dev/null || {
 	exit 1
 }
 
+# Tags cut before the Debian packaging landed have no debian/ at all, and the
+# failure otherwise surfaces as an opaque complaint from git show.
+git cat-file -e "$REF:debian/changelog" 2>/dev/null || {
+	echo "error: '$REF' contains no debian/changelog -- the Debian packaging was added" >&2
+	echo "       after that ref, so there is nothing there to build a source package from." >&2
+	echo "       Use a ref that has it (--ref main), or a later tag." >&2
+	exit 1
+}
+
 # Read both versions out of the ref rather than the working tree, so that
 # packaging an old tag from a dirty checkout still describes that tag.
 VERSION="$(git show "$REF:Cargo.toml" | sed -n 's/^version *= *"\(.*\)"/\1/p' | head -n1)"
