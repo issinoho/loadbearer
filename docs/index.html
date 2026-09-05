@@ -357,8 +357,13 @@ Disks
 
       <div class="install-card">
         <h3>🐧 Linux (x86-64)</h3>
-        <p>Extract the tarball and run <code>./loadbearer</code>, or install from
-        source:</p>
+        <p>On Ubuntu 22.04, 24.04 or 26.04, install from the PPA and get
+        updates through <code>apt</code> with everything else:</p>
+        <pre>sudo add-apt-repository ppa:issinoho/loadbearer
+sudo apt install loadbearer</pre>
+        <p>Elsewhere: extract the tarball and run <code>./loadbearer</code>, or
+        grab the standalone <code>.deb</code> attached to each release, or
+        install from source:</p>
         <pre>cargo install --git https://github.com/issinoho/loadbearer --locked</pre>
         <a class="btn btn-ghost" data-dl="linux" href="https://github.com/issinoho/loadbearer/releases/latest">Download .tar.gz</a>
       </div>

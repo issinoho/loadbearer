@@ -207,9 +207,20 @@ Windows `.zip` once that's been re-signed, since signing changes its bytes —
 expected, not a red flag. Full details, including why, are in
 [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md).
 
-### Debian / Ubuntu
+### Ubuntu (PPA)
 
-Download `loadbearer_<version>-1_amd64.deb` from the
+```
+sudo add-apt-repository ppa:issinoho/loadbearer
+sudo apt install loadbearer
+```
+
+Upgrades then arrive through `apt` along with everything else on the machine.
+Built for 22.04 (jammy), 24.04 (noble) and 26.04 (resolute), amd64.
+
+### Debian / Ubuntu (standalone `.deb`)
+
+For Debian, or an Ubuntu series the PPA doesn't cover, download
+`loadbearer_<version>-1_amd64.deb` from the
 [latest release](https://github.com/issinoho/loadbearer/releases/latest) and
 install it:
 

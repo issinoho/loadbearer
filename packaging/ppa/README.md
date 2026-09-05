@@ -151,20 +151,3 @@ not accept the result.
   every source package at once, so allow a couple of GB free on the output
   directory's filesystem. The script keeps lintian's scratch space there rather
   than under `/tmp`, which on a normal desktop is a tmpfs far too small for it.
-
-## When the PPA is live
-
-Add this to `README.md`, above the Debian/Ubuntu `.deb` section — it is left
-out until the PPA exists so the instructions never point at a 404:
-
-````markdown
-### Ubuntu (PPA)
-
-```
-sudo add-apt-repository ppa:issinoho/loadbearer
-sudo apt install loadbearer
-```
-
-Upgrades then arrive through `apt` like anything else. Supported on 22.04
-(jammy), 24.04 (noble) and 26.04 (resolute).
-````
