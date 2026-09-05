@@ -95,7 +95,7 @@ jobs:
         # Skip on a throwaway workflow_dispatch build (same gate as the release
         # job) so a test run leaves no public attestation behind.
         if: github.event_name == 'push' || inputs.publish_release
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             loadbearer-*.zip
@@ -152,7 +152,7 @@ jobs:
 
       - name: Attest build provenance
         if: github.event_name == 'push' || inputs.publish_release
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: deb/*.deb
 
