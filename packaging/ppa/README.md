@@ -37,7 +37,14 @@ have **no network**, so the source has to carry every crate with it.
    Under the PPA's *Change details* → *Processors*, enable `arm64` alongside
    `amd64` if you want Arm builds; PPAs default to amd64 only.
 
-3. **Local tools**:
+3. **An SSH key registered with Launchpad**, at
+   <https://launchpad.net/~/+editsshkeys>. This is not optional: Launchpad has
+   retired anonymous FTP uploads — `ppa.launchpad.net:21` still accepts a TCP
+   connection but never sends a banner, so `dput ppa:...` hangs and then
+   reports `Connection failed, aborting. Check your network`, which is
+   misleading. Uploads go over SFTP, authenticated by this key.
+
+4. **Local tools**:
 
    ```
    sudo apt install dpkg-dev dput lintian
@@ -45,8 +52,16 @@ have **no network**, so the source has to carry every crate with it.
 
    `devscripts` is not required — the script drives `dpkg-buildpackage`
    directly and signs through it, so there is no `debuild`/`debsign` in the
-   path. `dput` understands the `ppa:owner/name` shorthand out of the box, so
-   there is no `.dput.cf` to write.
+   path.
+
+   `dput` ships an `ssh-ppa` profile that is correct except for `login = *`,
+   which it resolves to `$USER` — the local account name, not the Launchpad
+   one. Override it once in `~/.dput.cf`:
+
+   ```
+   [ssh-ppa]
+   login = issinoho
+   ```
 
 ## Per release
 
@@ -63,10 +78,12 @@ because `dpkg-buildpackage` warns about anything shorter.
 That writes to `../ppa-1.2.2/` and finishes by printing the upload commands:
 
 ```
-dput ppa:issinoho/loadbearer ../ppa-1.2.2/loadbearer_1.2.2-1~jammy1_source.changes
-dput ppa:issinoho/loadbearer ../ppa-1.2.2/loadbearer_1.2.2-1~noble1_source.changes
-dput ppa:issinoho/loadbearer ../ppa-1.2.2/loadbearer_1.2.2-1~resolute1_source.changes
+dput ssh-ppa:issinoho/loadbearer ../ppa-1.2.2/loadbearer_1.2.2-1~jammy1_source.changes
+dput ssh-ppa:issinoho/loadbearer ../ppa-1.2.2/loadbearer_1.2.2-1~noble1_source.changes
+dput ssh-ppa:issinoho/loadbearer ../ppa-1.2.2/loadbearer_1.2.2-1~resolute1_source.changes
 ```
+
+Note `ssh-ppa:`, not `ppa:` — the latter is the dead FTP path.
 
 The script itself takes about five minutes -- roughly half vendoring and
 writing the tarball, half lintian walking the 267 vendored crates. Run the
