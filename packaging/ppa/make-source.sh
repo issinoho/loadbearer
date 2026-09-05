@@ -218,7 +218,9 @@ else
 fi
 
 echo
+# ssh-ppa, not ppa: Launchpad retired anonymous FTP upload, and the ppa
+# profile still points at it -- it hangs, then blames the network.
 echo "Done. Upload with:"
 for c in "${CHANGES[@]}"; do
-	echo "  dput ppa:issinoho/loadbearer $c"
+	echo "  dput ssh-ppa:issinoho/loadbearer $c"
 done
