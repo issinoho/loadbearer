@@ -24,6 +24,15 @@ Clippy on CI's toolchain is sometimes stricter than a local one — if in doubt
 
 ## Cutting a release
 
+`scripts/cut-release.sh X.Y.Z` does all of this — bump, changelogs, checks,
+tag, wait for CI, then the PPA source packages, their upload and the Launchpad
+builds. Write the `CHANGELOG.md` section first (it refuses to invent release
+notes) and leave it uncommitted; the script commits it. `--dry-run` prints the
+whole plan without touching anything, `--ppa-only` picks up an already-published
+release, `--skip-ppa` stops at the GitHub release. It confirms separately before
+the tag push and before the upload, so stopping at either leaves nothing to
+undo. The steps by hand, which is what it automates:
+
 1. Bump `version` in `Cargo.toml`.
 2. Add a `## X.Y.Z - <date>` section at the top of `CHANGELOG.md` (the release
    workflow extracts this section verbatim for the GitHub Release body).

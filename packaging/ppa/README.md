@@ -65,6 +65,10 @@ have **no network**, so the source has to carry every crate with it.
 
 ## Per release
 
+Normally this is `scripts/cut-release.sh X.Y.Z`, which runs everything below
+behind a preflight — see CLAUDE.md. What follows is what it does, and what to
+run when something needs doing by hand.
+
 After the tag is pushed and CI has published the GitHub release:
 
 ```
