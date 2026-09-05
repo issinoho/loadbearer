@@ -11,11 +11,22 @@ have **no network**, so the source has to carry every crate with it.
 
 ## One-time setup
 
-1. **Launchpad account** with a **GPG key registered and confirmed** at
-   <https://launchpad.net/~/+editpgpkeys>. Launchpad verifies the key by
-   emailing an encrypted token, so this is not instant — do it before you need
-   it. This is the same key already used to sign `SHA256SUMS` on the GitHub
-   releases (see `CODE_SIGNING_POLICY.md`); nothing separate is needed.
+1. **A GPG key registered with Launchpad.** Use the existing loadbearer
+   release-signing key — `BB61A33BCE783563`, the one CI signs `SHA256SUMS`
+   with (see `CODE_SIGNING_POLICY.md`). Nothing separate needs generating, but
+   its private half only exists wherever it was created; `gpg --list-secret-keys
+   BB61A33BCE783563` tells you whether the machine you are on has it.
+
+   Launchpad fetches the key rather than taking it inline, so publish it first:
+
+   ```
+   gpg --keyserver keyserver.ubuntu.com --send-keys BB61A33BCE783563
+   ```
+
+   Then paste the fingerprint at <https://launchpad.net/~/+editpgpkeys>.
+   Launchpad confirms by emailing a token encrypted to the key, which lands at
+   the address in its UID (`iain@issinoho.com`) — decrypt it and follow the
+   link. Not instant, so do it before you need it.
 
 2. **Create the PPA** at <https://launchpad.net/~issinoho/+activate-ppa>, named
    `loadbearer`. That gives `ppa:issinoho/loadbearer`.
