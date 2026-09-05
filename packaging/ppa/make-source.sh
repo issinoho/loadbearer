@@ -158,7 +158,15 @@ ls -l "$ORIG" | awk '{printf "    %.1f MB\n", $5/1048576}'
 # ------------------------------------------------------------ source packages
 
 if [ -n "$KEY" ]; then
-	SIGN_ARGS=(-k"$KEY")
+	# dpkg-buildpackage warns on anything shorter than a fingerprint, so accept
+	a short id, long id or email and hand it the fingerprint regardless.
+	FPR="$(gpg --with-colons --list-keys "$KEY" 2>/dev/null | awk -F: '$1=="fpr"{print $10; exit}')"
+	if [ -z "$FPR" ]; then
+		echo "error: no GPG key in your keyring matches '$KEY'" >&2
+		exit 1
+	fi
+	echo "==> signing with $FPR"
+	SIGN_ARGS=(-k"$FPR")
 else
 	SIGN_ARGS=(-us -uc)
 	echo "==> WARNING: no --key given; the source packages will be unsigned"
@@ -189,12 +197,22 @@ rm -rf "$SRCDIR"
 
 if command -v lintian >/dev/null; then
 	echo "==> lintian"
+	# lintian unpacks each source package in full -- some 300 MB apiece once the
+	# vendored crates are expanded -- and does it under TMPDIR, which on a normal
+	# desktop is a tmpfs a fraction of RAM in size. Point it at the output
+	# directory's filesystem instead, or three series in one run exhausts /tmp
+	# and dpkg-source fails with a bare non-zero status.
+	LINTIAN_TMP="$OUTDIR/.lintian-tmp"
+	rm -rf "$LINTIAN_TMP"
+	mkdir -p "$LINTIAN_TMP"
 	# Warnings are expected (a PPA upload closes no bug and vendors its
 	# dependencies); only errors should stop an upload.
-	lintian --fail-on error "${CHANGES[@]}" || {
+	TMPDIR="$LINTIAN_TMP" lintian --fail-on error "${CHANGES[@]}" || {
+		rm -rf "$LINTIAN_TMP"
 		echo "error: lintian found errors -- not printing upload commands" >&2
 		exit 1
 	}
+	rm -rf "$LINTIAN_TMP"
 else
 	echo "==> lintian not installed, skipping the check"
 fi

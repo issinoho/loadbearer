@@ -53,8 +53,12 @@ have **no network**, so the source has to carry every crate with it.
 After the tag is pushed and CI has published the GitHub release:
 
 ```
-packaging/ppa/make-source.sh --ref v1.2.2 --key <your-key-id>
+packaging/ppa/make-source.sh --ref v1.2.2 --key 273E45FB7B21B6C2
 ```
+
+`--key` takes any spelling gpg understands — short id, long id, fingerprint or
+email — and the script resolves it to a fingerprint before handing it on,
+because `dpkg-buildpackage` warns about anything shorter.
 
 That writes to `../ppa-1.2.2/` and finishes by printing the upload commands:
 
@@ -123,6 +127,13 @@ not accept the result.
   a new series still has it before adding it to `--series`.
 - **Source-only uploads.** Launchpad builds the binaries itself; never upload a
   `.deb`.
+- **gpg prompts once per run.** Dismiss or time out the passphrase prompt and
+  the build dies at `signfile` with `gpg: signing failed: Operation cancelled`,
+  after the vendoring work is already done. Just run it again.
+- **It needs room.** The vendored tree is ~300 MB unpacked, and lintian expands
+  every source package at once, so allow a couple of GB free on the output
+  directory's filesystem. The script keeps lintian's scratch space there rather
+  than under `/tmp`, which on a normal desktop is a tmpfs far too small for it.
 
 ## When the PPA is live
 
