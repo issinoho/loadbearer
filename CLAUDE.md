@@ -27,13 +27,17 @@ Clippy on CI's toolchain is sometimes stricter than a local one — if in doubt
 1. Bump `version` in `Cargo.toml`.
 2. Add a `## X.Y.Z - <date>` section at the top of `CHANGELOG.md` (the release
    workflow extracts this section verbatim for the GitHub Release body).
+2b. Add a `debian/changelog` entry for `X.Y.Z-1` (`dch -v X.Y.Z-1`, or by
+   hand in the same format). The `.deb` takes its version from here, so the
+   `build-deb` job **fails the release** if this doesn't match `Cargo.toml`
+   rather than shipping a package labelled with the previous version.
 3. Update `README.md` / `docs/` / the wiki if the change is user-visible.
 4. Commit, then `git tag -a vX.Y.Z -m "..."`.
 5. Push with tags: `git push <remote> main --follow-tags`.
 
 `.github/workflows/release.yml` fires on the `v*` tag and builds+attaches the
-Windows `.zip` and Linux `.tar.gz`, attaches a build-provenance attestation to
-each, GPG-signs `SHA256SUMS` (`SHA256SUMS.asc`, once `GPG_PRIVATE_KEY` /
+Windows `.zip`, the Linux `.tar.gz` and a Debian/Ubuntu `.deb`, attaches a
+build-provenance attestation to each, GPG-signs `SHA256SUMS` (`SHA256SUMS.asc`, once `GPG_PRIVATE_KEY` /
 `GPG_PASSPHRASE` are set — key details in `CODE_SIGNING_POLICY.md`), and
 (once `WINGET_TOKEN` is set and `Issinoho.Loadbearer` exists in
 `microsoft/winget-pkgs`) opens the winget version-bump PR. Nothing else to do
@@ -97,6 +101,12 @@ Transient `Could not resolve host: github.com` happens — just retry.
 - `src/tui/` — `mod.rs` (event loop + worker thread for `run`), `app.rs` (state),
   `view.rs` (run + results + soak screens), `compare.rs` (the compare view).
 - `src/output/` — plain-text and JSON rendering for non-TUI paths.
+- `debian/` — Debian/Ubuntu packaging. Built by CI's `build-deb` job against
+  the archive's *versioned* Rust toolchain (`rustc-1.91`/`cargo-1.91`), not
+  rustup, because the default `rustc` on every current series is older than
+  the MSRV. `debian/rules` finds `/usr/lib/rust-<ver>/bin` itself and goes
+  offline automatically if a `vendor/` directory is present, which is how a
+  PPA source build would carry its dependencies.
 - `src/cli.rs` — clap definitions. `src/run.rs` — resolves settings (CLI >
   config > default) and dispatches.
 

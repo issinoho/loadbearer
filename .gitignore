@@ -3,3 +3,12 @@
 result*.json
 /scratch
 .loadbearer-scratch.*
+
+# Debian packaging build artifacts (debian/rules' own output, not sources)
+/debian/.debhelper/
+/debian/cargo-home/
+/debian/loadbearer/
+/debian/files
+/debian/*.substvars
+/debian/*.debhelper.log
+/debian/debhelper-build-stamp

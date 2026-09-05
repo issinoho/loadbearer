@@ -109,8 +109,61 @@ jobs:
             loadbearer-*.tar.gz
           if-no-files-found: error
 
+  build-deb:
+    # Built the way a distribution would -- against the archive's own
+    # versioned Rust toolchain rather than rustup -- so this job doubles as a
+    # rehearsal for the PPA source build, which has neither rustup nor network.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install packaging tools and a new enough Rust
+        # The default rustc on every current series predates loadbearer's MSRV
+        # of 1.88; the versioned toolchain packages are the supported way to
+        # get a newer one. Keep this in step with debian/control's alternatives.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            debhelper dpkg-dev lintian rustc-1.91 cargo-1.91
+
+      - name: Check debian/changelog agrees with Cargo.toml
+        # The .deb takes its version from debian/changelog, so a forgotten
+        # entry would ship a package labelled with the previous release.
+        run: |
+          cargo_v="$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)"
+          deb_v="$(dpkg-parsechangelog -SVersion | sed 's/-[^-]*$//')"
+          echo "Cargo.toml=$cargo_v  debian/changelog=$deb_v"
+          if [ "$cargo_v" != "$deb_v" ]; then
+            echo "::error::debian/changelog is at $deb_v but Cargo.toml is at $cargo_v -- add a changelog entry (see CLAUDE.md, 'Cutting a release')."
+            exit 1
+          fi
+
+      - name: Build the .deb
+        run: dpkg-buildpackage -b -us -uc
+
+      - name: Collect and check it
+        run: |
+          mkdir -p deb
+          cp ../loadbearer_*.deb deb/
+          # Prints warnings but fails only on errors: a first upload always
+          # warns that it closes no ITP bug, which is true and not a defect.
+          lintian --fail-on error deb/*.deb
+          dpkg-deb -c deb/*.deb
+
+      - name: Attest build provenance
+        if: github.event_name == 'push' || inputs.publish_release
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: deb/*.deb
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: debian-package
+          path: deb/*.deb
+          if-no-files-found: error
+
   release:
-    needs: build
+    needs: [build, build-deb]
     if: github.event_name == 'push' || inputs.publish_release
     runs-on: ubuntu-latest
     env:
@@ -141,7 +194,7 @@ jobs:
       - name: Flatten artifacts into one directory
         run: |
           mkdir -p release-assets
-          find artifacts -type f \( -name '*.zip' -o -name '*.tar.gz' \) -exec cp {} release-assets/ \;
+          find artifacts -type f \( -name '*.zip' -o -name '*.tar.gz' -o -name '*.deb' \) -exec cp {} release-assets/ \;
           ls -l release-assets
 
       - name: Checksums
@@ -150,7 +203,7 @@ jobs:
         # (hash rules permit an unsigned binary; publisher rules don't).
         run: |
           cd release-assets
-          sha256sum *.zip *.tar.gz > SHA256SUMS
+          sha256sum *.zip *.tar.gz *.deb > SHA256SUMS
           for z in *.zip; do
             unzip -p "$z" '*/loadbearer.exe' | sha256sum \
               | sed "s#-#loadbearer.exe  (inside $z)#" >> SHA256SUMS
@@ -158,6 +211,10 @@ jobs:
           for t in *.tar.gz; do
             tar -xzOf "$t" --wildcards '*/loadbearer' | sha256sum \
               | sed "s#-#loadbearer  (inside $t)#" >> SHA256SUMS
+          done
+          for d in *.deb; do
+            dpkg-deb --fsys-tarfile "$d" | tar -xOf - ./usr/bin/loadbearer | sha256sum \
+              | sed "s#-#loadbearer  (inside $d)#" >> SHA256SUMS
           done
           cat SHA256SUMS
 

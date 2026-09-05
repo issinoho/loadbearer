@@ -1,0 +1,6 @@
+loadbearer (1.2.2-1) unstable; urgency=medium
+
+  * Initial Debian packaging, so releases can ship a .deb alongside the
+    tarball and the same source can be uploaded to a PPA.
+
+ -- Iain Smith <iain@issinoho.com>  Sat, 05 Sep 2026 00:30:00 +0100

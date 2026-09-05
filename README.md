@@ -207,7 +207,21 @@ Windows `.zip` once that's been re-signed, since signing changes its bytes —
 expected, not a red flag. Full details, including why, are in
 [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md).
 
-### Linux
+### Debian / Ubuntu
+
+Download `loadbearer_<version>-1_amd64.deb` from the
+[latest release](https://github.com/issinoho/loadbearer/releases/latest) and
+install it:
+
+```
+sudo apt install ./loadbearer_<version>-1_amd64.deb
+```
+
+That puts `loadbearer` on your `PATH` and installs the man page
+(`man loadbearer`) and completions for bash, zsh and fish. It depends only on
+the C runtime, so there's nothing else to pull in.
+
+### Linux (any distribution)
 
 Download `loadbearer-<version>-x86_64-unknown-linux-gnu.tar.gz` from the
 [latest release](https://github.com/issinoho/loadbearer/releases/latest),

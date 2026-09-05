@@ -1,0 +1,55 @@
+#!/usr/bin/make -f
+
+# The distribution's default rustc is older than loadbearer's MSRV of 1.88 on
+# every current series, so the build depends on a versioned toolchain instead.
+# Those install to /usr/lib/rust-<version>/bin rather than onto PATH; pick the
+# newest one that is new enough, and compare versions with dpkg rather than
+# sort -V so that 1.9 can never be mistaken for a successor to 1.88.
+RUST_BIN := $(shell for d in /usr/lib/rust-*/bin; do \
+	[ -x "$$d/cargo" ] || continue; \
+	v=$${d#/usr/lib/rust-}; v=$${v%/bin}; \
+	dpkg --compare-versions "$$v" ge 1.88 && echo "$$v $$d"; \
+	done | sort -V | tail -n1 | cut -d' ' -f2)
+
+ifneq ($(RUST_BIN),)
+export PATH := $(RUST_BIN):$(PATH)
+endif
+
+# Keep cargo's state inside the build tree: a build must not write to the
+# builder's home directory, and the PPA builders have no network at all.
+export CARGO_HOME = $(CURDIR)/debian/cargo-home
+export CARGO_TARGET_DIR = $(CURDIR)/target
+
+# Offline only when the source ships a vendor directory, which is how the
+# PPA source package carries its dependencies. A CI build has network and
+# resolves from crates.io as usual.
+ifneq ($(wildcard vendor),)
+export CARGO_NET_OFFLINE = true
+CARGO_FLAGS = --offline
+endif
+
+BUILDDIR = target/release
+DESTDIR = debian/loadbearer
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	cargo build --release --locked $(CARGO_FLAGS)
+
+override_dh_auto_test:
+	cargo test --release --locked $(CARGO_FLAGS)
+
+override_dh_auto_install:
+	install -D -m 0755 $(BUILDDIR)/loadbearer $(DESTDIR)/usr/bin/loadbearer
+	install -D -m 0644 $(BUILDDIR)/loadbearer.1 $(DESTDIR)/usr/share/man/man1/loadbearer.1
+	# build.rs renders these next to the binary; each shell wants its own path,
+	# and bash/zsh expect the file to be named after the command.
+	install -D -m 0644 $(BUILDDIR)/loadbearer.bash $(DESTDIR)/usr/share/bash-completion/completions/loadbearer
+	install -D -m 0644 $(BUILDDIR)/_loadbearer $(DESTDIR)/usr/share/zsh/vendor-completions/_loadbearer
+	install -D -m 0644 $(BUILDDIR)/loadbearer.fish $(DESTDIR)/usr/share/fish/vendor_completions.d/loadbearer.fish
+	install -D -m 0644 loadbearer.example.toml $(DESTDIR)/usr/share/doc/loadbearer/examples/loadbearer.example.toml
+
+override_dh_auto_clean:
+	rm -rf debian/cargo-home
+	cargo clean $(CARGO_FLAGS) || true
