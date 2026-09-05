@@ -159,7 +159,7 @@ ls -l "$ORIG" | awk '{printf "    %.1f MB\n", $5/1048576}'
 
 if [ -n "$KEY" ]; then
 	# dpkg-buildpackage warns on anything shorter than a fingerprint, so accept
-	a short id, long id or email and hand it the fingerprint regardless.
+	# a short id, long id or email and hand it the fingerprint regardless.
 	FPR="$(gpg --with-colons --list-keys "$KEY" 2>/dev/null | awk -F: '$1=="fpr"{print $10; exit}')"
 	if [ -z "$FPR" ]; then
 		echo "error: no GPG key in your keyring matches '$KEY'" >&2
