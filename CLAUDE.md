@@ -34,6 +34,10 @@ Clippy on CI's toolchain is sometimes stricter than a local one — if in doubt
 3. Update `README.md` / `docs/` / the wiki if the change is user-visible.
 4. Commit, then `git tag -a vX.Y.Z -m "..."`.
 5. Push with tags: `git push <remote> main --follow-tags`.
+6. Once the release is published, upload to the PPA:
+   `packaging/ppa/make-source.sh --ref vX.Y.Z --key <key>`, then the `dput`
+   lines it prints. Not something to do from here — it needs the signing key.
+   See `packaging/ppa/README.md`.
 
 `.github/workflows/release.yml` fires on the `v*` tag and builds+attaches the
 Windows `.zip`, the Linux `.tar.gz` and a Debian/Ubuntu `.deb`, attaches a
@@ -101,12 +105,18 @@ Transient `Could not resolve host: github.com` happens — just retry.
 - `src/tui/` — `mod.rs` (event loop + worker thread for `run`), `app.rs` (state),
   `view.rs` (run + results + soak screens), `compare.rs` (the compare view).
 - `src/output/` — plain-text and JSON rendering for non-TUI paths.
-- `debian/` — Debian/Ubuntu packaging. Built by CI's `build-deb` job against
-  the archive's *versioned* Rust toolchain (`rustc-1.91`/`cargo-1.91`), not
-  rustup, because the default `rustc` on every current series is older than
-  the MSRV. `debian/rules` finds `/usr/lib/rust-<ver>/bin` itself and goes
-  offline automatically if a `vendor/` directory is present, which is how a
-  PPA source build would carry its dependencies.
+- `debian/` — Debian/Ubuntu packaging, shared by the release `.deb` and the
+  PPA. Built by CI's `build-deb` job against the archive's *versioned* Rust
+  toolchain (`rustc-1.91`/`cargo-1.91`), not rustup, because the default
+  `rustc` on every current series is older than the MSRV. `debian/rules` finds
+  `/usr/lib/rust-<ver>/bin` itself, and if a `vendor/` directory is present it
+  goes offline and points cargo at it — which is how the PPA source package
+  carries its dependencies onto a network-less Launchpad builder.
+- `packaging/ppa/` — `make-source.sh` builds the per-series signed source
+  packages (vendors the crates, prunes the ~330 MB of prebuilt Windows blobs,
+  one shared `.orig.tar.gz`, `1.2.2-1~noble1` versioning); `README.md` there is
+  the full procedure. Manual, like Windows signing — it needs the GPG key.
+  Nothing about it runs in CI.
 - `src/cli.rs` — clap definitions. `src/run.rs` — resolves settings (CLI >
   config > default) and dispatches.
 

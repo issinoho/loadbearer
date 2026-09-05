@@ -4,10 +4,12 @@ Priority: optional
 Maintainer: Iain Smith <iain@issinoho.com>
 # loadbearer's MSRV is 1.88 and it uses edition 2024, so the distribution's
 # default rustc is too old on every current series (noble ships 1.75). The
-# versioned toolchains are listed newest-first: apt takes the first
-# alternative it can install, which is 1.91 on noble-updates and 1.88 on
-# questing. The unversioned fallback is for builders that have a new enough
-# default, such as a CI runner using rustup.
+# versioned toolchains are listed newest-first and apt takes the first
+# alternative it can install: rustc-1.91/cargo-1.91 is published in universe
+# on every series a PPA would target (jammy, noble, resolute), so in practice
+# that is always the one chosen. The older alternatives and the unversioned
+# fallback cover a builder that has only an older snapshot, or a new enough
+# default -- a CI runner using rustup, say.
 Build-Depends: debhelper-compat (= 13),
                cargo-1.91 | cargo-1.89 | cargo-1.88 | cargo (>= 1.88),
                rustc-1.91 | rustc-1.89 | rustc-1.88 | rustc (>= 1.88)

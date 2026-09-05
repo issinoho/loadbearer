@@ -34,11 +34,24 @@ DESTDIR = debian/loadbearer
 %:
 	dh $@
 
+# cargo will only take a source replacement from a config file, so the
+# CARGO_NET_OFFLINE above is not on its own enough to build from vendor/.
+# Write the replacement into CARGO_HOME, which already lives inside the build
+# tree, rather than shipping a .cargo/config.toml that would silently redirect
+# an ordinary development build in a git checkout as well.
+override_dh_auto_configure:
+ifneq ($(wildcard vendor),)
+	mkdir -p $(CARGO_HOME)
+	printf '[source.crates-io]\nreplace-with = "vendored-sources"\n\n[source.vendored-sources]\ndirectory = "$(CURDIR)/vendor"\n' > $(CARGO_HOME)/config.toml
+endif
+
 override_dh_auto_build:
 	cargo build --release --locked $(CARGO_FLAGS)
 
 override_dh_auto_test:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
 	cargo test --release --locked $(CARGO_FLAGS)
+endif
 
 override_dh_auto_install:
 	install -D -m 0755 $(BUILDDIR)/loadbearer $(DESTDIR)/usr/bin/loadbearer
