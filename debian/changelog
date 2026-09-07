@@ -1,3 +1,9 @@
+loadbearer (1.2.3-1) unstable; urgency=medium
+
+  * New upstream release 1.2.3; see CHANGELOG.md for the details.
+
+ -- Iain Smith <iain@issinoho.com>  Mon, 07 Sep 2026 14:31:11 +0100
+
 loadbearer (1.2.2-1) unstable; urgency=medium
 
   * Initial Debian packaging, so releases can ship a .deb alongside the

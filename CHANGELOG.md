@@ -2,6 +2,42 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 1.2.3 - Mon, 7 Sep 2026
+
+A distribution release: new ways to install loadbearer and better ways to
+check what you installed. The benchmark code is untouched since 1.2.2 —
+`src/` is byte-for-byte identical — so scores and result files are directly
+comparable across the two.
+
+- **Debian/Ubuntu `.deb`.** Releases now attach
+  `loadbearer_<version>-1_amd64.deb` alongside the archives:
+  `sudo apt install ./loadbearer_1.2.3-1_amd64.deb` puts `loadbearer` on your
+  `PATH` with the man page (`man loadbearer`) and bash/zsh/fish completions.
+  It depends only on the C runtime. Built the way a distribution would build
+  it — against the archive's own versioned Rust toolchain rather than rustup —
+  and `lintian`-checked in CI.
+- **Ubuntu PPA.** `sudo add-apt-repository ppa:issinoho/loadbearer` then
+  `sudo apt install loadbearer`, after which upgrades arrive through `apt`
+  with everything else. Built for 22.04 (jammy), 24.04 (noble) and 26.04
+  (resolute), on amd64 and arm64. On arm64 the `aes_gcm` and `sha256` subtests
+  read low — the build doesn't use Arm crypto instructions — the same caveat
+  as Apple Silicon; the rest of the run is comparable.
+- **GPG-signed `SHA256SUMS`.** CI now attaches a detached `SHA256SUMS.asc`
+  signed with a key dedicated to loadbearer releases, for anyone who'd rather
+  trust a key than GitHub's Sigstore instance. Fingerprint and public key are
+  in [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md). It covers the checksums
+  as CI published them: the manual Windows re-sign regenerates `SHA256SUMS`
+  and removes the now-stale signature rather than leaving it covering
+  superseded hashes, so its absence on a release means that step has run.
+- **Windows code signing, written down.** The `.exe` is Authenticode-signed
+  with a Certum Open Source Code Signing certificate — by hand, shortly after
+  each release publishes, not by CI (the cloud certificate has no unattended
+  signing mode), so a release can be briefly unsigned right after tagging.
+  [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md) and the README now cover
+  what that means for SmartScreen, Smart App Control and WDAC/AppLocker rules,
+  and why the build-provenance attestation stops matching the Windows `.zip`
+  once it's been re-signed.
+
 ## 1.2.2 - Fri, 4 Sep 2026
 
 - **Intel Core Ultra 7 366H in the model reference table.** Adds a `[[cpu]]`
