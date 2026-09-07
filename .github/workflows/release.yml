@@ -121,10 +121,13 @@ jobs:
         # The default rustc on every current series predates loadbearer's MSRV
         # of 1.88; the versioned toolchain packages are the supported way to
         # get a newer one. Keep this in step with debian/control's alternatives.
+        # build-essential is an implicit build dependency of every source
+        # package -- dpkg-checkbuilddeps refuses without it -- and the runner
+        # image doesn't preinstall it.
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            debhelper dpkg-dev lintian rustc-1.91 cargo-1.91
+            build-essential debhelper dpkg-dev lintian rustc-1.91 cargo-1.91
 
       - name: Check debian/changelog agrees with Cargo.toml
         # The .deb takes its version from debian/changelog, so a forgotten
