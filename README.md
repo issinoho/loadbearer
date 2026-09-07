@@ -248,6 +248,12 @@ or — if you'd rather trust a key than GitHub's Sigstore instance —
 `gpg --verify SHA256SUMS.asc SHA256SUMS` against the [release signing
 key](loadbearer-release-signing.asc) (see
 [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md) for the fingerprint).
+`SHA256SUMS.asc` covers the checksums *as CI published them*: once the Windows
+`.exe` has been re-signed by hand, `SHA256SUMS` is regenerated to match and the
+now-stale `.asc` is removed rather than left in place — its absence means that
+re-sign has run, not that anything is wrong. The attestation above covers the
+Linux tarball either way, for the life of the release.
+
 Or install straight from source with Cargo:
 
 ```
