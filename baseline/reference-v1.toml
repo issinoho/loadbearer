@@ -27,7 +27,10 @@
 # the backend also takes the VAES paths, two or more blocks per instruction,
 # which roughly DOUBLES measured AES-GCM throughput on a CPU that has VAES
 # (Intel Ice Lake / AMD Zen 3 and later). Measured on SGS-D47TDY3, which is in
-# this sample: 1664 -> 3380 MiB/s, +103%, at `--duration normal`.
+# this sample, at the `--duration thorough` these values were calibrated with:
+# 1638.6 -> 3626.6 MiB/s, +121%, cv 0.56% and 0.34%, both `high` confidence.
+# (An interleaved A/B at `--duration normal` gave +103%, with the new arm still
+# thermally ramping — the thorough figure is the steadier one.)
 #
 # Only two of the seven machines above (the i7-1370P and the N95) have VAES, so
 # a correct recalibration means re-running all seven with the new build rather

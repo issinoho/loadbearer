@@ -832,8 +832,9 @@ inputs; subtests missing from some inputs are flagged on stderr.
 - **`aes_gcm` depends on the crypto library, not just the CPU.** The RustCrypto
   backend gained the VAES code paths (two-plus AES blocks per instruction) in
   `aes` 0.9, which roughly doubles measured AES-GCM throughput on a CPU that
-  has VAES — Intel Ice Lake / AMD Zen 3 and later. Measured on an i7-1370P:
-  1664 → 3380 MiB/s. The embedded `reference-v1` anchor for this subtest was
+  has VAES — Intel Ice Lake / AMD Zen 3 and later. Measured on an i7-1370P at
+  `--duration thorough`: 1638.6 → 3626.6 MiB/s, +121%, both `high` confidence.
+  The embedded `reference-v1` anchor for this subtest was
   calibrated before that, so VAES-capable machines score high on it against a
   stale reference until the baseline is re-measured; the same is true in
   reverse comparing results across the versions. It's the same class of caveat
