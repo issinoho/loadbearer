@@ -7,6 +7,10 @@ use sysinfo::{DiskKind, Disks, System};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Inventory {
     pub hostname: Option<String>,
+    /// Firmware / OS identifiers, for telling repeated runs of the same machine
+    /// apart from a machine not seen before. Absent when none could be read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub identity: Option<crate::identity::MachineId>,
     pub os: Option<String>,
     pub kernel: Option<String>,
     pub arch: String,
@@ -47,6 +51,7 @@ impl Inventory {
     pub fn blank() -> Self {
         Inventory {
             hostname: None,
+            identity: None,
             os: None,
             kernel: None,
             arch: String::new(),
@@ -106,6 +111,7 @@ pub fn collect() -> Inventory {
 
     let inv = Inventory {
         hostname: System::host_name(),
+        identity: crate::identity::collect(),
         os: System::long_os_version().or_else(System::os_version),
         kernel: System::kernel_version(),
         arch: System::cpu_arch(),

@@ -258,6 +258,7 @@ mod tests {
     fn fake_inventory() -> Inventory {
         Inventory {
             hostname: Some("host".into()),
+            identity: None,
             os: Some("TestOS".into()),
             kernel: None,
             arch: "x86_64".into(),

@@ -4,6 +4,7 @@ mod cli;
 mod compare;
 mod config;
 mod engine;
+mod identity;
 mod inventory;
 mod logging;
 mod mem;
