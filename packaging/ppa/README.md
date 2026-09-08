@@ -34,8 +34,30 @@ have **no network**, so the source has to carry every crate with it.
 2. **Create the PPA** at <https://launchpad.net/~issinoho/+activate-ppa>, named
    `loadbearer`. That gives `ppa:issinoho/loadbearer`.
 
-   Under the PPA's *Change details* → *Processors*, enable `arm64` alongside
-   `amd64` if you want Arm builds; PPAs default to amd64 only.
+   Under the PPA's *Change details* → *Processors*, pick the architectures to
+   build for. This is the setting that decides how much work an upload makes:
+   every enabled processor gets its own build of every series, so three series
+   against six processors is eighteen builds, not three. Don't take the list
+   below as current — it's a live setting, changed in the web UI, and the
+   authoritative answer is that page (or the build records an upload actually
+   produces). Three things worth knowing before you tick a box:
+
+   - **Only amd64 and arm64 are architectures loadbearer is tested on.**
+     Anything else is along for the ride, and a failure there says nothing
+     about the release — but see the `cut-release.sh` note under *Gotchas*,
+     because the script doesn't know that.
+   - **riscv64 is the one that will keep you waiting.** Launchpad's riscv64
+     builder pool is small and usually backlogged; on 1.2.4 every other
+     architecture finished within about an hour while all three riscv64
+     builds were still sitting in `Needs building`. It doesn't hold up
+     publication of the others, but it does mean "all builds green" may be
+     hours away. Note that *unticking a processor does not cancel builds it
+     has already queued* — 1.2.4's three riscv64 records stayed `Needs
+     building` after riscv64 was disabled. Cancel them on the build pages if
+     you want the version to ever read as finished.
+   - **i386 can be ticked but never builds.** Ubuntu dropped i386 as a build
+     architecture; on jammy and later the checkbox produces no build records
+     at all. Don't expect i386 packages from it.
 
 3. **An SSH key registered with Launchpad**, at
    <https://launchpad.net/~/+editsshkeys>. This is not optional: Launchpad has
@@ -93,8 +115,29 @@ The script itself takes about five minutes -- roughly half vendoring and
 writing the tarball, half lintian walking the 267 vendored crates. Run the
 `dput` lines it prints. Launchpad emails an acceptance or rejection within a
 minute or two, then queues the builds; watch them at
-<https://launchpad.net/~issinoho/+archive/ubuntu/loadbearer/+packages>. A full
-build takes roughly ten minutes per series.
+<https://launchpad.net/~issinoho/+archive/ubuntu/loadbearer/+packages>.
+
+Budget about **an hour and a quarter from upload to `apt`**, most of it out of
+your hands. On 1.2.4 (three series, six or seven processors each — nineteen
+builds) the upload finished at 11:04, every architecture except riscv64 had
+built by 11:57, and the publisher made them live at about 12:20. That last
+step is the one people forget: a build reaching *Successfully built* does not
+mean anyone can install it. The binaries sit at status `Pending` until
+Launchpad's publisher next runs, which is what actually writes
+`dists/<series>/main/binary-<arch>/Packages.gz`. Until then `apt` still offers
+the previous version. `cut-release.sh` has a *Publication* step that waits for
+this, so it doesn't call a release done while `apt` is still handing out the
+last one — but if you uploaded by hand, that wait is yours to do.
+
+To check whether a release is genuinely live, read the index rather than the
+build page:
+
+```
+curl -sfL https://ppa.launchpadcontent.net/issinoho/loadbearer/ubuntu/dists/noble/main/binary-amd64/Packages.gz \
+  | gunzip -c | awk '/^Version:/{print $2}' | sort -u
+```
+
+(The uncompressed `Packages` is a 404 — only the compressed index is served.)
 
 Omit `--key` for a dry run: everything is built unsigned, which is enough to
 check that the source package assembles and passes lintian, but Launchpad will
@@ -151,6 +194,12 @@ not accept the result.
 - **gpg prompts once per run.** Dismiss or time out the passphrase prompt and
   the build dies at `signfile` with `gpg: signing failed: Operation cancelled`,
   after the vendoring work is already done. Just run it again.
+- **`cut-release.sh` judges the release on `SHIPPED_ARCHES` only.** That's
+  `amd64 arm64` at the top of the script. It still prints every build record,
+  marking the ones that count with a `*`, but only those gate the release — so
+  a riscv64 build that fails, or sits queued forever against a processor that
+  has since been disabled, no longer reports the release as broken or hangs
+  the wait. Widen the list there if loadbearer ever gets tested somewhere new.
 - **It needs room.** The vendored tree is ~300 MB unpacked, and lintian expands
   every source package at once, so allow a couple of GB free on the output
   directory's filesystem. The script keeps lintian's scratch space there rather

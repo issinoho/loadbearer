@@ -29,6 +29,10 @@ LP_PPA="loadbearer"
 # The release signing key from CODE_SIGNING_POLICY.md. Update both together.
 KEY="C3482C916797D77F38926A77273E45FB7B21B6C2"
 SERIES="jammy,noble,resolute"
+# The architectures a release is judged on. A PPA builds for every processor
+# enabled on it -- 1.2.4 fanned out to nineteen builds across seven -- but only
+# these are tested, and only these gate the release. See packaging/ppa/README.md.
+SHIPPED_ARCHES="amd64 arm64"
 BRANCH="main"
 
 VERSION=""
@@ -367,38 +371,94 @@ else
 	ok "uploaded"
 fi
 
+ARCHIVE_API="https://api.launchpad.net/1.0/~$LP_USER/+archive/ubuntu/$LP_PPA"
+
+# Poll a Launchpad archive operation until its reporter prints DONE. The
+# reporter's first line is DONE/PENDING/FAILED and the rest is shown to the
+# user; an empty result means the API hiccuped (it is eventually consistent and
+# returns partial pages), which is a retry rather than an answer.
+#   $1 ws.op   $2 minutes to wait   $3 python reporter
+poll_launchpad() {
+	local op="$1" limit="$2" src="$3" raw="" i=0
+	poll_out=""
+	while [ "$i" -lt "$limit" ]; do
+		raw="$(curl -sfG "$ARCHIVE_API" --data-urlencode "ws.op=$op" 2>/dev/null || true)"
+		poll_out="$(printf '%s' "$raw" \
+			| LB_VERSION="$VERSION" LB_ARCHES="$SHIPPED_ARCHES" LB_SERIES="$SERIES" \
+			  python3 -c "$src" 2>/dev/null || true)"
+		case "${poll_out%%$'\n'*}" in
+			DONE|FAILED) return 0 ;;
+		esac
+		i=$((i + 1))
+		sleep 60
+	done
+	return 1
+}
+
 step "Builds"
 if [ "$DRY_RUN" -eq 1 ]; then
-	ok "would watch Launchpad until every build finishes"
+	ok "would watch Launchpad until the $SHIPPED_ARCHES builds finish, then until apt can see them"
 	exit 0
 fi
 
-echo "  waiting for Launchpad (this takes about an hour per architecture)"
-for _ in $(seq 1 240); do
-	summary="$(curl -sfG "https://api.launchpad.net/1.0/~$LP_USER/+archive/ubuntu/$LP_PPA" \
-		--data-urlencode "ws.op=getBuildRecords" 2>/dev/null \
-		| python3 -c "
-import json,sys
-try: d=json.load(sys.stdin)
+echo "  waiting for builds; only $SHIPPED_ARCHES gate the release (* below)"
+poll_launchpad getBuildRecords 240 '
+import json, os, sys
+try: d = json.load(sys.stdin)
 except Exception: sys.exit(0)
-v='$VERSION'
-rows=[e for e in d.get('entries',[]) if v in e.get('title','')]
+v = os.environ["LB_VERSION"]
+gate = set(os.environ["LB_ARCHES"].split())
+rows = [e for e in d.get("entries", []) if v in e.get("title", "")]
 if not rows: sys.exit(0)
-live={'Needs building','Currently building','Uploading build'}
-print('PENDING' if any(r.get('buildstate') in live for r in rows) else 'DONE')
+live = {"Needs building", "Currently building", "Uploading build", "Dependency wait"}
+pending = failed = False
 for r in rows:
-    t=r.get('title','').split(' in ubuntu')[0].replace(' build of loadbearer','')
-    print(f\"  {t:44} {r.get('buildstate')}\")
-" 2>/dev/null || true)"
-	[ -z "$summary" ] && { sleep 60; continue; }
-	[ "${summary%%$'\n'*}" = "DONE" ] && break
-	sleep 60
-done
+    if r.get("title", "").split()[0] not in gate: continue
+    st = r.get("buildstate")
+    if st in live: pending = True
+    elif st != "Successfully built": failed = True
+print("FAILED" if failed else "PENDING" if pending else "DONE")
+for r in sorted(rows, key=lambda x: x.get("title", "")):
+    t = r.get("title", "")
+    mark = "*" if t.split()[0] in gate else " "
+    label = t.split(" in ubuntu")[0].replace(" build of loadbearer", "")
+    st = r.get("buildstate")
+    print(f"  {mark} {label:42} {st}")
+' || die "Builds for $SHIPPED_ARCHES still hadn't finished after four hours. Check: https://launchpad.net/~$LP_USER/+archive/ubuntu/$LP_PPA/+packages"
 
-printf '%s\n' "${summary#*$'\n'}"
-if printf '%s' "$summary" | grep -q 'Failed\|Chroot problem\|Dependency wait'; then
-	die "Some builds didn't succeed. Logs: https://launchpad.net/~$LP_USER/+archive/ubuntu/$LP_PPA/+packages"
-fi
+printf '%s\n' "${poll_out#*$'\n'}"
+[ "${poll_out%%$'\n'*}" = "FAILED" ] \
+	&& die "A $SHIPPED_ARCHES build didn't succeed. Logs: https://launchpad.net/~$LP_USER/+archive/ubuntu/$LP_PPA/+packages"
+ok "the architectures we ship built"
+
+# Built is not installable. Binaries sit at status Pending until Launchpad's
+# publisher next runs and writes dists/<series>/main/binary-<arch>/Packages.gz;
+# until then apt still offers the previous version. Stopping at "builds
+# finished" reports a release as done up to half an hour before it is.
+step "Publication"
+echo "  waiting for the publisher to put $VERSION in the apt index"
+poll_launchpad getPublishedBinaries 90 '
+import json, os, sys
+try: d = json.load(sys.stdin)
+except Exception: sys.exit(0)
+v = os.environ["LB_VERSION"]
+gate = sorted(set(os.environ["LB_ARCHES"].split()))
+series = [s for s in os.environ["LB_SERIES"].split(",") if s]
+rows = [e for e in d.get("entries", []) if v in (e.get("binary_package_version") or "")]
+if not rows: sys.exit(0)
+got = {}
+for e in rows:
+    parts = (e.get("distro_arch_series_link") or "").rstrip("/").split("/")
+    if len(parts) >= 2: got[(parts[-2], parts[-1])] = e.get("status")
+done = all(got.get((s, a)) == "Published" for s in series for a in gate)
+no_binary = "not built yet"
+print("DONE" if done else "PENDING")
+for s in series:
+    print(f"  {s:10} " + ", ".join(f"{a}={got.get((s, a), no_binary)}" for a in gate))
+' || die "$VERSION built but was still unpublished after 90 minutes. Check: https://launchpad.net/~$LP_USER/+archive/ubuntu/$LP_PPA/+packages"
+
+printf '%s\n' "${poll_out#*$'\n'}"
+ok "published -- apt can see it"
 
 step "Done"
-ok "loadbearer $VERSION is released and in the PPA."
+ok "loadbearer $VERSION is released and installable from ppa:$LP_USER/$LP_PPA."

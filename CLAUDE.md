@@ -25,8 +25,8 @@ Clippy on CI's toolchain is sometimes stricter than a local one — if in doubt
 ## Cutting a release
 
 `scripts/cut-release.sh X.Y.Z` does all of this — bump, changelogs, checks,
-tag, wait for CI, then the PPA source packages, their upload and the Launchpad
-builds. Write the `CHANGELOG.md` section first (it refuses to invent release
+tag, wait for CI, then the PPA source packages, their upload, the Launchpad
+builds and the publisher run that finally puts them in the apt index. Write the `CHANGELOG.md` section first (it refuses to invent release
 notes) and leave it uncommitted; the script commits it. `--dry-run` prints the
 whole plan without touching anything, `--ppa-only` picks up an already-published
 release, `--skip-ppa` stops at the GitHub release. It confirms separately before
@@ -45,7 +45,10 @@ undo. The steps by hand, which is what it automates:
 5. Push with tags: `git push <remote> main --follow-tags`.
 6. Once the release is published, upload to the PPA:
    `packaging/ppa/make-source.sh --ref vX.Y.Z --key <key>`, then the `dput`
-   lines it prints. Not something to do from here — it needs the signing key.
+   lines it prints. This *can* be done from here: the release signing key is in
+   `~/.gnupg` on this machine and gpg-agent normally has the passphrase cached,
+   so the whole flow runs locally — 1.2.4 was published this way. `dput` is an
+   outward-facing publish, so expect to approve it.
    See `packaging/ppa/README.md`.
 
 `.github/workflows/release.yml` fires on the `v*` tag and builds+attaches the
@@ -124,8 +127,8 @@ Transient `Could not resolve host: github.com` happens — just retry.
 - `packaging/ppa/` — `make-source.sh` builds the per-series signed source
   packages (vendors the crates, prunes the ~154 MB of prebuilt Windows blobs,
   one shared `.orig.tar.gz`, `1.2.2-1~noble1` versioning); `README.md` there is
-  the full procedure. Manual, like Windows signing — it needs the GPG key.
-  Nothing about it runs in CI.
+  the full procedure. Manual — nothing about it runs in CI — but unlike Windows
+  signing it needs no second machine: the GPG key is here.
 - `src/cli.rs` — clap definitions. `src/run.rs` — resolves settings (CLI >
   config > default) and dispatches.
 
