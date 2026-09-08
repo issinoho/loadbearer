@@ -2,6 +2,58 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 1.4.0 - Tue, 8 Sep 2026
+
+A dependency release, with one consequence big enough that it needs saying
+first.
+
+- **⚠️ `aes_gcm` roughly doubles on modern CPUs. Scores move.** The RustCrypto
+  backend gained the **VAES** code paths in `aes` 0.9 — two or more AES blocks
+  per instruction, where earlier versions used AES-NI one block at a time.
+  Measured on an i7-1370P at `--duration thorough`, the preset the baseline
+  itself was calibrated with: **1638.6 → 3626.6 MiB/s, +121%**, cv 0.56% and
+  0.34%, both `high` confidence. An interleaved A/B at `--duration normal`
+  independently gave +103%. Nothing about the benchmark changed; the old build
+  simply wasn't using a capability the CPU had.
+
+  This affects Intel Ice Lake / AMD Zen 3 and later. Older CPUs have no VAES,
+  fall back to AES-NI, and are unchanged.
+
+  What it means for you:
+  - **CPU component and overall grades rise on modern hardware.** The
+    component geomean dampens it, but it is not nothing.
+  - **Don't compare an `aes_gcm` figure across this version boundary.** A 1.3.x
+    number against a 1.4.0 number tells you about the crypto library, not the
+    machine. `loadbearer compare` is fine as long as both sides ran the same
+    build.
+  - **The embedded `reference-v1` anchor for `aes_gcm` is now knowingly
+    stale**, so a VAES-capable machine scores high on that one subtest. It has
+    *not* been adjusted: the anchor is a geomean over seven machines and only
+    two of them have VAES, so correcting it by modelling which ones changed
+    would put an unverified number into calibration data. Fixing it properly
+    means re-running all seven, and until then the file says so. Absolute
+    scores and the baseline are explicitly outside the stability contract —
+    see [VERSIONING.md](VERSIONING.md).
+
+  Arguably the subtest is now more honest than it was: it claims to reflect
+  "the crypto-instruction generation, not just the clock", and VAES is the
+  current crypto-instruction generation.
+
+- **Dependency majors.** `aes-gcm` 0.10 → 0.11, `sha2` 0.10 → 0.11,
+  `libloading` 0.8 → 0.9, `windows-sys` 0.60 → 0.61, `clap_mangen` 0.2 → 0.3.
+  Two needed code changes: `aes-gcm` deprecated `AeadInPlace` in favour of
+  `AeadInOut::encrypt_inout_detached`, and `libloading` replaced the
+  `AsRef<OsStr>` bound on `Library::new` with `AsFilename`, which the OpenCL
+  loader's `&&str` no longer satisfied. The latter only broke non-Windows
+  builds, since the Windows loader takes a different path.
+- **Documented the crypto-library caveat** in the README accuracy notes, the
+  baseline file itself, and the wiki's Accuracy Notes and The Baseline pages.
+  `build_isa` doesn't capture this one, because the backend picks its AES path
+  at runtime rather than at compile time. The README's capability list now
+  mentions VAES alongside AES-NI, which it had missed.
+- **Fixed a dead-code warning** on platforms with neither the Windows nor the
+  Linux identity collector — a macOS build from source, which CI doesn't cover.
+
 ## 1.3.0 - Tue, 8 Sep 2026
 
 A release about running loadbearer across a managed fleet rather than on one
