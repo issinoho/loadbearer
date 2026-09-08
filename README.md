@@ -759,7 +759,7 @@ not part of the [stability contract](VERSIONING.md).
 
 | Component | Subtests |
 | --- | --- |
-| **CPU** | Integer and floating-point throughput (single-core and all-core), BLAKE3 hashing, DEFLATE (level 6) compression, **AES-256-GCM** and **SHA-256** throughput. The integer/float kernels use eight independent accumulator lanes so they measure pipeline throughput, not dependency-chain latency. AES-GCM and SHA-256 pick up the CPU's AES-NI / CLMUL / SHA-extension hardware at runtime where it exists. All-core subtests run the kernel on every logical CPU and sum the rates. |
+| **CPU** | Integer and floating-point throughput (single-core and all-core), BLAKE3 hashing, DEFLATE (level 6) compression, **AES-256-GCM** and **SHA-256** throughput. The integer/float kernels use eight independent accumulator lanes so they measure pipeline throughput, not dependency-chain latency. AES-GCM and SHA-256 pick up the CPU's AES-NI / VAES / CLMUL / SHA-extension hardware at runtime where it exists. All-core subtests run the kernel on every logical CPU and sum the rates. |
 | **Memory** | Sequential read, write and copy bandwidth over a working set sized past any last-level cache (256 MiB at `normal`), plus an **all-core** read that sums the read kernel across every logical CPU; random-access latency via a single-cycle pointer chase (Sattolo) that defeats the prefetcher. Single-threaded except the all-core read. |
 | **Disk** | Sequential write (each pass ends with `fsync`, so it's durable-write throughput) and read; random 4 KiB read and write IOPS at queue depth 1. Reads and random I/O use unbuffered I/O — `O_DIRECT` on Linux, `FILE_FLAG_NO_BUFFERING` on Windows — to bypass the page cache, with a buffered fallback (and a recorded note) where the filesystem refuses it. The scratch file (1 GiB at `normal`) is filled with random data to defeat filesystem compression, reused by every subtest, and deleted when the run ends. A hard-killed run leaves it behind; the next run against the same directory sweeps any orphan that isn't its own and hasn't been touched in 20 minutes. |
 | **Network** | Loopback (`127.0.0.1`) only — this measures the machine's network *stack* (syscall, TCP processing, scheduler wakeup latency), **not** a physical link, and makes no network calls. Single-stream and all-core TCP throughput, TCP request/response round-trip latency, and UDP small-packet send rate. **Scored and shown, but not in the overall grade** (see [Scoring model](#scoring-model)). For a real link test between two machines, run `loadbearer net-server` on one and `loadbearer run --net-target` on the other (reported separately, also not graded). |
@@ -829,6 +829,17 @@ inputs; subtests missing from some inputs are flagged on stderr.
 
 - **Build both sides the same way.** A `target-cpu=native` build and a portable
   build produce different CPU numbers; only compare like with like.
+- **`aes_gcm` depends on the crypto library, not just the CPU.** The RustCrypto
+  backend gained the VAES code paths (two-plus AES blocks per instruction) in
+  `aes` 0.9, which roughly doubles measured AES-GCM throughput on a CPU that
+  has VAES — Intel Ice Lake / AMD Zen 3 and later. Measured on an i7-1370P:
+  1664 → 3380 MiB/s. The embedded `reference-v1` anchor for this subtest was
+  calibrated before that, so VAES-capable machines score high on it against a
+  stale reference until the baseline is re-measured; the same is true in
+  reverse comparing results across the versions. It's the same class of caveat
+  as the arm64 note above — the number reflects the build's crypto path as much
+  as the silicon. `loadbearer compare`, which works from raw metrics, is
+  unaffected as long as both sides ran the same build.
 - **Point `--target-dir` at real storage.** On a `tmpfs`/RAM disk the disk
   scores measure memory bandwidth. loadbearer detects this on Linux and adds a
   note; elsewhere it's on you.
