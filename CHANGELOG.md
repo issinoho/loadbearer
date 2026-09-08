@@ -2,6 +2,70 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 1.3.0 - Tue, 8 Sep 2026
+
+A release about running loadbearer across a managed fleet rather than on one
+machine at a time: knowing *which* machine a result came from, carrying the
+organisational context a benchmark can't discover for itself, and surviving
+the things a locked-down corporate desktop does to a benchmark. The
+measurement kernels are untouched, so scores remain directly comparable with
+1.2.x.
+
+- **A machine identity in every result.** `machine.identity` now carries the
+  SMBIOS system UUID, the chassis serial and asset tag, and the OS install's
+  own id. `hostname` was the only correlation key a result file had, and in a
+  managed fleet it's renameable, occasionally unset, and reissued between
+  machines — so a collector had no reliable way to tell a repeat run of one
+  machine from a machine it hadn't seen. The four identifiers fail in
+  different ways on purpose: the firmware ones survive a reimage and match
+  what asset, warranty and lease records key on, while the OS id is always
+  readable but resets when the machine is reimaged. All are best-effort, and
+  the block is left out entirely when nothing could be read (a container, a
+  locked-down VM, a non-root Linux run). OEM placeholder serials like
+  "To Be Filled By O.E.M." are rejected rather than recorded, since left in
+  they collapse every unconfigured machine of a model into one fleet
+  identity. On Windows this reads the registry and the raw SMBIOS table
+  directly — no COM, no `wmic` subprocess — so it works in the Session 0
+  context a deployment tool runs in.
+- **`--tag key=value`.** Repeatable on `run` and `soak`, with a matching
+  `[tags]` table in the config file, carried into the result file's `tags`
+  field. loadbearer can read a machine's hardware but not its place in an
+  organisation — which site it sits at, whose budget bought it, which
+  deployment ring it's in — and that context already exists in whatever
+  orchestrates the run. Switches override the config per key rather than
+  replacing the set, so a config pushed fleet-wide can hold the constants
+  while the command line adds what's specific to one run. Tags are metadata
+  only and never reach a score, and they survive `score` re-grading.
+- **A blocked optional subtest no longer ends the run.** A failure in a
+  component that doesn't feed the grade — `network`, `gpu` — and a
+  `--net-target` link probe that can't reach its target are now reported and
+  skipped instead of aborting. Endpoint protection refusing the loopback
+  socket the network component needs would previously throw away a completed
+  CPU, memory and disk assessment, which is a poor trade for a component
+  that is deliberately never graded. A *graded* component failing still
+  stops the run, and every component being skipped is still a failure.
+  **This changes an exit code**: a run whose `--net-target` probe failed used
+  to exit 1 and now exits 0, because the run itself succeeded. Anything
+  scripted against that needs to read the new `notes` field instead.
+- **`notes` in the result file.** Records what was skipped and why, so a
+  collector can tell a complete run from a complete-but-partial one instead
+  of treating partial data as clean. Absent when the run was clean, and
+  preserved through `score`.
+- **`--fail-under GRADE`.** Exits **3** when the overall grade comes in below
+  `GRADE`, so a management tool can flag slow hardware while keeping that
+  distinct from exit 1, "this run broke". Opt-in for exactly that reason: on
+  its own, a low grade is still a successful run and still exits 0. A run
+  that grades nothing — `--only network` reports 0/F by construction — isn't
+  judged at all and says so, rather than announcing a threshold breach that
+  didn't happen. [VERSIONING.md](VERSIONING.md) now spells out which exit
+  codes are covered by semver.
+- **Fixed a flaky network test.** `link_probe_talks_to_a_local_server` bound
+  an ephemeral TCP port and then assumed the same number was free on UDP. On
+  a host running Hyper-V (WSL, Docker Desktop) it can land inside a dynamic
+  UDP reservation, so the test failed at random — roughly one run in three on
+  one affected machine — and could redden CI for reasons unrelated to the
+  change under test.
+
 ## 1.2.4 - Tue, 8 Sep 2026
 
 - **`--target-dir` and `--output` no longer need to exist first.** `run`
