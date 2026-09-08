@@ -199,7 +199,9 @@ fn open_icd() -> Option<Library> {
         #[cfg(not(target_os = "macos"))]
         let names: &[&str] = &["libOpenCL.so.1", "libOpenCL.so"];
         names.iter().find_map(|n| {
-            let lib = unsafe { Library::new(n) }.ok();
+            // `*n`, not `n`: libloading 0.9's `AsFilename` is implemented for
+            // `&str` but not for `&&str`, which `iter()` hands us.
+            let lib = unsafe { Library::new(*n) }.ok();
             if lib.is_some() {
                 log::debug!(target: "loadbearer::gpu", "OpenCL ICD loader: opened {n}");
             }

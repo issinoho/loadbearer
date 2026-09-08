@@ -203,22 +203,26 @@ fn compress_rate(budget: Duration, seed: u64) -> f64 {
 /// 256 KiB buffer. RustCrypto uses AES-NI + CLMUL at runtime where the CPU has
 /// them, so this reflects the crypto-instruction generation, not just the clock.
 fn aes_gcm_rate(budget: Duration, seed: u64) -> f64 {
-    use aes_gcm::aead::AeadInPlace;
-    use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
+    use aes_gcm::{AeadInOut, Aes256Gcm, KeyInit, Nonce};
 
     const BUF: usize = 256 * 1024;
     let mut key = [0u8; 32];
     SplitMix64::new(seed ^ 0xA35F_1C2D_9B4E_7061).fill_bytes(&mut key);
     let cipher = Aes256Gcm::new_from_slice(&key).expect("32-byte key");
-    let nonce = Nonce::from_slice(&[0u8; 12]);
+    let nonce = Nonce::try_from(&[0u8; 12][..]).expect("12-byte nonce");
     let mut buf = vec![0u8; BUF];
     SplitMix64::new(seed ^ 0x51E5_A2C3_44D9_0177).fill_bytes(&mut buf);
 
     let bytes = throughput(budget, || {
         // Encrypt in place, discard the tag. Re-encrypting the previous
         // ciphertext costs the same AES + GHASH work.
+        //
+        // `InOutBuf::from(&mut [u8])` aliases the one buffer for both input
+        // and output, so this is the same in-place work the pre-0.11
+        // `encrypt_in_place_detached` did — it wraps a pointer and a length,
+        // nothing is copied.
         let tag = cipher
-            .encrypt_in_place_detached(nonce, b"", &mut buf)
+            .encrypt_inout_detached(&nonce, b"", buf.as_mut_slice().into())
             .expect("in-memory AES-GCM cannot fail");
         black_box(tag[0]);
         BUF as u64
