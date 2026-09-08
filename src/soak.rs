@@ -168,11 +168,17 @@ pub struct SoakDocument {
     pub tool_version: String,
     pub timestamp: String,
     pub machine: Inventory,
+    /// `key=value` labels from `--tag` / the config file. Metadata only.
+    #[serde(default, skip_serializing_if = "crate::tags::Tags::is_empty")]
+    pub tags: crate::tags::Tags,
     pub soak: SoakResult,
 }
 
 /// `loadbearer soak` — run the sustained-load test on its own.
 pub fn execute(args: SoakArgs) -> Result<()> {
+    // Before the run, not after: a mistyped tag shouldn't cost a soak.
+    let tags = crate::tags::resolve(None, &args.tags)?;
+
     let threads = args
         .threads
         .filter(|&t| t > 0)
@@ -193,6 +199,7 @@ pub fn execute(args: SoakArgs) -> Result<()> {
             .format(&Rfc3339)
             .unwrap_or_default(),
         machine,
+        tags,
         soak: result,
     };
 

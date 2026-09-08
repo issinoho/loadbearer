@@ -174,6 +174,11 @@ pub struct ResultFile {
     pub raw: Vec<BenchmarkOutcome>,
     pub components: Vec<ScoredComponent>,
     pub overall: Overall,
+    /// `key=value` labels supplied by whoever ran the benchmark (`--tag`, or
+    /// the config file). Organisational metadata for a collector to group by;
+    /// never an input to a score.
+    #[serde(default, skip_serializing_if = "crate::tags::Tags::is_empty")]
+    pub tags: crate::tags::Tags,
     /// Present only when `--net-target` was given.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub link: Option<LinkResult>,
@@ -211,6 +216,7 @@ impl ResultFile {
             raw,
             components: scored.components,
             overall: scored.overall,
+            tags: crate::tags::Tags::new(),
             link,
             soak: None,
             model_ref: Vec::new(),

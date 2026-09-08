@@ -106,6 +106,11 @@ pub struct SoakArgs {
     #[arg(long, value_name = "N")]
     pub seed: Option<u64>,
 
+    /// Attach a `key=value` label to the result, repeatable. Metadata only
+    /// (e.g. `--tag site=glasgow`).
+    #[arg(long = "tag", value_name = "K=V")]
+    pub tags: Vec<String>,
+
     /// Write the soak result JSON to a file.
     #[arg(long, value_name = "FILE")]
     pub output: Option<PathBuf>,
@@ -195,6 +200,11 @@ pub struct RunArgs {
     /// Don't sample CPU clocks / package power during the run.
     #[arg(long)]
     pub no_telemetry: bool,
+
+    /// Attach a `key=value` label to the result, repeatable. Metadata only —
+    /// never affects a measurement or a grade (e.g. `--tag site=glasgow`).
+    #[arg(long = "tag", value_name = "K=V")]
+    pub tags: Vec<String>,
 
     /// Write the result JSON to a file.
     #[arg(long, value_name = "FILE")]

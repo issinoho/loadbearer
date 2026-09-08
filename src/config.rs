@@ -17,6 +17,9 @@ pub struct FileConfig {
     pub runs: Option<u32>,
     pub seed: Option<u64>,
     pub only: Option<Vec<String>>,
+    /// `key = "value"` labels carried into the result file. `--tag` wins per
+    /// key; see `crate::tags`.
+    pub tags: Option<crate::tags::Tags>,
 }
 
 impl FileConfig {

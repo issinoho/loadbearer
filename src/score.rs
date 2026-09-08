@@ -132,6 +132,8 @@ pub fn rescore(
         original.link.clone(),
     );
     out.soak = original.soak.clone();
+    // Re-scoring changes the grade, not who the machine belongs to.
+    out.tags = original.tags.clone();
     Ok((out, skipped))
 }
 

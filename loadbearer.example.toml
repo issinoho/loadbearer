@@ -21,3 +21,13 @@ curve_k = 0.5
 
 # Override the number of timed iterations per subtest.
 # runs = 5
+
+# Labels carried into the result file, for a fleet collector to group by.
+# Metadata only: nothing here affects a measurement or a grade. `--tag k=v`
+# overrides an individual key without discarding the rest, so a config pushed
+# fleet-wide can hold the constants while the command line adds the specifics.
+# Keys take letters, digits, '_', '-' and '.'.
+# [tags]
+# site = "glasgow"
+# department = "engineering"
+# ring = "pilot"

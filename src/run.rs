@@ -44,6 +44,7 @@ struct Resolved {
     runs: Option<u32>,
     target_dir: Option<std::path::PathBuf>,
     only: Vec<String>,
+    tags: crate::tags::Tags,
 }
 
 fn resolve(args: &RunArgs) -> Result<Resolved> {
@@ -92,6 +93,7 @@ fn resolve(args: &RunArgs) -> Result<Resolved> {
         runs: args.runs.or(file.runs),
         target_dir: args.target_dir.clone().or(file.target_dir),
         only,
+        tags: crate::tags::resolve(file.tags.as_ref(), &args.tags)?,
     })
 }
 
@@ -147,11 +149,11 @@ pub fn execute(args: RunArgs) -> Result<()> {
     );
     if interactive {
         run_interactive(
-            &args, selected, ctx, baseline, r.profile, r.curve_k, machine, config,
+            &args, selected, ctx, baseline, r.profile, r.curve_k, machine, config, r.tags,
         )
     } else {
         run_plain(
-            &args, &selected, &ctx, &baseline, r.profile, r.curve_k, machine, config,
+            &args, &selected, &ctx, &baseline, r.profile, r.curve_k, machine, config, r.tags,
         )
     }
 }
@@ -166,6 +168,7 @@ fn run_interactive(
     curve_k: f64,
     machine: Inventory,
     config: RunConfig,
+    tags: crate::tags::Tags,
 ) -> Result<()> {
     let header = format!(
         "{} · {} · {} threads · {} preset · {} profile",
@@ -192,6 +195,7 @@ fn run_interactive(
     match tui::run(init)? {
         Some(mut result) => {
             result.link = probe_link(args)?;
+            result.tags = tags;
             write_output(&result, args.output.as_deref())?;
             let written = match &args.output {
                 Some(p) => format!(" · written to {}", p.display()),
@@ -226,6 +230,7 @@ fn run_plain(
     curve_k: f64,
     machine: Inventory,
     config: RunConfig,
+    tags: crate::tags::Tags,
 ) -> Result<()> {
     if !args.json {
         eprintln!(
@@ -258,6 +263,7 @@ fn run_plain(
     let mut result = ResultFile::assemble(machine, config, outcomes, scored, link);
     result.model_ref = model_ref;
     result.telemetry = telemetry;
+    result.tags = tags;
 
     if args.json {
         result.soak = run_soak(args);
