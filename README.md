@@ -593,7 +593,67 @@ target_dir = "/var/tmp"
 # only    = ["cpu", "memory"]
 # runs    = 7
 # seed    = 42
+
+# Labels carried into the result file for a collector to group by.
+# [tags]
+# site = "glasgow"
+# ring = "pilot"
 ```
+
+## Fleet use
+
+One self-contained binary with no runtime, no service, no persistence and no
+network calls, so the unattended case is mostly just a command. A PDQ Deploy
+step, or the equivalent in Intune / ConfigMgr / Ansible:
+
+```
+loadbearer.exe run --no-gpu --plain --duration short ^
+  --target-dir "%ProgramData%\loadbearer" ^
+  --output "%ProgramData%\loadbearer\%COMPUTERNAME%.json" ^
+  --tag site=glasgow --tag ring=pilot
+```
+
+Then collect the `.json` files to a share and treat them as a corpus —
+`loadbearer compare fleet\*.json`, or [`baseline`](#recalibrating-the-baseline)
+a house standard from the machines you consider par and `score` everything
+against it without re-running anything.
+
+What makes that work across repeat sweeps:
+
+- **`machine.identity`** — the SMBIOS UUID, serial and asset tag, plus the OS
+  install id. `hostname` is renameable and gets reissued, so it can't tell a
+  repeat run of one machine from a machine you haven't seen; the firmware
+  identifiers survive a reimage and are what asset and warranty records key
+  on. Best-effort, and absent where the firmware or OS won't say.
+- **`--tag k=v`** — the organisational context a benchmark can't discover for
+  itself (site, department, deployment ring). Whatever orchestrates the run
+  already knows it; tags carry it into the result for grouping later. Metadata
+  only, never an input to a score.
+- **A blocked optional subtest doesn't lose the run.** Endpoint protection
+  refusing the loopback socket the `network` component needs, or an
+  unreachable `--net-target`, is recorded in `notes` and skipped rather than
+  discarding a completed CPU/memory/disk assessment. A *graded* component
+  failing still fails the run.
+- **`--fail-under GRADE`** — exit `3` for a machine that grades below your
+  floor, which a management tool can act on while still telling that apart
+  from exit `1`, "this run broke".
+- **`--no-gpu`** is worth passing on a fleet: it skips the OpenCL probe
+  entirely, so a stale ICD loader left by an uninstalled driver can't stall
+  enumeration. GPU isn't in the grade anyway.
+
+Set the step timeout to **at least 300 s** — a `short` run is ~40 s of work,
+but a busy machine plus the scratch-file fill takes longer, and a step killed
+mid-run leaves the scratch file behind (the next run against that directory
+sweeps it).
+
+Don't put `net-server`, `--net-target` or `--soak` in a broadcast package: the
+first listens forever, the second makes an outbound connection to another
+host, and the third pins every core for 60–120 s.
+
+The full procedure — PDQ steps, Linux packaging, WDAC/AppLocker and Smart App
+Control behaviour, cleanup, and what a run touches — is in
+[Fleet Deployment](https://github.com/issinoho/loadbearer/wiki/Fleet-Deployment)
+in the wiki.
 
 ## Scoring model
 
