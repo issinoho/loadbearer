@@ -341,10 +341,20 @@ mod tests {
 
     #[test]
     fn link_probe_talks_to_a_local_server() {
-        // A minimal stand-in for `serve`, on an ephemeral port.
-        let listener = TcpListener::bind(LOCALHOST).unwrap();
-        let addr = listener.local_addr().unwrap();
-        let udp = UdpSocket::bind(addr).unwrap();
+        // A minimal stand-in for `serve`, on an ephemeral port. The probe
+        // needs TCP and UDP on the *same* port, but the OS only picked it as
+        // free for TCP — on a host running Hyper-V (WSL, Docker Desktop) the
+        // number can sit inside a dynamic UDP reservation, where the second
+        // bind fails with WSAEACCES. Retry with another port rather than
+        // failing the test for the machine it happened to run on.
+        let (listener, udp, addr) = (0..32)
+            .find_map(|_| {
+                let listener = TcpListener::bind(LOCALHOST).ok()?;
+                let addr = listener.local_addr().ok()?;
+                let udp = UdpSocket::bind(addr).ok()?;
+                Some((listener, udp, addr))
+            })
+            .expect("no port free on both TCP and UDP after 32 tries");
         thread::spawn(move || {
             let mut b = [0u8; 2048];
             loop {
