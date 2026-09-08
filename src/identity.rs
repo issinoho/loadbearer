@@ -64,6 +64,10 @@ pub fn collect() -> Option<MachineId> {
 /// Reject the placeholder strings OEMs ship in place of a real serial. Without
 /// this a fleet quietly collapses every unconfigured machine of a given model
 /// into one identity, because they all report the same "serial".
+///
+/// Only the Windows and Linux collectors call this, so it is dead code on a
+/// platform with neither — macOS builds from source, which the README covers.
+#[cfg_attr(not(any(windows, target_os = "linux")), allow(dead_code))]
 fn meaningful(s: &str) -> Option<String> {
     const JUNK: &[&str] = &[
         "to be filled by o.e.m.",
