@@ -2,6 +2,16 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 1.2.4 - Tue, 8 Sep 2026
+
+- **`--target-dir` and `--output` no longer need to exist first.** `run`
+  created the disk scratch file with `create(true)`, which makes the file but
+  not missing parent directories, so a fresh `--target-dir` (e.g. a scripted
+  first run against `%ProgramData%\loadbearer` before that folder exists)
+  failed with a bare "the system cannot find the path specified." `run`,
+  `score` and `soak` now create the directory (or the output file's parent
+  directory) first.
+
 ## 1.2.3 - Mon, 7 Sep 2026
 
 A distribution release: new ways to install loadbearer and better ways to
