@@ -116,6 +116,8 @@ pub fn execute(args: RunArgs) -> Result<()> {
         Some(dir) => dir,
         None => std::env::current_dir()?,
     };
+    std::fs::create_dir_all(&target_dir)
+        .with_context(|| format!("creating disk scratch directory {}", target_dir.display()))?;
     debug!(target: "loadbearer::run", "disk scratch target dir: {}", target_dir.display());
     let ctx = RunContext {
         preset: r.duration.into(),
@@ -340,6 +342,8 @@ fn probe_link(args: &RunArgs) -> Result<Option<crate::scoring::LinkResult>> {
 
 fn write_output(result: &ResultFile, path: Option<&Path>) -> Result<()> {
     if let Some(path) = path {
+        crate::util::ensure_parent_dir(path)
+            .with_context(|| format!("creating directory for {}", path.display()))?;
         let json = serde_json::to_string_pretty(result)?;
         std::fs::write(path, json).with_context(|| format!("writing {}", path.display()))?;
         info!(target: "loadbearer::run", "result written to {}", path.display());

@@ -202,6 +202,8 @@ pub fn execute(args: SoakArgs) -> Result<()> {
         output::print_soak_report(&doc.machine, &doc.soak);
     }
     if let Some(path) = &args.output {
+        crate::util::ensure_parent_dir(path)
+            .with_context(|| format!("creating directory for {}", path.display()))?;
         let json = serde_json::to_string_pretty(&doc)?;
         std::fs::write(path, json).with_context(|| format!("writing {}", path.display()))?;
         if !args.json {

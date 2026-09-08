@@ -1,10 +1,25 @@
-//! Small shared helpers: a fast seeded PRNG for workload generation and byte-size
-//! constants. Kept dependency-free on purpose — benchmark workloads must stay
-//! predictable and identical across platforms.
+//! Small shared helpers: a fast seeded PRNG for workload generation, byte-size
+//! constants, and a couple of filesystem odds and ends. The PRNG is kept
+//! dependency-free on purpose — benchmark workloads must stay predictable and
+//! identical across platforms.
+
+use std::path::Path;
 
 /// Binary megabyte / gigabyte as `f64`, for turning byte counts into rates.
 pub const MIB: f64 = 1024.0 * 1024.0;
 pub const GIB: f64 = MIB * 1024.0;
+
+/// Create the parent directory of `path` if it doesn't already exist, so
+/// writing a `--output` file under a not-yet-created directory (e.g. a fresh
+/// `--target-dir` on a machine's first run) doesn't fail.
+pub fn ensure_parent_dir(path: &Path) -> std::io::Result<()> {
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent)?;
+    }
+    Ok(())
+}
 
 /// Geometric mean of a slice; `0.0` for an empty slice. Each value is floored
 /// just above zero so a single zero cannot collapse the whole product.
