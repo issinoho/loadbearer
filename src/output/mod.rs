@@ -334,6 +334,13 @@ pub fn print_scored_report(result: &ResultFile) {
         }
     }
 
+    if !result.notes.is_empty() {
+        println!("\n  Skipped:");
+        for note in &result.notes {
+            println!("    - {note}");
+        }
+    }
+
     let has_graded = result.components.iter().any(|c| c.graded);
     if has_graded {
         println!(

@@ -418,6 +418,8 @@ loadbearer net-server [--bind ADDR]
 | `--no-gpu` | Never touch the GPU: skip the `gpu` component **and** the OpenCL probe that `info` / `run` otherwise perform, so `OpenCL.dll` is never loaded. A global flag — works with any subcommand. Useful for fleet deployment where a stale ICD loader could stall enumeration. |
 | `--no-model-ref` | Skip the ["vs typical hardware"](#vs-typical-hardware) block — don't compare the CPU / GPU against their model reference. |
 | `--no-telemetry` | Don't sample CPU clocks / package power during the run (no `Clocks …` line, no `telemetry` field, no thermal-limit flag). |
+| `--tag K=V` | Attach a label to the result, repeatable (`--tag site=glasgow --tag ring=pilot`). Carried in the result JSON's `tags` field for a fleet collector to group by; **metadata only** — never affects a measurement or a grade. Keys take letters, digits, `_`, `-` and `.`. Also settable as a `[tags]` table in the config file, which `--tag` overrides per key. |
+| `--fail-under GRADE` | Exit **3** if the overall grade is worse than `GRADE` (`S`/`A`/`B`/`C`/`D`/`F`), so a management tool can flag the machine. A run that couldn't complete is still exit 1, keeping "this machine is slow" distinct from "this run broke". Ignored, with a note, when nothing in the run is graded (e.g. `--only network`). |
 | `--output FILE` | Write the full result as a versioned JSON file. Works alongside the TUI or plain output. |
 | `--plain` | Disable the TUI and emit the plain-text report. Implied automatically when stdout is not a terminal. |
 | `--json` | Disable the TUI and emit only the result JSON to stdout. |
@@ -720,6 +722,17 @@ benchmark; use `--only cpu,memory,network` to skip it.
   x86 build, `neon` on Apple Silicon / Arm).
 - `raw` — every subtest's per-run values and summary statistics, unscored.
 - `components` / `overall` — the scored, graded results.
+- `tags` — the `--tag` / config-file labels, if any. Organisational metadata,
+  never an input to a score.
+- `notes` — anything that didn't run as asked but didn't stop the run: an
+  ungraded component a security policy refused, a link probe that couldn't
+  reach its target. A collector should read a run carrying notes as complete
+  but partial, rather than as clean data. Absent when the run was clean.
+- `machine.identity` — the machine's SMBIOS UUID, serial and asset tag plus the
+  OS install id, for telling repeat runs of one machine from a machine not seen
+  before (`hostname` is renameable and gets reissued). Best-effort: fields are
+  absent where firmware doesn't report them or the OS won't say without root,
+  and the whole block is absent when none could be read.
 - `link` — the `--net-target` link probe, if one ran (ungraded).
 - `soak` — the `--soak` sustained-load result, if one ran (ungraded): every
   per-second sample plus the derived peak / steady / retained / onset figures.

@@ -66,6 +66,25 @@ impl Grade {
             Grade::F => "F",
         }
     }
+
+    /// Best to worst, `0` being `S`. Deliberately not a derived `Ord`: with
+    /// this declaration order the *greater* grade would be the worse one, and
+    /// a caller reading `a > b` would get the polarity backwards.
+    fn rank(self) -> u8 {
+        match self {
+            Grade::S => 0,
+            Grade::A => 1,
+            Grade::B => 2,
+            Grade::C => 3,
+            Grade::D => 4,
+            Grade::F => 5,
+        }
+    }
+
+    /// True when this grade is `floor` or better, e.g. `A.is_at_least(C)`.
+    pub fn is_at_least(self, floor: Grade) -> bool {
+        self.rank() <= floor.rank()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -179,6 +198,12 @@ pub struct ResultFile {
     /// never an input to a score.
     #[serde(default, skip_serializing_if = "crate::tags::Tags::is_empty")]
     pub tags: crate::tags::Tags,
+    /// Anything that didn't run as asked but didn't stop the run: an ungraded
+    /// component a security policy refused, a link probe that couldn't reach
+    /// its target. A collector should treat a run with notes as complete but
+    /// partial, rather than as clean data.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<String>,
     /// Present only when `--net-target` was given.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub link: Option<LinkResult>,
@@ -217,6 +242,7 @@ impl ResultFile {
             components: scored.components,
             overall: scored.overall,
             tags: crate::tags::Tags::new(),
+            notes: Vec::new(),
             link,
             soak: None,
             model_ref: Vec::new(),
@@ -478,6 +504,20 @@ mod tests {
     use super::*;
     use crate::engine::stats::Stats;
     use crate::engine::{BenchmarkOutcome, SubtestOutcome};
+
+    #[test]
+    fn is_at_least_reads_best_to_worst() {
+        assert!(Grade::S.is_at_least(Grade::F));
+        assert!(Grade::A.is_at_least(Grade::C));
+        assert!(Grade::C.is_at_least(Grade::C), "a floor is inclusive");
+        assert!(!Grade::D.is_at_least(Grade::C));
+        assert!(!Grade::F.is_at_least(Grade::S));
+        // Every grade clears an F floor; only S clears an S floor.
+        for g in [Grade::S, Grade::A, Grade::B, Grade::C, Grade::D, Grade::F] {
+            assert!(g.is_at_least(Grade::F));
+            assert_eq!(g.is_at_least(Grade::S), g == Grade::S);
+        }
+    }
 
     fn subtest(id: &str, dir: Direction, value: f64) -> SubtestOutcome {
         SubtestOutcome {

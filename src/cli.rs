@@ -30,6 +30,18 @@ pub enum DurationArg {
     Thorough,
 }
 
+/// A letter grade, for `--fail-under`.
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+#[value(rename_all = "upper")]
+pub enum GradeArg {
+    S,
+    A,
+    B,
+    C,
+    D,
+    F,
+}
+
 /// Benchmark and grade a machine's CPU, memory and disk.
 ///
 /// Run the same build on two machines and compare their result files to see
@@ -205,6 +217,12 @@ pub struct RunArgs {
     /// never affects a measurement or a grade (e.g. `--tag site=glasgow`).
     #[arg(long = "tag", value_name = "K=V")]
     pub tags: Vec<String>,
+
+    /// Exit 3 when the overall grade is worse than this, so a fleet tool can
+    /// flag the machine. A benchmark that couldn't run is still exit 1 —
+    /// "this machine is slow" and "this run broke" stay distinguishable.
+    #[arg(long, value_enum, value_name = "GRADE")]
+    pub fail_under: Option<GradeArg>,
 
     /// Write the result JSON to a file.
     #[arg(long, value_name = "FILE")]

@@ -51,7 +51,20 @@ impl Cli {
     }
 }
 
-fn main() -> Result<()> {
+/// Process exit codes. `VERSIONING.md` promises `0` on success and non-zero on
+/// failure; these only refine the non-zero side. `2` is left alone because
+/// clap already uses it for a usage error.
+pub mod exit {
+    /// Ran and produced a result. Optional extras may have been skipped — see
+    /// the result file's `notes`.
+    pub const OK: u8 = 0;
+    /// Couldn't produce a result.
+    pub const ERROR: u8 = 1;
+    /// Ran fine, but the grade came in under `--fail-under`.
+    pub const BELOW_THRESHOLD: u8 = 3;
+}
+
+fn main() -> std::process::ExitCode {
     let cli = Cli::parse();
 
     if let Some(path) = logging::init(cli.log_target(), cli.log_level.map(Into::into)) {
@@ -65,13 +78,19 @@ fn main() -> Result<()> {
         );
     }
 
-    let result = dispatch(cli);
-    if let Err(e) = &result {
-        error!(target: "loadbearer", "exiting with error: {e:#}");
-    } else {
-        info!(target: "loadbearer", "done");
+    match dispatch(cli) {
+        Ok(code) => {
+            info!(target: "loadbearer", "done (exit {code})");
+            std::process::ExitCode::from(code)
+        }
+        Err(e) => {
+            error!(target: "loadbearer", "exiting with error: {e:#}");
+            // `{:?}` on an anyhow error is the "Error: … / Caused by: …" form
+            // that `fn main() -> Result` used to print for us.
+            eprintln!("Error: {e:?}");
+            std::process::ExitCode::from(exit::ERROR)
+        }
     }
-    result
 }
 
 /// The subcommand name, for the session header line.
@@ -90,7 +109,9 @@ fn command_name(command: &Command) -> &'static str {
     }
 }
 
-fn dispatch(cli: Cli) -> Result<()> {
+/// Returns the exit code to leave with. Only `run` has anything to say beyond
+/// success-or-error, so every other arm reports `OK` and relies on `?`.
+fn dispatch(cli: Cli) -> Result<u8> {
     if cli.no_gpu {
         info!(target: "loadbearer", "--no-gpu: GPU probe and component disabled");
         benches::gpu_disable();
@@ -103,16 +124,16 @@ fn dispatch(cli: Cli) -> Result<()> {
             } else {
                 output::print_inventory(&inv);
             }
-            Ok(())
+            Ok(exit::OK)
         }
-        Command::Mem(args) => mem::execute(args),
+        Command::Mem(args) => mem::execute(args).map(|()| exit::OK),
         Command::List => {
             output::print_catalog(&benches::all(), &scoring::Baseline::reference_v1());
-            Ok(())
+            Ok(exit::OK)
         }
         Command::Run(args) => run::execute(args),
-        Command::Compare(args) => compare::execute(args),
-        Command::Score(args) => score::execute(args),
+        Command::Compare(args) => compare::execute(args).map(|()| exit::OK),
+        Command::Score(args) => score::execute(args).map(|()| exit::OK),
         Command::Baseline(args) => {
             if args.files.is_empty() {
                 print!("{}", scoring::Baseline::embedded_toml());
@@ -124,10 +145,10 @@ fn dispatch(cli: Cli) -> Result<()> {
                 )?;
                 print!("{toml}");
             }
-            Ok(())
+            Ok(exit::OK)
         }
-        Command::Models(args) => scoring::models::execute(args),
-        Command::Soak(args) => soak::execute(args),
-        Command::NetServer(args) => benches::net_serve(&args.bind),
+        Command::Models(args) => scoring::models::execute(args).map(|()| exit::OK),
+        Command::Soak(args) => soak::execute(args).map(|()| exit::OK),
+        Command::NetServer(args) => benches::net_serve(&args.bind).map(|()| exit::OK),
     }
 }

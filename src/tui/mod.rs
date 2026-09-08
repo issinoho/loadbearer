@@ -18,7 +18,7 @@ use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers
 
 use app::{App, Ev, Msg, Phase};
 
-use crate::engine::{Benchmark, Progress, ProgressEvent, RunContext, run_benchmark};
+use crate::engine::{Benchmark, Progress, ProgressEvent, RunContext};
 use crate::inventory::Inventory;
 use crate::scoring::{Baseline, Profile, ResultFile, RunConfig, score_run};
 
@@ -155,17 +155,16 @@ fn spawn_worker(init: RunInit, tx: Sender<Msg>) -> JoinHandle<()> {
         log::debug!(target: "loadbearer::tui", "worker thread started");
         let mut progress = ChannelProgress::new(tx.clone());
         let sampler = crate::telemetry::Sampler::start(!no_telemetry);
-        let mut outcomes = Vec::with_capacity(selected.len());
-        for bench in &selected {
-            match run_benchmark(bench.as_ref(), &ctx, &mut progress) {
-                Ok(outcome) => outcomes.push(outcome),
-                Err(err) => {
-                    log::warn!(target: "loadbearer::tui", "worker: benchmark {} failed: {err:#}", bench.id());
-                    let _ = tx.send(Msg::Failed(format!("{err:#}")));
-                    return;
-                }
+        // Same policy as the plain path: an ungraded component that a security
+        // policy refuses is noted and skipped, a graded one still stops the run.
+        let (outcomes, notes) = match crate::run::run_benchmarks(&selected, &ctx, &mut progress) {
+            Ok(pair) => pair,
+            Err(err) => {
+                log::warn!(target: "loadbearer::tui", "worker: benchmarks failed: {err:#}");
+                let _ = tx.send(Msg::Failed(format!("{err:#}")));
+                return;
             }
-        }
+        };
         let telemetry = sampler.finish();
 
         let scored = match score_run(&outcomes, &baseline, profile, curve_k) {
@@ -189,6 +188,7 @@ fn spawn_worker(init: RunInit, tx: Sender<Msg>) -> JoinHandle<()> {
         let mut result = ResultFile::assemble(machine, config, outcomes, scored, None);
         result.model_ref = model_ref;
         result.telemetry = telemetry;
+        result.notes = notes;
 
         // Sustained-load phase: stream a sample per second to the UI, then
         // fold the analysed result into the result file. A cancel during the
