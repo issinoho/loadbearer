@@ -126,6 +126,19 @@ pub fn execute(args: RunArgs) -> Result<u8> {
         "selected benchmarks: [{}]",
         selected.iter().map(|b| b.id()).collect::<Vec<_>>().join(", "),
     );
+
+    // Before the baseline, the inventory, the scratch directory — anything a
+    // skipped run shouldn't pay for. A gate declining to run is not a failure,
+    // so this leaves with 0 and writes no result file.
+    let gate_report = match gates(&args)?.evaluate() {
+        crate::gates::Decision::Proceed(report) => *report,
+        crate::gates::Decision::Skip(why) => {
+            info!(target: "loadbearer::run", "skipped: {why}");
+            eprintln!("loadbearer run skipped — {why}");
+            return Ok(crate::exit::OK);
+        }
+    };
+
     let baseline = Baseline::reference_v1();
     let machine = crate::inventory::collect();
 
@@ -164,11 +177,29 @@ pub fn execute(args: RunArgs) -> Result<u8> {
     );
     if interactive {
         run_interactive(
-            &args, selected, ctx, baseline, r.profile, r.curve_k, machine, config, r.tags,
+            &args,
+            selected,
+            ctx,
+            baseline,
+            r.profile,
+            r.curve_k,
+            machine,
+            config,
+            r.tags,
+            gate_report,
         )
     } else {
         run_plain(
-            &args, &selected, &ctx, &baseline, r.profile, r.curve_k, machine, config, r.tags,
+            &args,
+            &selected,
+            &ctx,
+            &baseline,
+            r.profile,
+            r.curve_k,
+            machine,
+            config,
+            r.tags,
+            gate_report,
         )
     }
 }
@@ -184,6 +215,7 @@ fn run_interactive(
     machine: Inventory,
     config: RunConfig,
     tags: crate::tags::Tags,
+    gate_report: crate::gates::GateReport,
 ) -> Result<u8> {
     let header = format!(
         "{} · {} · {} threads · {} preset · {} profile",
@@ -213,6 +245,7 @@ fn run_interactive(
             result.link = link;
             result.notes.extend(link_notes);
             result.tags = tags;
+            result.gates = (!gate_report.is_empty()).then_some(gate_report);
             write_output(&result, args.output.as_deref())?;
             let written = match &args.output {
                 Some(p) => format!(" · written to {}", p.display()),
@@ -252,6 +285,7 @@ fn run_plain(
     machine: Inventory,
     config: RunConfig,
     tags: crate::tags::Tags,
+    gate_report: crate::gates::GateReport,
 ) -> Result<u8> {
     if !args.json {
         eprintln!(
@@ -284,6 +318,7 @@ fn run_plain(
     result.telemetry = telemetry;
     result.tags = tags;
     result.notes = notes;
+    result.gates = (!gate_report.is_empty()).then_some(gate_report);
 
     if args.json {
         result.soak = run_soak(args);
@@ -302,6 +337,26 @@ fn run_plain(
         }
     }
     Ok(threshold_code(args, &result))
+}
+
+/// Build the unattended-run gates from the command line. The hostname comes
+/// straight from the OS rather than the inventory, because the gates run before
+/// anything as expensive as a full inventory collection.
+fn gates(args: &RunArgs) -> Result<crate::gates::Gates<'_>> {
+    let skip_if_newer_than = match &args.skip_if_newer_than {
+        Some(s) => Some(
+            crate::gates::parse_age(s).with_context(|| format!("--skip-if-newer-than {s:?}"))?,
+        ),
+        None => None,
+    };
+    Ok(crate::gates::Gates {
+        not_on_battery: args.not_on_battery,
+        if_idle: args.if_idle,
+        jitter: args.jitter.map(std::time::Duration::from_secs),
+        skip_if_newer_than,
+        output: args.output.as_deref(),
+        hostname: sysinfo::System::host_name(),
+    })
 }
 
 /// The machine's CPU / GPU measured against their model references, unless

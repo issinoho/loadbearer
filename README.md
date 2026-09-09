@@ -420,6 +420,10 @@ loadbearer net-server [--bind ADDR]
 | `--no-telemetry` | Don't sample CPU clocks / package power during the run (no `Clocks …` line, no `telemetry` field, no thermal-limit flag). |
 | `--tag K=V` | Attach a label to the result, repeatable (`--tag site=glasgow --tag ring=pilot`). Carried in the result JSON's `tags` field for a fleet collector to group by; **metadata only** — never affects a measurement or a grade. Keys take letters, digits, `_`, `-` and `.`. Also settable as a `[tags]` table in the config file, which `--tag` overrides per key. |
 | `--fail-under GRADE` | Exit **3** if the overall grade is worse than `GRADE` (`S`/`A`/`B`/`C`/`D`/`F`), so a management tool can flag the machine. A run that couldn't complete is still exit 1, keeping "this machine is slow" distinct from "this run broke". Ignored, with a note, when nothing in the run is graded (e.g. `--only network`). |
+| `--not-on-battery` | Don't run when the machine is on battery — the clocks are usually power-capped, so the numbers wouldn't be comparable. **Skipping exits 0**, not a failure. A machine with no battery counts as mains; a platform that won't say proceeds with a note rather than skipping. |
+| `--if-idle` | Don't run when the machine is already busy — global CPU load at or above **20 %**, sampled just before starting. Skipping exits 0. This asks "is the machine busy", not "is anyone using it": a user reading a document won't register. |
+| `--jitter SECS` | Wait a random 0–`SECS` before starting, so an estate told to run at 09:00 doesn't all hit the same file share at 09:00. Seeded per host, so machines pick different delays. Only paid by a run that's actually going to happen. |
+| `--skip-if-newer-than AGE` | Don't run if `--output` already exists and is newer than `AGE` (`30s`, `15m`, `12h`, `7d`) — so a deployment tool retrying doesn't re-benchmark. Skipping exits 0. Requires `--output`, whose mtime is the record; nothing extra is persisted. A bare number is rejected rather than guessed at. |
 | `--output FILE` | Write the full result as a versioned JSON file. Works alongside the TUI or plain output. |
 | `--plain` | Disable the TUI and emit the plain-text report. Implied automatically when stdout is not a terminal. |
 | `--json` | Disable the TUI and emit only the result JSON to stdout. |
@@ -637,6 +641,17 @@ What makes that work across repeat sweeps:
 - **`--fail-under GRADE`** — exit `3` for a machine that grades below your
   floor, which a management tool can act on while still telling that apart
   from exit `1`, "this run broke".
+- **Gates, so a sweep isn't disruptive.** A benchmark pins every core for
+  minutes, which is unwelcome on someone's laptop mid-meeting and pointless on
+  a machine running off battery. `--not-on-battery`, `--if-idle`,
+  `--skip-if-newer-than 7d` (don't re-benchmark on a redeploy) and
+  `--jitter 300` (don't have 500 machines hit the share at once) let the caller
+  say when *not* to run. **A gate declining to run exits 0**, because deciding
+  not to benchmark is the tool doing as it was told — a fleet where every
+  docked-at-lunchtime laptop shows as a failed deployment is a fleet where
+  someone turns the gates off. What the gates observed lands in the result's
+  `gates` block, so you can filter for runs taken on mains and on a quiet
+  machine.
 - **`--no-gpu`** is worth passing on a fleet: it skips the OpenCL probe
   entirely, so a stale ICD loader left by an uninstalled driver can't stall
   enumeration. GPU isn't in the grade anyway.
@@ -788,6 +803,10 @@ benchmark; use `--only cpu,memory,network` to skip it.
   ungraded component a security policy refused, a link probe that couldn't
   reach its target. A collector should read a run carrying notes as complete
   but partial, rather than as clean data. Absent when the run was clean.
+- `gates` — what the unattended-run gates observed: `on_ac`, `cpu_load_pct`,
+  `jitter_secs`. Present only when a gate was asked for, and worth filtering
+  on — a run taken on mains and on an idle machine is more comparable than one
+  that wasn't.
 - `machine.identity` — the machine's SMBIOS UUID, serial and asset tag plus the
   OS install id, for telling repeat runs of one machine from a machine not seen
   before (`hostname` is renameable and gets reissued). Best-effort: fields are

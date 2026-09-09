@@ -204,6 +204,12 @@ pub struct ResultFile {
     /// partial, rather than as clean data.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub notes: Vec<String>,
+    /// What the unattended-run gates observed — mains state, CPU load, the
+    /// jitter actually waited. Present only when a gate was asked for, and
+    /// worth filtering on: a run taken on mains and on a quiet machine is
+    /// more comparable than one that wasn't.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gates: Option<crate::gates::GateReport>,
     /// Present only when `--net-target` was given.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub link: Option<LinkResult>,
@@ -243,6 +249,7 @@ impl ResultFile {
             overall: scored.overall,
             tags: crate::tags::Tags::new(),
             notes: Vec::new(),
+            gates: None,
             link,
             soak: None,
             model_ref: Vec::new(),

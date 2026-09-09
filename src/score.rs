@@ -136,6 +136,8 @@ pub fn rescore(
     // completely the original run managed to measure it.
     out.tags = original.tags.clone();
     out.notes = original.notes.clone();
+    // Conditions the original run was taken under don't change by re-grading.
+    out.gates = original.gates.clone();
     Ok((out, skipped))
 }
 

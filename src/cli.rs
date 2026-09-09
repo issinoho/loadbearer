@@ -224,6 +224,27 @@ pub struct RunArgs {
     #[arg(long, value_enum, value_name = "GRADE")]
     pub fail_under: Option<GradeArg>,
 
+    /// Don't run when the machine is on battery: the clocks are usually
+    /// power-capped, so the numbers aren't comparable. Skipping exits 0.
+    #[arg(long)]
+    pub not_on_battery: bool,
+
+    /// Don't run when the machine is already busy (global CPU load at or above
+    /// 20 %). Skipping exits 0.
+    #[arg(long)]
+    pub if_idle: bool,
+
+    /// Wait a random 0–SECS before starting, so a whole estate told to run at
+    /// once doesn't hit the same file share simultaneously.
+    #[arg(long, value_name = "SECS")]
+    pub jitter: Option<u64>,
+
+    /// Don't run if `--output` already exists and is newer than this age
+    /// (`30s`, `15m`, `12h`, `7d`), so a redeploy doesn't re-benchmark.
+    /// Skipping exits 0.
+    #[arg(long, value_name = "AGE", requires = "output")]
+    pub skip_if_newer_than: Option<String>,
+
     /// Write the result JSON to a file.
     #[arg(long, value_name = "FILE")]
     pub output: Option<PathBuf>,
