@@ -385,6 +385,7 @@ mod tests {
             unit: "Mops/s".into(),
             direction: Direction::HigherIsBetter,
             value: 10.0,
+            representative: crate::engine::Representative::Median,
             stats: Stats::from_runs(vec![10.0]),
             confidence: crate::engine::stats::Confidence::High,
             scored: true,

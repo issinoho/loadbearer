@@ -848,6 +848,13 @@ inputs; subtests missing from some inputs are flagged on stderr.
 
 - **Build both sides the same way.** A `target-cpu=native` build and a portable
   build produce different CPU numbers; only compare like with like.
+- **The `Clocks` line is only as good as the OS's frequency reporting.** On
+  Windows `sysinfo` returned a 1638–1900 MHz range on a part that boosts past
+  5 GHz, and under WSL2 it reports one static figure whatever the load. Where
+  that happens the clock trace is uninformative, and so is the "thermally
+  limited" verdict derived from it — which is why a run's confidence flags come
+  primarily from run-to-run spread. On bare-metal Linux (cpufreq) the reading is
+  real. Treat a flat clock trace as "no data", not as "no throttling".
 - **All-core CPU subtests report their peak run, not their median.** An
   all-core series decays rather than scatters: every core at full tilt holds
   boost for a few seconds, then drops to the package power limit. A median over

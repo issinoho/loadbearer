@@ -639,6 +639,7 @@ mod tests {
                     unit: (*unit).into(),
                     direction: Direction::HigherIsBetter,
                     value: *value,
+                    representative: crate::engine::Representative::Median,
                     stats: Stats::from_runs(vec![*value]),
                     confidence: Confidence::Medium,
                     scored: true,

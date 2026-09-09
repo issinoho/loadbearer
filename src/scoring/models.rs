@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cli::ModelsArgs;
 use crate::engine::stats::{Confidence, Stats};
-use crate::engine::{BenchmarkOutcome, Direction, SubtestOutcome};
+use crate::engine::{BenchmarkOutcome, Direction, Representative, SubtestOutcome};
 
 /// `(id, unit, label)` for every subtest the model table can hold. All are
 /// higher-is-better; none are latency.
@@ -451,6 +451,8 @@ pub fn synthetic_result(kind: &str, entry: &ModelEntry) -> Result<crate::scoring
                 unit: (*unit).to_string(),
                 direction: Direction::HigherIsBetter,
                 value: v,
+                // A single tabulated value: median and peak are the same thing.
+                representative: Representative::Median,
                 stats: Stats::from_runs(vec![v]),
                 confidence: Confidence::High,
                 scored: true,
@@ -711,6 +713,7 @@ mod tests {
                     unit: (*unit).to_string(),
                     direction: Direction::HigherIsBetter,
                     value: v,
+                    representative: Representative::Median,
                     stats: Stats::from_runs(vec![v]),
                     confidence: Confidence::High,
                     scored: true,

@@ -26,10 +26,12 @@ pub enum Direction {
 }
 
 /// Which statistic over the timed runs is the subtest's reported value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Representative {
     /// The run median. Right for a measurement whose runs scatter around a
     /// stable central value, which is nearly all of them.
+    #[default]
     Median,
     /// The best run.
     ///
@@ -229,8 +231,13 @@ pub struct SubtestOutcome {
     pub label: String,
     pub unit: String,
     pub direction: Direction,
-    /// Representative value for scoring (the run median).
+    /// Representative value for scoring — the statistic named by
+    /// `representative`.
     pub value: f64,
+    /// Which statistic `value` is. Absent in result files written before 1.5,
+    /// which were all medians.
+    #[serde(default)]
+    pub representative: Representative,
     pub stats: Stats,
     pub confidence: Confidence,
     /// Mirrors [`SubtestSpec::scored`]. Informational subtests (`false`) are
@@ -335,6 +342,7 @@ pub fn run_benchmark(
             unit: spec.unit.to_string(),
             direction: spec.direction,
             value,
+            representative: spec.representative,
             stats,
             confidence,
             scored: spec.scored,

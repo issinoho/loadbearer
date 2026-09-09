@@ -300,8 +300,16 @@ fn run_plain(
 
     let mut progress = PlainProgress::new();
     let sampler = crate::telemetry::Sampler::start(!args.no_telemetry);
-    let (outcomes, mut notes) = run_benchmarks(selected, ctx, &mut progress)?;
+    let (mut outcomes, mut notes) = run_benchmarks(selected, ctx, &mut progress)?;
     let telemetry = sampler.finish();
+
+    // Before scoring, so the raw and scored views agree on confidence.
+    if let Some(note) =
+        crate::telemetry::downgrade_thermally_limited(&mut outcomes, telemetry.as_ref())
+    {
+        warn!(target: "loadbearer::run", "{note}");
+        notes.push(note);
+    }
 
     let scored = score_run(&outcomes, baseline, profile, curve_k)?;
     let (link, link_notes) = probe_link(args);

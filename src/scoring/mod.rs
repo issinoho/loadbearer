@@ -533,6 +533,7 @@ mod tests {
             unit: "u".to_string(),
             direction: dir,
             value,
+            representative: crate::engine::Representative::Median,
             stats: Stats::from_runs(vec![value]),
             confidence: Confidence::High,
             scored: true,

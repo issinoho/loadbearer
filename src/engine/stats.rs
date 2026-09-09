@@ -80,6 +80,17 @@ impl Confidence {
         }
     }
 
+    /// One band less trustworthy; `Low` is the floor. Used when something
+    /// outside the run-to-run spread undermines the measurement — a machine
+    /// that was already thermally limited can produce a tight, repeatable and
+    /// wrong number, which `from_cv` alone would call `high`.
+    pub fn downgraded(self) -> Self {
+        match self {
+            Confidence::High => Confidence::Medium,
+            Confidence::Medium | Confidence::Low => Confidence::Low,
+        }
+    }
+
     /// Higher rank = more trustworthy. Use with `min_by_key` to find the weakest.
     pub fn rank(self) -> u8 {
         match self {

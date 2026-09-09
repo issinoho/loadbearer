@@ -157,15 +157,24 @@ fn spawn_worker(init: RunInit, tx: Sender<Msg>) -> JoinHandle<()> {
         let sampler = crate::telemetry::Sampler::start(!no_telemetry);
         // Same policy as the plain path: an ungraded component that a security
         // policy refuses is noted and skipped, a graded one still stops the run.
-        let (outcomes, notes) = match crate::run::run_benchmarks(&selected, &ctx, &mut progress) {
-            Ok(pair) => pair,
-            Err(err) => {
-                log::warn!(target: "loadbearer::tui", "worker: benchmarks failed: {err:#}");
-                let _ = tx.send(Msg::Failed(format!("{err:#}")));
-                return;
-            }
-        };
+        let (mut outcomes, mut notes) =
+            match crate::run::run_benchmarks(&selected, &ctx, &mut progress) {
+                Ok(pair) => pair,
+                Err(err) => {
+                    log::warn!(target: "loadbearer::tui", "worker: benchmarks failed: {err:#}");
+                    let _ = tx.send(Msg::Failed(format!("{err:#}")));
+                    return;
+                }
+            };
         let telemetry = sampler.finish();
+
+        // Before scoring, so the raw and scored views agree on confidence.
+        if let Some(note) =
+            crate::telemetry::downgrade_thermally_limited(&mut outcomes, telemetry.as_ref())
+        {
+            log::warn!(target: "loadbearer::tui", "{note}");
+            notes.push(note);
+        }
 
         let scored = match score_run(&outcomes, &baseline, profile, curve_k) {
             Ok(scored) => scored,
