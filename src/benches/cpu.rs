@@ -60,9 +60,12 @@ impl Benchmark for CpuBenchmark {
         const HI: Direction = Direction::HigherIsBetter;
         let mut v = vec![
             SubtestSpec::scored("int_single", "Integer, single-core", "Mops/s", HI),
-            SubtestSpec::scored("int_multi", "Integer, all cores", "Mops/s", HI),
+            // Peak, not median: an all-core run series decays from boost to the
+            // package power limit, so a median reports whichever regime happens
+            // to straddle the middle sample. See `Representative::Peak`.
+            SubtestSpec::scored("int_multi", "Integer, all cores", "Mops/s", HI).peak(),
             SubtestSpec::scored("float_single", "Float, single-core", "MFLOP/s", HI),
-            SubtestSpec::scored("float_multi", "Float, all cores", "MFLOP/s", HI),
+            SubtestSpec::scored("float_multi", "Float, all cores", "MFLOP/s", HI).peak(),
             SubtestSpec::scored("hash", "BLAKE3 hash", "MiB/s", HI),
             SubtestSpec::scored("compress", "DEFLATE compress", "MiB/s", HI),
             SubtestSpec::scored("aes_gcm", "AES-256-GCM encrypt", "MiB/s", HI),
@@ -70,7 +73,10 @@ impl Benchmark for CpuBenchmark {
         ];
         for &(n, id, label) in SCALE_POINTS {
             if n < self.logical {
-                v.push(SubtestSpec::info(id, label, "Mops/s", HI));
+                // Same decay applies once several threads are loaded, and the
+                // curve is only interpretable if its points and the `int_multi`
+                // endpoint are the same statistic.
+                v.push(SubtestSpec::info(id, label, "Mops/s", HI).peak());
             }
         }
         v

@@ -25,6 +25,34 @@ pub enum Direction {
     LowerIsBetter,
 }
 
+/// Which statistic over the timed runs is the subtest's reported value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Representative {
+    /// The run median. Right for a measurement whose runs scatter around a
+    /// stable central value, which is nearly all of them.
+    Median,
+    /// The best run.
+    ///
+    /// For an **all-core** throughput subtest the runs don't scatter around a
+    /// centre — they *decay*. Every core at full tilt holds boost clocks for a
+    /// few seconds and then drops to the package power limit, so a run series
+    /// looks like `105k 105k 85k 73k 73k 73k 73k 72k 72k`. A median over that
+    /// reports whichever regime happens to straddle the middle sample, which
+    /// makes the value bimodal: two identical `--duration thorough` runs on a
+    /// 13th-gen mobile part came out 42 % apart (103.5k vs 72.7k) purely on
+    /// when the thermal knee landed.
+    ///
+    /// The peak is the stable answer and the one the subtest is nominally
+    /// asking — what the silicon can do with every core — leaving how long a
+    /// machine *sustains* it to `loadbearer soak`, which measures exactly that
+    /// and is deliberately never graded. Measured over twelve comparable runs,
+    /// the peak held to ~8 % where the median swung ~50 %.
+    ///
+    /// A throughput peak can't overshoot the hardware, so the maximum is safe
+    /// here in a way it wouldn't be for a latency subtest.
+    Peak,
+}
+
 /// Static description of one measurement within a benchmark.
 #[derive(Debug, Clone)]
 pub struct SubtestSpec {
@@ -32,6 +60,9 @@ pub struct SubtestSpec {
     pub label: &'static str,
     pub unit: &'static str,
     pub direction: Direction,
+    /// Which statistic over the runs is reported. [`Representative::Median`]
+    /// unless the subtest says otherwise.
+    pub representative: Representative,
     /// `true` if this subtest is looked up in the baseline and folded into the
     /// component and overall grade. `false` for an *informational* subtest:
     /// still measured, kept in `raw`, shown in output and usable by `compare`,
@@ -53,8 +84,16 @@ impl SubtestSpec {
             label,
             unit,
             direction,
+            representative: Representative::Median,
             scored: true,
         }
+    }
+
+    /// Report the peak of the runs rather than the median — for a subtest
+    /// whose runs decay rather than scatter. See [`Representative::Peak`].
+    pub const fn peak(mut self) -> Self {
+        self.representative = Representative::Peak;
+        self
     }
 
     /// An informational subtest — measured and shown, never scored.
@@ -69,6 +108,7 @@ impl SubtestSpec {
             label,
             unit,
             direction,
+            representative: Representative::Median,
             scored: false,
         }
     }
@@ -280,6 +320,10 @@ pub fn run_benchmark(
 
         let stats = Stats::from_runs(runs);
         let confidence = Confidence::from_cv(stats.cv);
+        let value = match spec.representative {
+            Representative::Median => stats.median,
+            Representative::Peak => stats.max,
+        };
         log::debug!(
             target: "loadbearer::engine",
             "subtest {}/{} done: median {:.3} {} (cv {:.1}%, {})",
@@ -290,7 +334,7 @@ pub fn run_benchmark(
             label: spec.label.to_string(),
             unit: spec.unit.to_string(),
             direction: spec.direction,
-            value: stats.median,
+            value,
             stats,
             confidence,
             scored: spec.scored,
@@ -430,4 +474,51 @@ where
         let handles: Vec<_> = (0..threads).map(|_| scope.spawn(&f)).collect();
         handles.into_iter().map(|h| h.join().unwrap()).sum()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const HI: Direction = Direction::HigherIsBetter;
+
+    #[test]
+    fn subtests_report_the_median_unless_they_ask_for_peak() {
+        let plain = SubtestSpec::scored("x", "X", "u", HI);
+        assert_eq!(plain.representative, Representative::Median);
+        assert_eq!(
+            SubtestSpec::scored("x", "X", "u", HI).peak().representative,
+            Representative::Peak
+        );
+        // `peak()` changes only the statistic.
+        let p = SubtestSpec::info("y", "Y", "u", HI).peak();
+        assert_eq!(p.representative, Representative::Peak);
+        assert!(!p.scored, "peak() must not make an info subtest graded");
+    }
+
+    /// The reason `Peak` exists: over a run series that decays from boost to
+    /// the power limit, the median reports whichever regime straddles the
+    /// middle sample. These are real `int_multi` readings from two identical
+    /// `--duration thorough` runs — the medians are 42 % apart while the peaks
+    /// agree to under 1 %.
+    #[test]
+    fn a_decaying_series_has_an_unstable_median_but_a_stable_peak() {
+        let throttled_early =
+            Stats::from_runs(vec![103.0, 105.0, 85.0, 73.0, 73.0, 73.0, 73.0, 72.0, 72.0]);
+        let throttled_late = Stats::from_runs(vec![
+            105.0, 105.0, 105.0, 105.0, 104.0, 102.0, 86.0, 86.0, 84.0,
+        ]);
+
+        let median_gap = (throttled_late.median - throttled_early.median) / throttled_early.median;
+        assert!(
+            median_gap > 0.3,
+            "expected the medians to diverge, got {median_gap:.2}"
+        );
+
+        let peak_gap = (throttled_late.max - throttled_early.max).abs() / throttled_early.max;
+        assert!(
+            peak_gap < 0.02,
+            "expected the peaks to agree, got {peak_gap:.3}"
+        );
+    }
 }

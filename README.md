@@ -848,6 +848,21 @@ inputs; subtests missing from some inputs are flagged on stderr.
 
 - **Build both sides the same way.** A `target-cpu=native` build and a portable
   build produce different CPU numbers; only compare like with like.
+- **All-core CPU subtests report their peak run, not their median.** An
+  all-core series decays rather than scatters: every core at full tilt holds
+  boost for a few seconds, then drops to the package power limit. A median over
+  that reports whichever regime straddles the middle sample, which made
+  `int_multi` bimodal — two identical `--duration thorough` runs measured 42 %
+  apart (103.5k vs 72.7k Mops/s) purely on when the thermal knee landed.
+  Reporting the peak held to ~7 % across presets and run counts where the
+  median swung ~54 %. How long a machine *sustains* all-core load is what
+  [`soak`](#soak-options) measures, and it stays out of every grade.
+  Two consequences: the `reference-v1` anchors for `int_multi` / `float_multi`
+  predate this and read low (see the note in
+  [`baseline/reference-v1.toml`](baseline/reference-v1.toml)), and a machine
+  already heat-soaked when the run starts may never reach boost at all, so its
+  peak is a peak in name only — the `Clocks` line and the confidence flags are
+  the signal there. Single-core subtests are unaffected.
 - **`aes_gcm` depends on the crypto library, not just the CPU.** The RustCrypto
   backend gained the VAES code paths (two-plus AES blocks per instruction) in
   `aes` 0.9, which roughly doubles measured AES-GCM throughput on a CPU that

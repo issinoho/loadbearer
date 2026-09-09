@@ -41,6 +41,23 @@
 # Same shape of caveat as the arm64 note in the README: what the number
 # reflects is the build's crypto path as much as the silicon.
 #
+# ALSO STALE: `int_multi` and `float_multi`. These were captured as the median
+# of the timed runs. An all-core run series doesn't scatter around a centre, it
+# decays — every core at full tilt holds boost for a few seconds then drops to
+# the package power limit — so a median reports whichever regime straddles the
+# middle sample. Two identical `--duration thorough` runs on the i7-1370P in
+# this sample came out 42 % apart on `int_multi` (103.5k vs 72.7k) for that
+# reason alone, and the seven anchor machines each landed on one side or the
+# other of their own thermal knee.
+#
+# These subtests now report the *peak* of their runs instead, which held to
+# ~7 % across presets and run counts where the median swung ~54 %. The anchors
+# above were not re-measured, so they sit somewhere between the two regimes and
+# are low for a machine that boosts: expect all-core CPU to score high against
+# them until all seven machines are re-run. `int_single` / `float_single` are
+# unaffected — one core doesn't reach the package limit, and they measured the
+# same either way.
+#
 # Regenerate:  loadbearer baseline run1.json run2.json … --name reference-v1 \
 #                --description "…" > baseline/reference-v1.toml && cargo build
 
@@ -49,9 +66,9 @@ description = "geomean of 7 Intel machines (2015-2023), calibrated 2026-08-29"
 
 [components.cpu]
 int_single   = 6432.0    # Mops/s
-int_multi    = 17660.0   # Mops/s
+int_multi    = 17660.0   # Mops/s (pre-peak — see the ALL-CORE note below)
 float_single = 5684.0    # MFLOP/s
-float_multi  = 23030.0   # MFLOP/s
+float_multi  = 23030.0   # MFLOP/s (pre-peak — see the ALL-CORE note below)
 hash         = 1873.0    # MiB/s   (BLAKE3, SIMD)
 compress     = 44.37     # MiB/s   (DEFLATE level 6)
 aes_gcm      = 760.2     # MiB/s   (AES-256-GCM, single thread; pre-VAES — see
