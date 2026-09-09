@@ -203,15 +203,23 @@ if command -v lintian >/dev/null; then
 	# directory's filesystem instead, or three series in one run exhausts /tmp
 	# and dpkg-source fails with a bare non-zero status.
 	LINTIAN_TMP="$OUTDIR/.lintian-tmp"
-	rm -rf "$LINTIAN_TMP"
-	mkdir -p "$LINTIAN_TMP"
-	# Warnings are expected (a PPA upload closes no bug and vendors its
-	# dependencies); only errors should stop an upload.
-	TMPDIR="$LINTIAN_TMP" lintian --fail-on error "${CHANGES[@]}" || {
+	# One package at a time, wiping the scratch between each. Handing lintian all
+	# three at once makes it hold three expanded trees concurrently, which on a
+	# 7 GB machine got the whole run OOM-killed during 1.4.0 -- after the
+	# vendoring and signing were already done. Sequentially the peak is one tree,
+	# at the cost of a little wall time.
+	for c in "${CHANGES[@]}"; do
 		rm -rf "$LINTIAN_TMP"
-		echo "error: lintian found errors -- not printing upload commands" >&2
-		exit 1
-	}
+		mkdir -p "$LINTIAN_TMP"
+		echo "    $(basename "$c")"
+		# Warnings are expected (a PPA upload closes no bug and vendors its
+		# dependencies); only errors should stop an upload.
+		TMPDIR="$LINTIAN_TMP" lintian --fail-on error "$c" || {
+			rm -rf "$LINTIAN_TMP"
+			echo "error: lintian found errors in $(basename "$c") -- not printing upload commands" >&2
+			exit 1
+		}
+	done
 	rm -rf "$LINTIAN_TMP"
 else
 	echo "==> lintian not installed, skipping the check"

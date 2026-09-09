@@ -200,7 +200,11 @@ not accept the result.
   a riscv64 build that fails, or sits queued forever against a processor that
   has since been disabled, no longer reports the release as broken or hangs
   the wait. Widen the list there if loadbearer ever gets tested somewhere new.
-- **It needs room.** The vendored tree is ~300 MB unpacked, and lintian expands
-  every source package at once, so allow a couple of GB free on the output
-  directory's filesystem. The script keeps lintian's scratch space there rather
-  than under `/tmp`, which on a normal desktop is a tmpfs far too small for it.
+- **It needs room, and a little RAM.** The vendored tree is ~300 MB unpacked.
+  The script keeps lintian's scratch space on the output directory's
+  filesystem rather than under `/tmp`, which on a normal desktop is a tmpfs far
+  too small for it, so allow a couple of GB free there. It also runs lintian
+  one source package at a time: handing it all three at once makes it hold
+  three expanded trees concurrently, which on a 7 GB machine got the 1.4.0 run
+  OOM-killed at the lintian step — after the vendoring and signing were done,
+  but before the upload commands were printed.
