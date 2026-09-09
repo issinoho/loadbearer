@@ -2,6 +2,82 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 1.5.0 - Wed, 9 Sep 2026
+
+Unattended-run controls for fleet use, and the results of actually measuring
+whether the benchmark measures what it claims to. It mostly did; three graded
+subtests didn't, and this release fixes two of them and documents the third.
+
+- **⚠️ Graded values changed. 1.4.x and 1.5.0 scores are not comparable.**
+  Four subtests now read differently, and the embedded `reference-v1` anchors
+  have *not* been re-measured to match — they need all seven calibration
+  machines re-run, so the baseline file records each as `KNOWN STALE` with
+  what it would take to fix. Expect a modern machine to score high on
+  `aes_gcm` (since 1.4.0), `int_multi`, `float_multi` and `memory.latency`.
+  Use [`compare`](README.md#compare-options) for anything that has to be
+  defensible: it works from raw metrics and doesn't touch the baseline.
+- **Gates for when a run should *not* happen.** A graded run pins every core
+  for minutes, which is unwelcome on someone's laptop mid-meeting and
+  pointless on a machine running off a dying battery. `--not-on-battery`,
+  `--if-idle`, `--skip-if-newer-than 7d` (don't re-benchmark when a
+  deployment tool retries) and `--jitter 600` (don't have 500 machines hit one
+  file share at once) let the caller say so. **A gate declining to run exits
+  0** — deciding not to benchmark is the tool obeying instructions, and a
+  fleet where every docked-at-lunchtime laptop shows as a failed deployment is
+  a fleet where somebody turns the gates off. The reason goes to stderr and
+  the log; what the gates observed lands in the result's new `gates` block, so
+  a collector can filter for runs taken on mains and on an idle machine.
+- **All-core CPU subtests now report their peak run, not their median — and
+  this was a real defect.** An all-core series doesn't scatter around a
+  centre, it decays: every core at full tilt holds boost for a few seconds
+  and then drops to the package power limit. A median over that reports
+  whichever regime straddles the middle sample, so `int_multi` was
+  **bimodal** — two identical `--duration thorough --runs 9` runs measured
+  103.5k and 72.7k Mops/s, 42 % apart, on nothing but thermal timing. It also
+  explains the ~1.45× gap between `--duration short` and `thorough` (worth
+  ~6 % of the CPU component score) and why per-run spread was erratic. Peak
+  held to 6.8 % across presets and run counts where the median swung 53.6 %.
+  How long a machine *sustains* all-core load is what [`soak`](README.md) is
+  for, and it stays out of every grade.
+- **Throttle detection worked on nothing.** `thermal_limited` compared the
+  head and tail of the *mean* clock across logical CPUs; most subtests are
+  single-threaded, so on a 20-thread machine nineteen idle cores held that
+  mean flat. Across twenty real runs — several losing 40 % of their all-core
+  throughput mid-subtest — it fired zero times. It now reads the busiest core
+  in each sample. When it fires, peak-reported subtests have their confidence
+  lowered, because a "peak" measured while throttling wasn't one; the reason
+  goes into `notes`. Two limits, both measured and both documented: it can't
+  see a machine that was *already* saturated when the run began (nothing
+  declines — it started at the bottom), and it can't fire at all where the OS
+  doesn't report real clocks, which on Windows and WSL2 it doesn't. Read a
+  flat clock trace as "no data", not "no throttling".
+- **Memory runs are 24 % faster at `--duration thorough`** (231 s → 176 s for
+  the component). The pointer-chase cycle was rebuilt for every timed
+  iteration, and shuffling a 134M-node array eleven times was most of the
+  cost; it is now built once per subtest. That does move the figure —
+  rebuilding left the array warm in cache from the shuffle's own writes, so
+  the chase partly hit cache (189.3 → 200.6 ns on an unchanged footprint).
+  The reused figure is the honest one, but it's why `memory.latency` is on the
+  stale list above.
+- **`memory/latency` is optimistic at `--duration short`, and isn't fixed.**
+  The chase covers the preset-scaled working set — 128 MiB at `short` against
+  512 MiB at `thorough` — and a shorter range reads ~9 % faster (0.902× and
+  0.926× over two alternating pairs). Pinning the footprint was implemented,
+  measured and reverted: it couldn't be shown to fix the bias and it doubled
+  the run-to-run spread, since a large chase on a 350 ms budget completes too
+  few traversals. Documented in the accuracy notes instead — don't read a
+  `short` latency figure against a `thorough` one.
+- **Two timing-sensitive tests no longer redden CI at random.**
+  `link_probe_talks_to_a_local_server` gave the probe a 20 ms budget, which
+  can mean a single iteration against a server thread that hasn't been
+  scheduled yet; `abort_stops_the_run_early` asserted a flat 5 s on a 60 s
+  soak while the rest of the suite saturated every core. Verified by
+  reproducing both under one-CPU contention first.
+- **Result files record which statistic produced each value.** Every subtest
+  in `raw` gains `representative`, either `median` or `peak`. Additive and
+  defaulted, so files written before 1.5.0 still parse (they were all
+  medians), and `loadbearer.result/1` is unchanged.
+
 ## 1.4.0 - Tue, 8 Sep 2026
 
 A dependency release, with one consequence big enough that it needs saying
