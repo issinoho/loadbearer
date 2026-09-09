@@ -35,8 +35,17 @@ pub struct RunTelemetry {
     pub mhz_min: f64,
     pub mhz_max: f64,
     pub mhz_mean: f64,
-    /// Set when the late-run clock mean sits well below the early-run mean.
+    /// Set when the late-run clock sits well below the early-run clock, judged
+    /// on the busiest core — see [`RunTelemetry::from_samples`].
     pub thermal_limited: bool,
+    /// The busiest-core mean over the first and last quarter of the run: the
+    /// two figures `thermal_limited` is decided from. Reported because the
+    /// mean-across-CPUs fields above can look flat while these move sharply,
+    /// which is the whole reason the decision doesn't use them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub busiest_head_mhz: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub busiest_tail_mhz: Option<f64>,
     /// Mean package power over the run — Linux + Intel RAPL only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub package_watts_mean: Option<f64>,
@@ -53,6 +62,8 @@ impl RunTelemetry {
             mhz_max: 0.0,
             mhz_mean: 0.0,
             thermal_limited: false,
+            busiest_head_mhz: None,
+            busiest_tail_mhz: None,
             package_watts_mean: None,
         }
     }
@@ -74,7 +85,8 @@ impl RunTelemetry {
         }
         let n = mhz.len();
         let window = n.div_ceil(4);
-        let throttle_series = if busiest.len() == n { busiest } else { mhz };
+        let have_busiest = busiest.len() == n;
+        let throttle_series = if have_busiest { busiest } else { mhz };
         let head = mean(&throttle_series[..window]);
         let tail = mean(&throttle_series[n - window..]);
         let thermal_limited =
@@ -92,6 +104,8 @@ impl RunTelemetry {
             mhz_max: mhz.iter().copied().fold(0.0, f64::max),
             mhz_mean: mean(mhz),
             thermal_limited,
+            busiest_head_mhz: have_busiest.then_some(head),
+            busiest_tail_mhz: have_busiest.then_some(tail),
             package_watts_mean: watts,
         }
     }
@@ -280,10 +294,20 @@ pub fn downgrade_thermally_limited(
         return None;
     }
 
+    // Quote the busiest-core window means when they're available: the
+    // mean-across-CPUs figures can sit flat while these fall off a cliff, so
+    // printing those alongside this verdict made it look unfounded.
+    let clock_drop = match (tel.busiest_head_mhz, tel.busiest_tail_mhz) {
+        (Some(head), Some(tail)) => format!("{head:.0} -> {tail:.0} MHz"),
+        _ => format!(
+            "{:.0} -> {:.0} MHz, all-CPU mean",
+            tel.mhz_start, tel.mhz_end
+        ),
+    };
+
     Some(format!(
-        "clocks fell over the run ({:.0} -> {:.0} MHz mean), so peak-reported          subtests may never have reached boost — confidence lowered for {}",
-        tel.mhz_start,
-        tel.mhz_end,
+        "the busiest core's clock fell over the run ({}), so peak-reported          subtests may never have reached boost — confidence lowered for {}",
+        clock_drop,
         affected.join(", "),
     ))
 }
@@ -291,6 +315,29 @@ pub fn downgrade_thermally_limited(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The note used to quote the all-CPU mean, which on the openvms anchor
+    /// machine read "2641 -> 2639 MHz" beside a throttling verdict — a 0.08 %
+    /// drop that plainly didn't justify it. It must quote the series the
+    /// decision was made from.
+    #[test]
+    fn the_note_quotes_the_busiest_core_not_the_flat_mean() {
+        let flat_mean: Vec<f64> = vec![2641.0; 20];
+        let busy: Vec<f64> = (0..20)
+            .map(|i| if i < 6 { 3900.0 } else { 2400.0 })
+            .collect();
+        let tel = RunTelemetry::from_samples(&flat_mean, &busy, None);
+        assert!(tel.thermal_limited);
+
+        let mut o = vec![outcome("int_multi", Representative::Peak, Confidence::High)];
+        let note = downgrade_thermally_limited(&mut o, Some(&tel)).expect("should downgrade");
+        assert!(note.contains("3900"), "{note}");
+        assert!(note.contains("2400"), "{note}");
+        assert!(
+            !note.contains("2641"),
+            "must not quote the flat mean: {note}"
+        );
+    }
 
     /// The regression that mattered: a busy core decaying from boost while the
     /// all-CPU mean barely budges, because the idle cores dominate it. Real
@@ -356,6 +403,8 @@ mod tests {
             mhz_max: 3900.0,
             mhz_mean: 3000.0,
             thermal_limited: limited,
+            busiest_head_mhz: Some(3800.0),
+            busiest_tail_mhz: Some(2400.0),
             package_watts_mean: None,
         }
     }
