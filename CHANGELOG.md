@@ -2,6 +2,54 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 1.5.1 - Wed, 9 Sep 2026
+
+Fixes only. The headline is that the reference baseline has caught up with
+the measurement changes in 1.4.0 and 1.5.0, so scores are trustworthy again.
+
+- **The baseline is recalibrated, and your scores will drop by roughly 6 %.**
+  All seven calibration machines were re-run on 1.5.0, which clears the four
+  anchors 1.5.0 shipped with a `KNOWN STALE` warning: `aes_gcm` +52 % (the
+  VAES paths that arrived with `aes` 0.9), `int_multi` +34 % and `float_multi`
+  +38 % (both now the peak of their timed runs rather than the median, because
+  an all-core series decays from boost to the package power limit), and
+  `memory.latency` +4 % (the pointer-chase array is no longer rebuilt, and
+  left warm, before every iteration). Higher anchors mean lower scores: the
+  ~6 % drop *is* the inflation from grading 1.5.0 measurements against
+  anchors captured on older code. None of the seven changed grade, and they
+  now geomean to ~998, which is what "calibrated" should mean. **1.5.0 and
+  1.5.1 scores are not comparable** — but 1.5.1 numbers are consistent with
+  their own baseline, which 1.5.0's were not.
+- **The baseline is now honest about its own precision.** Recalibrating moved
+  `hash` +19 %, `float_single` +18 % and `int_single` +8 % — subtests whose
+  kernels have not changed since the previous calibration, so that is pure
+  run-to-run variation. `int_single` alone measured between 13330 and 16071
+  Mops/s across repeated runs on one machine. Read every anchor as carrying
+  roughly ±10–20 %, and don't attribute a machine scoring 1050 rather than
+  1000 to its hardware. The file's header now says so.
+- **A GPU run can no longer take the desktop with it.** A `--duration
+  thorough` run on a ThinkPad X280 (Gen9 UHD 620) stopped responding at the
+  GPU stage: 137 `i915 GPU HANG … Resetting rcs0` in seven minutes, one every
+  ~3 s. On an integrated part the display shares the engine the benchmark
+  saturates, so each reset froze the session — and nothing in the OpenCL error
+  path noticed, because `clFinish` returned `CL_SUCCESS` through every one of
+  them. Wall clock is the only available signal, so each launch is now timed
+  and the component bails if one exceeds 1 s (inside i915's 2.5 s heartbeat).
+  `gpu` is ungraded, so the run carries on and reports the component skipped.
+  Calibration also ramps up from 8 iterations rather than correcting down from
+  128, since a submission cannot be recalled once queued.
+- **The throttle warning quotes the clocks it was actually decided from.** It
+  read "clocks fell over the run (2641 → 2639 MHz mean)" on one machine — a
+  0.08 % drop offered as grounds for lowering confidence. The verdict was
+  right; the figures beside it were the mean across all CPUs, while the
+  decision is made on the busiest core. The result file now carries
+  `busiest_head_mhz` / `busiest_tail_mhz`, the two window means behind the
+  call, and the message quotes those. Additive fields, so
+  `loadbearer.result/1` is unchanged.
+- **`cut-release.sh` waits on the apt index rather than the Launchpad API.**
+  A source package reading `Published` still isn't installable until the
+  publisher runs; on 1.4.0 that gap was about 20 minutes.
+
 ## 1.5.0 - Wed, 9 Sep 2026
 
 Unattended-run controls for fleet use, and the results of actually measuring
