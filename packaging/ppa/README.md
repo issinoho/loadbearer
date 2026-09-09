@@ -130,7 +130,12 @@ this, so it doesn't call a release done while `apt` is still handing out the
 last one — but if you uploaded by hand, that wait is yours to do.
 
 To check whether a release is genuinely live, read the index rather than the
-build page:
+build page — and rather than the API. `getPublishedBinaries` is served from
+replicas that disagree with each other: during the 1.4.0 release, back-to-back
+requests returned all-`Published` and all-`Pending` for the same ten records,
+and a poll of it was still reading `Pending` an hour after the binaries had
+gone live. The index is what `apt` reads, so it can't be stale about the only
+thing that matters. `cut-release.sh` waits on the index for this reason.
 
 ```
 curl -sfL https://ppa.launchpadcontent.net/issinoho/loadbearer/ubuntu/dists/noble/main/binary-amd64/Packages.gz \

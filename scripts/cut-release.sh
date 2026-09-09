@@ -431,33 +431,52 @@ printf '%s\n' "${poll_out#*$'\n'}"
 	&& die "A $SHIPPED_ARCHES build didn't succeed. Logs: https://launchpad.net/~$LP_USER/+archive/ubuntu/$LP_PPA/+packages"
 ok "the architectures we ship built"
 
-# Built is not installable. Binaries sit at status Pending until Launchpad's
-# publisher next runs and writes dists/<series>/main/binary-<arch>/Packages.gz;
-# until then apt still offers the previous version. Stopping at "builds
-# finished" reports a release as done up to half an hour before it is.
-step "Publication"
-echo "  waiting for the publisher to put $VERSION in the apt index"
-poll_launchpad getPublishedBinaries 90 '
-import json, os, sys
-try: d = json.load(sys.stdin)
-except Exception: sys.exit(0)
-v = os.environ["LB_VERSION"]
-gate = sorted(set(os.environ["LB_ARCHES"].split()))
-series = [s for s in os.environ["LB_SERIES"].split(",") if s]
-rows = [e for e in d.get("entries", []) if v in (e.get("binary_package_version") or "")]
-if not rows: sys.exit(0)
-got = {}
-for e in rows:
-    parts = (e.get("distro_arch_series_link") or "").rstrip("/").split("/")
-    if len(parts) >= 2: got[(parts[-2], parts[-1])] = e.get("status")
-done = all(got.get((s, a)) == "Published" for s in series for a in gate)
-no_binary = "not built yet"
-print("DONE" if done else "PENDING")
-for s in series:
-    print(f"  {s:10} " + ", ".join(f"{a}={got.get((s, a), no_binary)}" for a in gate))
-' || die "$VERSION built but was still unpublished after 90 minutes. Check: https://launchpad.net/~$LP_USER/+archive/ubuntu/$LP_PPA/+packages"
+# Built is not installable. Binaries sit unpublished until Launchpad's publisher
+# next runs and writes dists/<series>/main/binary-<arch>/Packages.gz; until then
+# apt still offers the previous version. Stopping at "builds finished" reports a
+# release as done up to half an hour before it is.
+#
+# Read the index rather than the API. getPublishedBinaries is served from
+# replicas that disagree: during the 1.4.0 release, back-to-back requests
+# returned all-Published and all-Pending for the same records, and a 90-minute
+# poll of it still read Pending an hour after the binaries had gone live at
+# 09:53 -- failing a release that had in fact succeeded. The index is what apt
+# actually reads, so it cannot be stale relative to the thing we care about.
+PPA_INDEX="https://ppa.launchpadcontent.net/$LP_USER/$LP_PPA/ubuntu/dists"
 
-printf '%s\n' "${poll_out#*$'\n'}"
+# Is $VERSION in this series/arch index? Absent or unfetchable both mean "not
+# yet" -- the index 404s until the first publish for a series.
+in_index() {
+	curl -sfL "$PPA_INDEX/$1/main/binary-$2/Packages.gz" 2>/dev/null \
+		| gunzip -c 2>/dev/null \
+		| awk -v v="$VERSION-" '$1 == "Version:" && index($2, v) == 1 { found = 1 }
+		                        END { exit !found }'
+}
+
+step "Publication"
+echo "  waiting for $VERSION to reach the apt index"
+published=0
+for _ in $(seq 1 90); do
+	missing=""
+	for s in ${SERIES//,/ }; do
+		for a in $SHIPPED_ARCHES; do
+			in_index "$s" "$a" || missing="$missing $s/$a"
+		done
+	done
+	[ -z "$missing" ] && { published=1; break; }
+	sleep 60
+done
+
+for s in ${SERIES//,/ }; do
+	line=""
+	for a in $SHIPPED_ARCHES; do
+		if in_index "$s" "$a"; then line="$line $a=yes"; else line="$line $a=NO"; fi
+	done
+	printf '  %-10s%s\n' "$s" "$line"
+done
+[ "$published" -eq 1 ] \
+	|| die "$VERSION built, but 90 minutes later apt still can't see it in:$missing
+Check: https://launchpad.net/~$LP_USER/+archive/ubuntu/$LP_PPA/+packages"
 ok "published -- apt can see it"
 
 step "Done"
