@@ -384,7 +384,16 @@ mod tests {
             }
         });
 
-        let result = link_probe(&addr.to_string(), Duration::from_millis(20)).unwrap();
+        // 250 ms per phase, not 20 ms. `throughput` runs its closure at least
+        // once and then until the budget expires, so a 20 ms budget could come
+        // down to a *single* iteration — and this test probes a server thread
+        // it has only just spawned. On a busy machine (CI running the rest of
+        // this suite's all-core benchmarks in parallel) that thread may not be
+        // scheduled yet, the one round trip fails, `rtts` is 0, and
+        // `link_probe` returns the "no round trips completed" error. The
+        // budget isn't measuring anything here — the assertions are just
+        // "did it work at all" — so buy enough iterations to absorb a hiccup.
+        let result = link_probe(&addr.to_string(), Duration::from_millis(250)).unwrap();
         assert!(result.tcp_upload_gibps > 0.0);
         assert!(result.tcp_rtt_us > 0.0);
         assert!(result.udp_send_kpps > 0.0);

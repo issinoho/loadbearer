@@ -525,9 +525,20 @@ mod tests {
         let abort = AtomicBool::new(true);
         let start = Instant::now();
         let _ = run(&cfg, &abort, |_| {});
+        let elapsed = start.elapsed();
+
+        // A third of the configured duration, rather than a flat few seconds.
+        // What's being tested is that setting `abort` short-circuits a long
+        // run: honoured, this returns in milliseconds; ignored, it takes the
+        // full 60 s. Anything in between is scheduling noise, and there can be
+        // a lot of it — the rest of this suite saturates every core, so on a
+        // small CI runner the worker spawn, one work batch and two sysinfo CPU
+        // reads can take seconds of wall clock. A flat 5 s bound failed on
+        // windows-latest for exactly that reason while testing nothing extra.
         assert!(
-            start.elapsed() < Duration::from_secs(5),
-            "abort was not honoured"
+            elapsed < cfg.duration / 3,
+            "abort was not honoured: took {elapsed:?} of a {:?} soak",
+            cfg.duration,
         );
     }
 
