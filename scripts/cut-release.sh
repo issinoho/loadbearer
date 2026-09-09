@@ -137,6 +137,24 @@ ok "tools present"
 gh auth status >/dev/null 2>&1 || die "gh isn't authenticated. Run: gh auth login"
 ok "gh authenticated"
 
+# confirm() reads /dev/tty rather than stdin, so that a redirected stdin can't
+# skip a gate by feeding it EOF. That needs a controlling terminal to exist: a
+# backgrounded or detached run has none, and the read fails outright. Without
+# this check it fails at the *upload prompt* -- after the vendoring, the three
+# source packages and lintian, ten minutes in, with everything built, nothing
+# uploaded and nothing to show for it. Ask now instead.
+if [ "$ASSUME_YES" -eq 0 ] && [ "$DRY_RUN" -eq 0 ]; then
+	if (exec 3</dev/tty) 2>/dev/null; then
+		ok "a terminal is available to confirm on"
+	else
+		die "No controlling terminal, so the confirmation prompts can't be answered.
+
+  Run this in the foreground, or pass -y to take the prompts as answered.
+  (-y skips the gates before the tag push and the upload, so only use it
+  once you've watched the flow through at least once on this machine.)"
+	fi
+fi
+
 if [ "$PPA_ONLY" -eq 0 ]; then
 	current_branch="$(git rev-parse --abbrev-ref HEAD)"
 	[ "$current_branch" = "$BRANCH" ] \
