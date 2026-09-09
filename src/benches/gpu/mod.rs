@@ -27,6 +27,35 @@ const BW_GLOBAL: usize = 1 << 18;
 /// FLOP per loop iteration in `fma32`: 4 `fma` on `float4` = 4 × 4 × 2.
 const FLOP_PER_ITER: u64 = 32;
 
+/// Ceiling on a single kernel launch, past which we stop rather than submit
+/// another.
+///
+/// A driver watchdogs its engines and resets one that stops responding — i915's
+/// heartbeat fires at 2.5 s — and pre-Xe integrated parts cannot preempt a
+/// compute kernel mid-thread. On a machine whose display shares that engine, one
+/// overlong submission freezes the desktop until the reset lands. Worse, the
+/// reset is *silent* from here: `clFinish` still returns `CL_SUCCESS`, so no
+/// OpenCL error path notices and the loop cheerfully queues the next one. Timing
+/// each launch is the only signal we get.
+const MAX_LAUNCH: Duration = Duration::from_secs(1);
+
+/// What the compute calibration aims a single launch at: long enough to amortise
+/// launch + sync overhead, short enough to sample the time budget finely and to
+/// notice an abort promptly.
+const TARGET_LAUNCH_SECS: f64 = 0.008;
+
+/// Ceiling on the calibrated iteration count, for a device fast enough that
+/// [`TARGET_LAUNCH_SECS`] is never reached.
+const MAX_ITERS: u32 = 4_000_000;
+
+/// Most any single calibration step may grow the iteration count. Caps how far
+/// one unrepresentative measurement (a cold GPU clock, say) can overshoot.
+const MAX_GROWTH: f64 = 8.0;
+
+/// How many calibration launches to spend before settling for what we have.
+/// Enough to climb from 8 to [`MAX_ITERS`] at [`MAX_GROWTH`] per step.
+const CALIBRATION_STEPS: usize = 16;
+
 const KERNELS: &str = r#"
 __kernel void fma32(__global float *out, const uint iters) {
     const uint gid = get_global_id(0);
@@ -240,16 +269,66 @@ impl Benchmark for GpuBenchmark {
 }
 
 fn launch(q: &cl::Queue, k: &cl::Kernel, global: usize) -> Result<()> {
-    q.run_1d(k, global, 0)?;
-    q.finish()
+    guarded_launch(q, k, global).map(|_| ())
 }
 
-/// Time a single kernel launch (one discarded warmup launch first).
-fn time_launch(q: &cl::Queue, k: &cl::Kernel, global: usize) -> Result<f64> {
-    launch(q, k, global)?;
+/// One blocking launch, timed, refusing to go on if the device took long enough
+/// that the driver's reset watchdog is in play (see [`MAX_LAUNCH`]).
+///
+/// Bailing skips the whole GPU component — `gpu` is ungraded, so the run carries
+/// on without it — which is the right trade: once launches are overrunning, every
+/// further one hangs the engine the desktop draws on, and the numbers are
+/// measuring reset latency rather than the GPU.
+fn guarded_launch(q: &cl::Queue, k: &cl::Kernel, global: usize) -> Result<f64> {
     let t = Instant::now();
-    launch(q, k, global)?;
-    Ok(t.elapsed().as_secs_f64())
+    q.run_1d(k, global, 0)?;
+    q.finish()?;
+    let elapsed = t.elapsed();
+    if elapsed > MAX_LAUNCH {
+        bail!(
+            "a single GPU launch took {:.1} s (limit {:.1} s): the device is too \
+             slow for this workload, or its driver reset the engine mid-launch. \
+             Skipping the GPU component rather than hanging the display. Use \
+             --no-gpu to skip it up front.",
+            elapsed.as_secs_f64(),
+            MAX_LAUNCH.as_secs_f64(),
+        );
+    }
+    Ok(elapsed.as_secs_f64())
+}
+
+/// Find an iteration count that makes one launch run for about
+/// [`TARGET_LAUNCH_SECS`].
+///
+/// This ramps *up* from a trivially short launch rather than correcting down
+/// from a guess. A submission cannot be taken back once it is queued, so the
+/// search must never make an overlong one — and correcting downwards requires
+/// first measuring a launch that may itself be the one that wedges the GPU. Each
+/// step grows by at most 8×, bounding the worst overshoot to well inside
+/// [`MAX_LAUNCH`].
+fn calibrate(q: &cl::Queue, k: &cl::Kernel, global: usize) -> Result<u32> {
+    let mut iters: u32 = 8;
+    for _ in 0..CALIBRATION_STEPS {
+        k.set_u32(1, iters)?;
+        let secs = guarded_launch(q, k, global)?;
+        match next_iters(iters, secs) {
+            Some(next) => iters = next,
+            None => break,
+        }
+    }
+    Ok(iters)
+}
+
+/// The next iteration count to try, or `None` once `iters` is close enough to
+/// [`TARGET_LAUNCH_SECS`] (or as far up as we will go). Split out from
+/// [`calibrate`] so the growth bound is testable without a GPU.
+fn next_iters(iters: u32, secs: f64) -> Option<u32> {
+    if secs >= TARGET_LAUNCH_SECS * 0.75 || iters >= MAX_ITERS {
+        return None;
+    }
+    let grow = (TARGET_LAUNCH_SECS / secs.max(1e-6)).clamp(1.5, MAX_GROWTH);
+    let next = ((f64::from(iters) * grow) as u32).clamp(1, MAX_ITERS);
+    (next != iters).then_some(next)
 }
 
 /// FP32 FMA throughput in GFLOP/s.
@@ -267,14 +346,8 @@ fn compute_fp32(
     )?;
     kernel.set_mem(0, &out)?;
 
-    // Calibrate `iters` so a launch runs ~8 ms — long enough to amortise launch
-    // + sync overhead, short enough to sample the time budget finely.
-    let mut iters: u32 = 128;
-    for _ in 0..2 {
-        kernel.set_u32(1, iters)?;
-        let secs = time_launch(q, &kernel, COMPUTE_GLOBAL)?;
-        iters = ((f64::from(iters) * 0.008 / secs.max(1e-6)).clamp(64.0, 4.0e6)) as u32;
-    }
+    let iters = calibrate(q, &kernel, COMPUTE_GLOBAL)?;
+    log::debug!(target: "loadbearer::gpu", "compute_fp32 calibrated to {iters} iters/launch");
     kernel.set_u32(1, iters)?;
     for _ in 0..2 {
         launch(q, &kernel, COMPUTE_GLOBAL)?;
@@ -284,11 +357,13 @@ fn compute_fp32(
     let start = Instant::now();
     let mut launches: u64 = 0;
     while start.elapsed() < budget {
-        launch(q, &kernel, COMPUTE_GLOBAL)?;
-        launches += 1;
+        // Before the launch, not after: a launch blocks until the GPU is done,
+        // so checking afterwards makes abort latency a whole submission long.
         if abort.load(Ordering::Relaxed) {
             break;
         }
+        launch(q, &kernel, COMPUTE_GLOBAL)?;
+        launches += 1;
     }
     let secs = start.elapsed().as_secs_f64();
 
@@ -348,11 +423,11 @@ impl GpuBenchmark {
         let start = Instant::now();
         let mut launches: u64 = 0;
         while start.elapsed() < budget {
-            launch(q, &kernel, BW_GLOBAL)?;
-            launches += 1;
             if rc.abort.load(Ordering::Relaxed) {
                 break;
             }
+            launch(q, &kernel, BW_GLOBAL)?;
+            launches += 1;
         }
         let secs = start.elapsed().as_secs_f64();
 
@@ -412,6 +487,53 @@ mod tests {
                     "unexpected error: {e}"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn calibration_never_grows_more_than_the_cap() {
+        // However absurdly fast a launch looks, one step cannot leap to a
+        // submission long enough to trip the driver's watchdog.
+        for iters in [1u32, 8, 1_000, 100_000] {
+            for secs in [0.0, 1e-9, 1e-6, 1e-4] {
+                let next = next_iters(iters, secs).expect("should keep climbing");
+                assert!(
+                    f64::from(next) <= f64::from(iters) * MAX_GROWTH,
+                    "{iters} -> {next} at {secs}s exceeds {MAX_GROWTH}x",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn calibration_stops_once_the_launch_is_long_enough() {
+        assert_eq!(next_iters(1_000, TARGET_LAUNCH_SECS), None);
+        assert_eq!(next_iters(1_000, TARGET_LAUNCH_SECS * 2.0), None);
+        // And never climbs past the ceiling.
+        assert_eq!(next_iters(MAX_ITERS, 1e-6), None);
+    }
+
+    #[test]
+    fn calibration_converges_from_the_starting_point() {
+        // Simulate a device where one iteration costs a fixed time: the loop
+        // must reach the target launch length within its step budget, for
+        // devices spanning six orders of magnitude of speed.
+        for per_iter in [1e-9, 1e-8, 1e-7, 1e-6, 1e-5] {
+            let mut iters: u32 = 8;
+            let mut steps = 0;
+            while let Some(next) = next_iters(iters, f64::from(iters) * per_iter) {
+                iters = next;
+                steps += 1;
+                assert!(
+                    steps <= CALIBRATION_STEPS,
+                    "no convergence at {per_iter}s/iter"
+                );
+            }
+            let secs = f64::from(iters) * per_iter;
+            assert!(
+                secs >= TARGET_LAUNCH_SECS * 0.75 || iters >= MAX_ITERS,
+                "settled at {iters} iters = {secs}s for {per_iter}s/iter",
+            );
         }
     }
 
