@@ -14,6 +14,23 @@ use crate::scoring::{Grade, ResultFile};
 const ACCENT: Color = Color::Cyan;
 const DIM: Color = Color::DarkGray;
 
+// The gauge's unfilled track, and -- because ratatui swaps the gauge style's
+// fg and bg for the label cells that sit over the filled part -- the colour
+// the progress label is drawn in once the bar has filled past it.
+//
+// It has to be set explicitly. Leaving bg unset makes that swapped label
+// foreground `Color::Reset`, i.e. the terminal's own default foreground, over
+// a palette-indexed ACCENT: white on whatever the user's scheme calls cyan.
+// Under Dracula that is #F8F8F2 on #8BE9FD, a contrast ratio of 1.30:1, and
+// the elapsed/eta text disappears the moment the bar reaches it. It was never
+// really right anywhere -- Windows Terminal's Campbell resolves the same pair
+// to 1.99:1 -- but a darker cyan there made it look survivable, which is why
+// it was reported as a Linux problem.
+//
+// Black against the scheme's cyan measures 11.4:1 on Dracula, 6.1:1 on
+// Campbell, 4.7:1 on Gruvbox and 4.1:1 on Solarized Dark.
+const GAUGE_BG: Color = Color::Black;
+
 pub fn draw(f: &mut Frame, app: &mut App) {
     let area = f.area();
     if area.width < 44 || area.height < 12 {
@@ -128,7 +145,7 @@ fn draw_running(f: &mut Frame, app: &App, area: Rect) {
     };
     f.render_widget(
         Gauge::default()
-            .gauge_style(Style::default().fg(ACCENT))
+            .gauge_style(Style::default().fg(ACCENT).bg(GAUGE_BG))
             .ratio(frac.clamp(0.0, 1.0))
             .label(format!(
                 "{:.0}% · elapsed {}{}",
@@ -267,7 +284,7 @@ fn draw_soak(f: &mut Frame, header: &str, soak: &SoakView, cancelling: bool, are
     let remaining = (soak.duration_secs * (1.0 - frac)).max(0.0);
     f.render_widget(
         Gauge::default()
-            .gauge_style(Style::default().fg(ACCENT))
+            .gauge_style(Style::default().fg(ACCENT).bg(GAUGE_BG))
             .ratio(frac)
             .label(format!(
                 "{:.0}% · {}s / {:.0}s",
@@ -698,5 +715,60 @@ mod tests {
             b.rfind("medium"),
             "confidence column\n{a}\n{b}"
         );
+    }
+
+    /// The progress label has to stay readable once the bar fills past it.
+    ///
+    /// ratatui swaps the gauge style's fg and bg for the label cells over the
+    /// filled part, so leaving bg unset draws the label in `Color::Reset` --
+    /// the terminal's default foreground -- on top of ACCENT. Under a scheme
+    /// with a light cyan that is near-white on near-white (measured 1.30:1 on
+    /// Dracula) and the elapsed/eta text vanishes. Assert both halves of the
+    /// pair are real colours, which is what makes the swap produce contrast.
+    #[test]
+    fn progress_label_stays_readable_over_the_filled_bar() {
+        let specs = vec![(
+            "CPU".to_string(),
+            vec![("hash".to_string(), "MiB/s".to_string())],
+        )];
+        let mut app = App::new("host".into(), specs, Arc::new(AtomicBool::new(false)));
+        app.apply(Msg::Progress(Ev::SubtestDone {
+            bench: 0,
+            sub: 0,
+            outcome: Box::new(SubtestOutcome {
+                id: "hash".into(),
+                label: "hash".into(),
+                unit: "MiB/s".into(),
+                direction: Direction::HigherIsBetter,
+                value: 1.0,
+                representative: crate::engine::Representative::Median,
+                stats: Stats::from_runs(vec![1.0]),
+                confidence: Confidence::Medium,
+                scored: true,
+            }),
+        }));
+
+        let mut term = Terminal::new(TestBackend::new(80, 20)).unwrap();
+        term.draw(|f| draw_running(f, &app, f.area())).unwrap();
+        let buf = term.backend().buffer().clone();
+        let a = buf.area();
+
+        // The gauge is the only thing painted with ACCENT as a background.
+        let gauge: Vec<_> = (0..a.height)
+            .flat_map(|y| (0..a.width).map(move |x| (x, y)))
+            .map(|(x, y)| buf[(x, y)].clone())
+            .filter(|c| c.bg == ACCENT)
+            .collect();
+        assert!(!gauge.is_empty(), "no gauge cells found");
+
+        for cell in &gauge {
+            assert_ne!(
+                cell.fg,
+                Color::Reset,
+                "label cell {:?} falls back to the terminal's default foreground over ACCENT",
+                cell.symbol()
+            );
+            assert_eq!(cell.fg, GAUGE_BG);
+        }
     }
 }
