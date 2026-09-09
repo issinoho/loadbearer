@@ -14,6 +14,21 @@
 //! Latency is a pointer chase around a single random cycle (Sattolo), which
 //! serialises loads and exposes load-to-use latency to DRAM.
 //!
+//! **`latency` is optimistic at `--duration short`.** The chase covers the
+//! working set, which is preset-scaled, so it ranges over 128 MiB at `short`
+//! against 512 MiB at `thorough`. A shorter range gets better DRAM row-buffer
+//! locality and less page-table pressure, and read consistently faster:
+//! 0.902× and 0.926× short-against-thorough over two alternating pairs. Same
+//! hazard the RAM/8 cap already warns about, arriving via the preset instead.
+//!
+//! Pinning the footprint across presets was tried and reverted. It could not
+//! be shown to fix the bias (0.998× and 0.932× afterwards) and it roughly
+//! doubled the run-to-run spread, because a 512 MiB chase on `short`'s 350 ms
+//! budget completes far fewer traversals. Doing it properly needs a minimum
+//! budget for this subtest as well, which is a larger change than the bias
+//! justifies. Compare like with like: don't read a `short` latency figure
+//! against a `thorough` one.
+//!
 //! Every subtest is single-threaded except the all-core read (`bw_read_mt`),
 //! which runs the read kernel on one thread per logical CPU — each on its own
 //! buffer (at least 32 MiB, past any per-core slice of a shared L3) — and sums
@@ -21,7 +36,7 @@
 //! so the timed window starts on every core at once.
 
 use std::hint::black_box;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{Result, bail};
@@ -37,7 +52,10 @@ fn target_bytes(ctx: &RunContext) -> usize {
 /// Actual working set: `target`, capped at RAM/8, floored at 16 MiB, rounded to
 /// a multiple of 8 KiB.
 fn working_bytes(ctx: &RunContext) -> (usize, bool) {
-    let target = target_bytes(ctx);
+    clamp_to_ram(target_bytes(ctx), ctx)
+}
+
+fn clamp_to_ram(target: usize, ctx: &RunContext) -> (usize, bool) {
     let cap = (ctx.total_ram / 8).max(16 * 1024 * 1024) as usize;
     let capped = target > cap;
     let chosen = target.min(cap) & !(8 * 1024 - 1);
@@ -62,13 +80,62 @@ fn mt_read_bytes(ctx: &RunContext) -> (usize, bool) {
 
 pub struct MemoryBenchmark {
     notes: Mutex<Vec<String>>,
+    /// The pointer-chase cycle for the subtest currently running. See
+    /// [`MemoryBenchmark::cycle_for`].
+    cycle: Mutex<Option<CachedCycle>>,
+}
+
+struct CachedCycle {
+    nodes: usize,
+    seed: u64,
+    cycle: Arc<Vec<u32>>,
 }
 
 impl MemoryBenchmark {
     pub fn new() -> Self {
         Self {
             notes: Mutex::new(Vec::new()),
+            cycle: Mutex::new(None),
         }
+    }
+
+    /// The Sattolo cycle for `(nodes, seed)`, built once and reused.
+    ///
+    /// The engine calls `run_subtest` once per warmup and timed iteration, and
+    /// a cycle is a pure function of its node count and seed — so rebuilding
+    /// it every time was pure overhead. Shuffling a 134M-node array eleven
+    /// times is most of what `--only memory --duration thorough` was spending
+    /// its ~220 s on.
+    ///
+    /// Only the cycle for the subtest in flight is kept, and the previous one
+    /// is dropped before the next is allocated, so at most one is resident and
+    /// the peak allocation is no higher than it was when every iteration built
+    /// its own.
+    ///
+    /// It does move the number, which the first version of this comment
+    /// wrongly denied. Rebuilding left the array warm in cache from the
+    /// shuffle's own writes, so the chase partly hit cache: `--only memory
+    /// --duration thorough` read 189.3 ns rebuilding and 200.6 ns reusing, on
+    /// an unchanged 512 MiB footprint. The reused figure is the colder and more
+    /// honest one — a random chase over half a gigabyte should not be finding
+    /// data in a 24 MB L3 — but it is a change, so the `latency` baseline
+    /// anchor predates it.
+    fn cycle_for(&self, nodes: usize, seed: u64) -> Arc<Vec<u32>> {
+        let mut guard = self.cycle.lock().unwrap();
+        if let Some(c) = guard.as_ref()
+            && c.nodes == nodes
+            && c.seed == seed
+        {
+            return c.cycle.clone();
+        }
+        *guard = None;
+        let built = Arc::new(sattolo_cycle(nodes, seed));
+        *guard = Some(CachedCycle {
+            nodes,
+            seed,
+            cycle: built.clone(),
+        });
+        built
     }
 
     fn note(&self, msg: impl Into<String>) {
@@ -151,20 +218,21 @@ impl Benchmark for MemoryBenchmark {
                 })
             }
             "latency" => {
-                // 4 bytes per node; size independent of the bandwidth working set.
+                // 4 bytes per node; size independent of the bandwidth working
+                // set. Note this scales with the preset, which makes the figure
+                // optimistic at `--duration short` — see the module docs.
                 let nodes = (bytes / 4).max(1 << 20);
-                let cycle = sattolo_cycle(nodes, ctx.seed ^ 0xEE);
-                latency_ns(&cycle, budget)
+                latency_ns(&self.cycle_for(nodes, ctx.seed ^ 0xEE), budget)
             }
             // Fixed-size pointer chases that name the cache level they most
             // likely land in. Informational: real cache sizes vary, so the
             // labels are approximate and there is no baseline anchor.
-            "lat_l1" => latency_ns(&sattolo_cycle(L1_NODES, ctx.seed ^ 0x101), budget),
-            "lat_l2" => latency_ns(&sattolo_cycle(L2_NODES, ctx.seed ^ 0x102), budget),
-            "lat_l3" => latency_ns(&sattolo_cycle(L3_NODES, ctx.seed ^ 0x103), budget),
+            "lat_l1" => latency_ns(&self.cycle_for(L1_NODES, ctx.seed ^ 0x101), budget),
+            "lat_l2" => latency_ns(&self.cycle_for(L2_NODES, ctx.seed ^ 0x102), budget),
+            "lat_l3" => latency_ns(&self.cycle_for(L3_NODES, ctx.seed ^ 0x103), budget),
             "lat_loaded" => {
                 let nodes = (bytes / 4).max(1 << 20);
-                let cycle = sattolo_cycle(nodes, ctx.seed ^ 0x104);
+                let cycle = self.cycle_for(nodes, ctx.seed ^ 0x104);
                 loaded_latency_ns(&cycle, ctx.threads, ctx.seed ^ 0x105, budget)
             }
             other => bail!("unknown memory subtest: {other}"),
@@ -312,12 +380,16 @@ mod tests {
     use crate::engine::DurationPreset;
 
     fn ctx() -> RunContext {
+        ctx_with(DurationPreset::Short, 8 * 1024 * 1024 * 1024)
+    }
+
+    fn ctx_with(preset: DurationPreset, total_ram: u64) -> RunContext {
         RunContext {
-            preset: DurationPreset::Short,
+            preset,
             seed: 5,
             target_dir: std::env::temp_dir(),
             threads: 1,
-            total_ram: 8 * 1024 * 1024 * 1024,
+            total_ram,
             runs_override: None,
             abort: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
@@ -345,7 +417,11 @@ mod tests {
     #[test]
     fn cache_ladder_and_loaded_latency_run_and_order_sanely() {
         let bench = MemoryBenchmark::new();
-        let mut c = ctx();
+        // A deliberately small RAM figure, so the RAM/8 cap keeps
+        // `lat_loaded`'s chase tiny. This test is about ordering and finiteness,
+        // not real DRAM latency, and the fixed 512 MiB footprint would
+        // otherwise cost the suite half a minute shuffling arrays.
+        let mut c = ctx_with(DurationPreset::Short, 256 * 1024 * 1024);
         c.threads = 2;
         let l1 = bench.run_subtest("lat_l1", &c).unwrap();
         let l3 = bench.run_subtest("lat_l3", &c).unwrap();

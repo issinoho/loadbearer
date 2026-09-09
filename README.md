@@ -848,6 +848,16 @@ inputs; subtests missing from some inputs are flagged on stderr.
 
 - **Build both sides the same way.** A `target-cpu=native` build and a portable
   build produce different CPU numbers; only compare like with like.
+- **`memory/latency` reads optimistically at `--duration short`.** The pointer
+  chase covers the preset-scaled working set — 128 MiB at `short` against
+  512 MiB at `thorough` — and a shorter range gets better DRAM row-buffer
+  locality, so it measures faster: 0.902× and 0.926× short-against-thorough
+  over two alternating pairs. It's the same hazard the RAM/8 cap already warns
+  about, reached via the preset instead. Compare like with like, and don't read
+  a `short` latency figure against a `thorough` one. (Pinning the footprint
+  across presets was tried and reverted — it couldn't be shown to fix the bias
+  and doubled the run-to-run spread, since a large chase on a 350 ms budget
+  completes too few traversals.)
 - **The `Clocks` line is only as good as the OS's frequency reporting.** On
   Windows `sysinfo` returned a 1638–1900 MHz range on a part that boosts past
   5 GHz, and under WSL2 it reports one static figure whatever the load. Where

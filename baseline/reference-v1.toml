@@ -58,6 +58,19 @@
 # unaffected — one core doesn't reach the package limit, and they measured the
 # same either way.
 #
+# ALSO STALE: `memory.latency`. The pointer-chase array used to be rebuilt for
+# every timed iteration, which left it warm in cache from the shuffle's own
+# writes, so the chase partly hit cache. The cycle is now built once per
+# subtest and reused, which reads colder and higher — 189.3 -> 200.6 ns on the
+# i7-1370P over an unchanged footprint. The reused figure is the honest one (a
+# random chase over half a gigabyte shouldn't be finding data in a 24 MB L3),
+# but this anchor predates it and so reads low by roughly that much.
+#
+# Separately, and NOT fixed: this subtest is optimistic at `--duration short`,
+# where the chase covers 128 MiB rather than thorough's 512 MiB. These anchors
+# are thorough-calibrated, so a short run scores itself well on it. See the
+# note in src/benches/memory.rs.
+#
 # Regenerate:  loadbearer baseline run1.json run2.json … --name reference-v1 \
 #                --description "…" > baseline/reference-v1.toml && cargo build
 
