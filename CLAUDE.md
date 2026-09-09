@@ -45,10 +45,19 @@ undo. The steps by hand, which is what it automates:
 5. Push with tags: `git push <remote> main --follow-tags`.
 6. Once the release is published, upload to the PPA:
    `packaging/ppa/make-source.sh --ref vX.Y.Z --key <key>`, then the `dput`
-   lines it prints. This *can* be done from here: the release signing key is in
-   `~/.gnupg` on this machine and gpg-agent normally has the passphrase cached,
-   so the whole flow runs locally — 1.2.4 was published this way. `dput` is an
-   outward-facing publish, so expect to approve it.
+   lines it prints. **Whether this can be done from where you are depends on
+   the machine — check, don't assume:**
+   - **The Linux dev box** has the release signing key in `~/.gnupg` with the
+     passphrase normally cached in gpg-agent, so the whole flow runs locally
+     there. 1.2.4 was published that way.
+   - **The Windows laptop (`SGS-D47TDY3`) cannot do it.** There are no GPG
+     private keys on it at all — not in `~/.gnupg`, not in `%APPDATA%\gnupg`,
+     and Gpg4win isn't installed. Its WSL Ubuntu has `dpkg-dev` but is missing
+     `dput` and `lintian`, has no `~/.dput.cf`, and its SSH key is not
+     registered with Launchpad (verified: the SSH handshake is refused). All
+     four would need doing before a PPA upload could run there.
+
+   `dput` is an outward-facing publish, so expect to approve it.
    See `packaging/ppa/README.md`.
 
 `.github/workflows/release.yml` fires on the `v*` tag and builds+attaches the
@@ -127,8 +136,9 @@ Transient `Could not resolve host: github.com` happens — just retry.
 - `packaging/ppa/` — `make-source.sh` builds the per-series signed source
   packages (vendors the crates, prunes the ~154 MB of prebuilt Windows blobs,
   one shared `.orig.tar.gz`, `1.2.2-1~noble1` versioning); `README.md` there is
-  the full procedure. Manual — nothing about it runs in CI — but unlike Windows
-  signing it needs no second machine: the GPG key is here.
+  the full procedure. Manual — nothing about it runs in CI — and it needs the
+  GPG signing key, which lives on the Linux dev box and *not* on the Windows
+  laptop. See step 6 of "Cutting a release" before assuming you can run it.
 - `src/cli.rs` — clap definitions. `src/run.rs` — resolves settings (CLI >
   config > default) and dispatches.
 
