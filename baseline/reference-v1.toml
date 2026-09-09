@@ -2,7 +2,7 @@
 #
 # CALIBRATED. Each value is the geometric mean of that metric across seven real
 # machines benchmarked with `loadbearer run --duration thorough` from the
-# released (default, non-native) build — see the list below. A machine that
+# released (default, non-native) build — see the list below.  A machine that
 # matches the baseline on a metric scores ~1000 on it.
 #
 #   host              CPU                              cores  OS
@@ -22,94 +22,71 @@
 # is calibration data, not part of the stability contract (see VERSIONING.md);
 # it will be recalibrated as more machines are measured.
 #
-# KNOWN STALE: `aes_gcm`. These values were measured with aes-gcm 0.10 / aes
-# 0.8, whose x86 backend used AES-NI one block per instruction. From aes 0.9
-# the backend also takes the VAES paths, two or more blocks per instruction,
-# which roughly DOUBLES measured AES-GCM throughput on a CPU that has VAES
-# (Intel Ice Lake / AMD Zen 3 and later). Measured on SGS-D47TDY3, which is in
-# this sample, at the `--duration thorough` these values were calibrated with:
-# 1638.6 -> 3626.6 MiB/s, +121%, cv 0.56% and 0.34%, both `high` confidence.
-# (An interleaved A/B at `--duration normal` gave +103%, with the new arm still
-# thermally ramping — the thorough figure is the steadier one.)
+# HOW PRECISE IS THIS, REALLY? Less than four significant figures suggests.
+# Recalibrating on 2026-09-09 moved `hash` +19 %, `float_single` +18 % and
+# `int_single` +8 % — subtests whose kernels had not changed at all since the
+# previous calibration. That is run-to-run variation, and it is not small:
+# `int_single` alone was measured between 13330 and 16071 Mops/s across
+# repeated runs on one machine, a 20 % spread. Read every anchor as carrying
+# something like ±10-20 %, and don't attribute a machine scoring 1050 rather
+# than 1000 to its hardware.
 #
-# Only two of the seven machines above (the i7-1370P and the N95) have VAES, so
-# a correct recalibration means re-running all seven with the new build rather
-# than scaling this figure — the anchor is a geomean, and adjusting it by
-# modelling which machines changed would put an unverified number into
-# calibration data. Until that happens this anchor is UNDERSTATED for
-# VAES-capable hardware, and such machines will score high on this one subtest.
-# Same shape of caveat as the arm64 note in the README: what the number
-# reflects is the build's crypto path as much as the silicon.
+# `gpu` rests on THREE of the seven machines (the others have no OpenCL device,
+# and the X280 contributes none since its integrated engine wedges under load —
+# see src/benches/gpu/mod.rs). Its anchors moved a long way at this
+# recalibration simply because the contributing set changed, so treat them as
+# indicative. GPU is not folded into any grade.
 #
-# ALSO STALE: `int_multi` and `float_multi`. These were captured as the median
-# of the timed runs. An all-core run series doesn't scatter around a centre, it
-# decays — every core at full tilt holds boost for a few seconds then drops to
-# the package power limit — so a median reports whichever regime straddles the
-# middle sample. Two identical `--duration thorough` runs on the i7-1370P in
-# this sample came out 42 % apart on `int_multi` (103.5k vs 72.7k) for that
-# reason alone, and the seven anchor machines each landed on one side or the
-# other of their own thermal knee.
+# Recalibrated 2026-09-09 against 1.5.0, which cleared four anchors that had
+# been knowingly stale: `aes_gcm` (+52 %, the VAES code paths that arrived with
+# aes 0.9 and that the old figure predated), `int_multi` (+34 %) and
+# `float_multi` (+38 %) — both now the *peak* of their timed runs rather than
+# the median, because an all-core series decays from boost to the package power
+# limit and a median over that is bimodal — and `memory.latency` (+4 %), which
+# reads colder now the pointer-chase array is built once per subtest instead of
+# being rebuilt, and left warm, before every iteration.
 #
-# These subtests now report the *peak* of their runs instead, which held to
-# ~7 % across presets and run counts where the median swung ~54 %. The anchors
-# above were not re-measured, so they sit somewhere between the two regimes and
-# are low for a machine that boosts: expect all-core CPU to score high against
-# them until all seven machines are re-run. `int_single` / `float_single` are
-# unaffected — one core doesn't reach the package limit, and they measured the
-# same either way.
-#
-# ALSO STALE: `memory.latency`. The pointer-chase array used to be rebuilt for
-# every timed iteration, which left it warm in cache from the shuffle's own
-# writes, so the chase partly hit cache. The cycle is now built once per
-# subtest and reused, which reads colder and higher — 189.3 -> 200.6 ns on the
-# i7-1370P over an unchanged footprint. The reused figure is the honest one (a
-# random chase over half a gigabyte shouldn't be finding data in a 24 MB L3),
-# but this anchor predates it and so reads low by roughly that much.
-#
-# Separately, and NOT fixed: this subtest is optimistic at `--duration short`,
-# where the chase covers 128 MiB rather than thorough's 512 MiB. These anchors
-# are thorough-calibrated, so a short run scores itself well on it. See the
-# note in src/benches/memory.rs.
+# STILL A KNOWN GAP: `memory.latency` is measured over the preset-scaled working
+# set, so a `--duration short` run chases 128 MiB against thorough's 512 MiB and
+# reads ~9 % faster. These anchors are thorough-calibrated, so a short run
+# flatters itself on that subtest. See the notes in src/benches/memory.rs.
 #
 # Regenerate:  loadbearer baseline run1.json run2.json … --name reference-v1 \
 #                --description "…" > baseline/reference-v1.toml && cargo build
+#              (it takes explicit paths — it does not expand wildcards)
 
 name = "reference-v1"
-description = "geomean of 7 Intel machines (2015-2023), calibrated 2026-08-29"
+description = "geomean of 7 Intel machines (2015-2023), recalibrated 2026-09-09"
 
 [components.cpu]
-int_single   = 6432.0    # Mops/s
-int_multi    = 17660.0   # Mops/s (pre-peak — see the ALL-CORE note below)
-float_single = 5684.0    # MFLOP/s
-float_multi  = 23030.0   # MFLOP/s (pre-peak — see the ALL-CORE note below)
-hash         = 1873.0    # MiB/s   (BLAKE3, SIMD)
-compress     = 44.37     # MiB/s   (DEFLATE level 6)
-aes_gcm      = 760.2     # MiB/s   (AES-256-GCM, single thread; pre-VAES — see
-                         #          the KNOWN STALE note above)
-sha256       = 355.7     # MiB/s   (SHA-256, single thread; mostly software in this sample)
+int_single   = 6945.0    # Mops/s
+int_multi    = 23594.0   # Mops/s  (peak of the timed runs, not the median)
+float_single = 6704.0    # MFLOP/s
+float_multi  = 31692.0   # MFLOP/s (peak of the timed runs, not the median)
+hash         = 2229.0    # MiB/s   (BLAKE3, SIMD)
+compress     = 47.36     # MiB/s   (DEFLATE level 6)
+aes_gcm      = 1153.0    # MiB/s   (AES-256-GCM, single thread; VAES where present)
+sha256       = 415.9     # MiB/s   (SHA-256, single thread; mostly software in this sample)
 
 [components.memory]
-bw_read     = 10.64      # GiB/s   (single thread)
-bw_write    = 6.849      # GiB/s
-bw_copy     = 6.498      # GiB/s
-bw_read_mt  = 16.32      # GiB/s   (all logical CPUs, summed)
-latency     = 147.6      # ns      (lower is better)
+bw_read      = 11.45     # GiB/s
+bw_write     = 7.162     # GiB/s
+bw_copy      = 6.352     # GiB/s
+bw_read_mt   = 18.34     # GiB/s   (all cores, rates summed)
+latency      = 153.6     # ns      (random access, 512 MiB chase at `thorough`)
 
 [components.disk]
-seq_write  = 342.3       # MiB/s   (with fsync)
-seq_read   = 571.6       # MiB/s
-rand_read  = 8195.0      # IOPS    (QD1, 4 KiB)
-rand_write = 10820.0     # IOPS    (QD1, 4 KiB)
+seq_write    = 372.2     # MiB/s
+seq_read     = 642.8     # MiB/s
+rand_read    = 9049.0    # IOPS    (4 KiB, QD1)
+rand_write   = 13054.0   # IOPS    (4 KiB, QD1)
 
 [components.network]
-# Loopback (127.0.0.1) network-stack figures, not a physical link.
-tcp_stream   = 1.956     # GiB/s   (single stream)
-tcp_parallel = 2.939     # GiB/s   (all logical CPUs)
-tcp_rtt      = 39.80     # us      (lower is better)
-udp_pps      = 93.13     # Kpps    (successful sends/sec)
+tcp_stream   = 2.538     # GiB/s   (loopback, single stream)
+tcp_parallel = 3.611     # GiB/s   (loopback, all cores)
+tcp_rtt      = 30.63     # us      (loopback round trip)
+udp_pps      = 136.1     # Kpps    (loopback send rate)
 
 [components.gpu]
-# Geomean over the 4 machines that had a usable GPU (3 iGPUs + one Iris Xe-class
-# part). GPU is measured and shown but never folded into the overall grade.
-compute_fp32 = 282.0     # GFLOP/s (FP32 FMA)
-bandwidth    = 20.52     # GiB/s   (VRAM read)
+compute_fp32 = 177.4     # GFLOP/s (three machines only — see above)
+bandwidth    = 22.68     # GiB/s   (three machines only — see above)
