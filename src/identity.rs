@@ -50,15 +50,27 @@ impl MachineId {
 /// Collect what this platform will tell us, or `None` if that's nothing.
 pub fn collect() -> Option<MachineId> {
     let id = platform_collect();
+    // Whether each field was readable, never the value. These are the most
+    // identifying things loadbearer touches, PRIVACY.md promises the
+    // diagnostic log holds no personal data, and a log is the artefact people
+    // paste into a bug report — the result file is the one they choose to
+    // share. Presence is also what actually diagnoses a collector problem:
+    // "the serial is wrong" is a `meaningful` question, and that path logs
+    // the placeholder it rejected, which is a fixed OEM string.
     log::debug!(
         target: "loadbearer::identity",
         "machine_id={} smbios_uuid={} serial={} asset_tag={}",
-        id.machine_id.as_deref().unwrap_or("-"),
-        id.smbios_uuid.as_deref().unwrap_or("-"),
-        id.serial.as_deref().unwrap_or("-"),
-        id.asset_tag.as_deref().unwrap_or("-"),
+        readable(&id.machine_id),
+        readable(&id.smbios_uuid),
+        readable(&id.serial),
+        readable(&id.asset_tag),
     );
     if id.is_empty() { None } else { Some(id) }
+}
+
+/// Whether a field was readable, for the diagnostic log — see `collect`.
+fn readable(field: &Option<String>) -> &'static str {
+    if field.is_some() { "present" } else { "absent" }
 }
 
 /// Reject the placeholder strings OEMs ship in place of a real serial. Without
@@ -97,6 +109,12 @@ fn meaningful(s: &str) -> Option<String> {
     }
     let lower = t.to_ascii_lowercase();
     if JUNK.contains(&lower.as_str()) {
+        // Safe to log this one: it matched a fixed list of OEM placeholders, so
+        // it describes the firmware and not the machine. It's also the
+        // diagnostic that matters — "the firmware didn't report a serial" and
+        // "it reported something useless" look identical in the result file
+        // and want different answers.
+        log::debug!(target: "loadbearer::identity", "rejected placeholder identifier {t:?}");
         return None;
     }
     // "0000000", "xxxxxxxx", "........" and friends: technically a string, but
@@ -104,6 +122,8 @@ fn meaningful(s: &str) -> Option<String> {
     let mut chars = t.chars();
     let first = chars.next()?;
     if t.chars().count() > 1 && chars.all(|c| c == first) {
+        // One repeated character carries no identity, so this is safe too.
+        log::debug!(target: "loadbearer::identity", "rejected filler identifier {t:?}");
         return None;
     }
     Some(t.to_string())

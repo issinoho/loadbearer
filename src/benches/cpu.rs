@@ -212,6 +212,10 @@ fn aes_gcm_rate(budget: Duration, seed: u64) -> f64 {
     use aes_gcm::{AeadInOut, Aes256Gcm, KeyInit, Nonce};
 
     const BUF: usize = 256 * 1024;
+    // Seed-derived, so `--seed` reproduces the workload. CodeQL's
+    // hard-coded-key query reads the zeroed array below as the key and misses
+    // the `fill_bytes` that overwrites it; alert 2 is dismissed as a false
+    // positive rather than worked around here.
     let mut key = [0u8; 32];
     SplitMix64::new(seed ^ 0xA35F_1C2D_9B4E_7061).fill_bytes(&mut key);
     let cipher = Aes256Gcm::new_from_slice(&key).expect("32-byte key");

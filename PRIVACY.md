@@ -36,8 +36,14 @@ server side.
 - **A diagnostic log** at `%LOCALAPPDATA%\loadbearer\loadbearer.log` (Windows) /
   `$XDG_CACHE_HOME/loadbearer/loadbearer.log` (Linux), or wherever `--log-file`
   points. It records the run's settings, per-benchmark timings, and errors. It
-  contains no personal data beyond the local file path in its header. `--no-log`
-  disables it.
+  contains no personal data beyond the local file path in its header —
+  deliberately not the hostname, and not the `machine.identity` values. At
+  `--log-level debug` it records whether each of those was *readable*, not what
+  it said, because a log is the artefact people paste into a bug report while a
+  result file is one they choose to share. The exception is an identifier
+  rejected as an OEM placeholder ("To Be Filled By O.E.M." and friends), which
+  is logged as-is: it describes the firmware, not the machine. `--no-log`
+  disables the log entirely.
 - **A scratch file** in `--target-dir` for the disk benchmark, deleted when the
   run ends.
 

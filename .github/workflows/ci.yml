@@ -8,6 +8,12 @@ on:
     branches: [main]
   pull_request:
 
+# Nothing here writes anything back — no comments, no commits, no releases —
+# so the token only needs to read the code it checks out. Without this block
+# it inherits whatever the repository default is, which is broader.
+permissions:
+  contents: read
+
 jobs:
   check:
     strategy:

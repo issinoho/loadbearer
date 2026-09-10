@@ -128,12 +128,15 @@ pub fn collect() -> Inventory {
     };
     log::debug!(
         target: "loadbearer::inventory",
-        "collected: {} · {} · {} logical cores · {} MiB RAM · {} disk(s) · gpu={} · battery={}",
-        inv.hostname.as_deref().unwrap_or("?"),
+        // No hostname: a machine name is frequently a person's name, and the
+        // diagnostic log is the artefact that gets pasted into bug reports.
+        // Whether one was readable is all this line needs to say.
+        "collected: {} · {} logical cores · {} MiB RAM · {} disk(s) · hostname={} · gpu={} · battery={}",
         inv.cpu_model,
         inv.cpu_logical_cores,
         inv.ram_bytes / (1024 * 1024),
         inv.disks.len(),
+        inv.hostname.is_some(),
         inv.gpu.is_some(),
         inv.battery.is_some(),
     );
