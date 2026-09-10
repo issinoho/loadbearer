@@ -60,6 +60,30 @@ undo. The steps by hand, which is what it automates:
    `dput` is an outward-facing publish, so expect to approve it.
    See `packaging/ppa/README.md`.
 
+**`cut-release.sh` will not start on the Windows laptop at all** — not just the
+PPA leg. Two independent blocks, both verified on 2026-09-10 while preparing
+1.5.2:
+
+- **Git Bash** dies in preflight: `dpkg-buildpackage isn't on PATH`. The
+  Windows side has no Debian tooling and cannot get it.
+- **WSL** dies at line 22 with `$'\r': command not found`. `core.autocrlf` is
+  on for the Windows checkout, so the script is CRLF in the working tree and
+  `bash` reads the carriage returns as part of each command. Cloning fresh
+  inside WSL, or a `.gitattributes` carrying `*.sh text eol=lf`, would fix
+  this; neither is done.
+
+`--dry-run` does skip the `/dev/tty` gate, so the terminal check is not what
+stops it. **Cut releases from the Linux dev box**, which is also where the
+signing key is.
+
+Writing the release notes ahead of time and committing them is fine — the
+script's check is `grep "^## X.Y.Z "`, and it reports "CHANGELOG.md already has
+a X.Y.Z section" and carries on. Leave `Cargo.toml`, `Cargo.lock` and
+`debian/changelog` to it: it generates the `debian/changelog` entry, and
+`build-deb` fails the release outright if that version disagrees with
+`Cargo.toml`, so hand-writing one just to have it done is how you get a failed
+release rather than a head start.
+
 `.github/workflows/release.yml` fires on the `v*` tag and builds+attaches the
 Windows `.zip`, the Linux `.tar.gz` and a Debian/Ubuntu `.deb`, attaches a
 build-provenance attestation to each, GPG-signs `SHA256SUMS` (`SHA256SUMS.asc`, once `GPG_PRIVATE_KEY` /

@@ -2,6 +2,43 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 1.5.2 - Thu, 10 Sep 2026
+
+Fixes only, and no measurement changes at all — 1.5.1 scores and result files
+are directly comparable. Both fixes are about something that was on screen or
+on disk and shouldn't have been.
+
+- **The diagnostic log no longer records machine identifiers.** At
+  `--log-level debug` it wrote the SMBIOS UUID, the chassis serial, the asset
+  tag, the OS install ID and the hostname into `loadbearer.log`, while
+  `PRIVACY.md` promised in the same breath that the log held no personal data
+  beyond its own file path in the header. It records whether each of those was
+  *readable* now, rather than what it said. That is the diagnostic that was
+  wanted anyway, and the distinction that matters is which artefact leaks: a
+  result file is one you choose to share and can strip, a log is the one a bug
+  report asks you to attach. The exception is an identifier rejected as an OEM
+  placeholder ("To Be Filled By O.E.M." and friends), now logged as-is —
+  it describes the firmware rather than the machine, and telling "the firmware
+  reported nothing" from "it reported something useless" is worth being able
+  to do.
+- **The progress gauge's label stays readable once the bar fills past it.**
+  ratatui swaps the gauge style's foreground and background for the label
+  cells over the filled part, so the label reads against the fill instead of
+  disappearing into it — but only when both halves of the pair are set, and
+  only the foreground was. The swap therefore drew the label in the terminal's
+  own default foreground on top of `Color::Cyan`, whose actual colour is
+  whatever the user's scheme says: under Dracula that is 1.30:1, and the
+  elapsed/eta text vanished. It measures 11.4:1 there now, 6.1:1 on Windows
+  Terminal's Campbell, 4.7:1 on Gruvbox and 4.1:1 on Solarized Dark. Both
+  gauges had it, the `run` screen and the `soak` screen; it was reported as a
+  Linux problem, but Campbell's 1.99:1 only made it look survivable.
+- **`cut-release.sh` checks for a terminal before the ten minutes of work**
+  rather than after, since its confirmations read `/dev/tty` and can't be
+  answered without one.
+- The website now has a section on
+  [loadbearer-fleet](https://github.com/issinoho/loadbearer-fleet), which
+  reports across an estate of collected results.
+
 ## 1.5.1 - Wed, 9 Sep 2026
 
 Fixes only. The headline is that the reference baseline has caught up with
