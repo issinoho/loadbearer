@@ -107,8 +107,8 @@ h1, h2, h3 { line-height: 1.2; letter-spacing: -0.015em; }
   .lead { max-width: none; }
 }
 
-/* ---------- terminal frame ---------- */
-.term {
+/* ---------- terminal frame (and the screenshot frame, same chrome) ---------- */
+.term, .shot {
   margin: 0;
   background: var(--panel);
   border: 1px solid var(--border);
@@ -182,6 +182,10 @@ section.alt .card { background: var(--panel-2); }
 .card em { color: var(--text); font-style: italic; }
 @media (max-width: 720px) { .cards { grid-template-columns: 1fr; } }
 
+/* Screenshots are captured at 2x, so the intrinsic width is twice the CSS one. */
+.shot img { display: block; width: 100%; height: auto; }
+.shot-note { margin: 14px 0 44px; }
+
 /* ---------- gallery ---------- */
 .gallery { display: grid; grid-template-columns: 1.1fr 1fr; gap: 22px; align-items: start; }
 .gallery-col { display: grid; gap: 22px; }
@@ -212,6 +216,9 @@ section.alt .card { background: var(--panel-2); }
 .install-note a, .muted-note a, .section-head a { color: var(--accent); text-decoration: none; }
 .install-note a:hover, .muted-note a:hover { text-decoration: underline; }
 @media (max-width: 860px) { .install-grid { grid-template-columns: 1fr; } }
+
+/* ---------- fleet ---------- */
+#fleet .term-wide, #fleet .hero-ctas { margin-top: 26px; }
 
 /* ---------- footer ---------- */
 footer { padding: 34px 0; border-bottom: none; }

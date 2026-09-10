@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>loadbearer — grade any machine, and know which one is faster</title>
-<meta name="description" content="loadbearer is a single-binary command-line tool that benchmarks a machine's CPU, memory, disk, network stack and GPU, scores every measurement against a shared reference baseline, and grades each component — and the whole machine — on an S-to-F scale. Its compare mode reads two result files and tells you which machine wins, by how much, and why; a sustained-load test shows how much speed a machine keeps once it throttles. No GUI, no network calls, no runtime. Windows, Linux, and macOS on Apple Silicon.">
+<meta name="description" content="loadbearer is a single-binary command-line tool that benchmarks a machine's CPU, memory, disk, network stack and GPU, scores every measurement against a shared reference baseline, and grades each component — and the whole machine — on an S-to-F scale. Its compare mode reads two result files and tells you which machine wins, by how much, and why; a sustained-load test shows how much speed a machine keeps once it throttles. No GUI, no network calls, no runtime. Windows, Linux, and macOS on Apple Silicon. A companion server, loadbearer-fleet, indexes a folder of collected results into a dashboard over the whole estate.">
 
 <link rel="canonical" href="https://loadbearer.issinoho.com/">
 <link rel="icon" type="image/svg+xml" href="assets/logo-mark.svg">
@@ -47,6 +47,7 @@
       <a href="#see">See it</a>
       <a href="#examples">Examples</a>
       <a href="#install">Install</a>
+      <a href="#fleet">Fleet</a>
       <a href="https://github.com/issinoho/loadbearer">GitHub</a>
     </div>
     <a class="nav-cta" data-dl="windows" href="https://github.com/issinoho/loadbearer/releases/latest">Download</a>
@@ -409,11 +410,117 @@ sudo apt install loadbearer</pre>
   </div>
 </section>
 
+<section id="fleet">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">At fleet scale</span>
+      <h2>Now do it for every machine you own</h2>
+      <p><strong>loadbearer-fleet</strong> is a companion server. Point it at the
+      folder your deployment tool drops result files into and it indexes them and
+      reports across the estate — summary, peer groups, drilldown, and the red
+      flags worth acting on. Separate repository, separate release, also MIT.
+      <b>Early, but usable.</b></p>
+    </div>
+
+    <figure class="shot">
+      <figcaption class="term-bar"><i></i><i></i><i></i><em>http://127.0.0.1:8787</em></figcaption>
+      <img src="assets/fleet-dashboard.png" width="2880" height="1304" loading="lazy"
+        alt="The loadbearer-fleet overview: three of four machines need attention, a median score of 1,124, a bar chart of machines by grade, and findings split into machine, measurement and coverage queues.">
+    </figure>
+    <p class="muted-note shot-note">
+      The overview, over that project's four sample results — which is why nothing
+      has a peer group here: a cohort needs four machines of the same hardware
+      measured the same way.
+    </p>
+
+    <div class="cards">
+      <article class="card">
+        <div class="card-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 16h18"/><path d="M12 5v14"/><circle cx="7" cy="10" r="1.7"/><circle cx="12" cy="10" r="1.7"/><circle cx="17.5" cy="12.5" r="1.7"/></svg>
+        </div>
+        <h3>Peers first, not the baseline</h3>
+        <p>The reference baseline answers <em>is this machine any good</em>. It's the
+        wrong tool for <em>is this machine broken</em> — a 15% shortfall against it
+        could be the baseline. So the primary comparison is a machine against the
+        machines like it, and the secondary one against its own history, where the
+        hardware is held constant. Cohorts use <b>median and MAD</b> rather than mean
+        and standard deviation, because the statistic has to survive the thing it's
+        looking for.</p>
+      </article>
+
+      <article class="card">
+        <div class="card-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h9M4 12h13M4 18h7"/><path d="M18 5v6M18 5l-2 2M18 5l2 2"/></svg>
+        </div>
+        <h3>Three queues, not one wall of red</h3>
+        <p>Findings are split by what you'd <em>do</em> about them: <b>the machine</b>
+        (repair, replace, reassign), <b>the measurement</b> (the number can't be
+        trusted until collection is fixed — thermally limited, on battery, a partial
+        run), and <b>the data we hold</b> (stale, or attributed by an identifier that
+        resets on reimage). Mixing them means an estate owner reads a thermal caveat
+        as a failing asset.</p>
+      </article>
+
+      <article class="card">
+        <div class="card-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
+        </div>
+        <h3>Loopback by default, SSO when you need it</h3>
+        <p>Out of the box it serves <code>127.0.0.1:8787</code> with no sign-in, and
+        <b>refuses a wider bind</b> unless sign-in is configured and the public URL is
+        https — or you pass a flag that says you meant it. Point it at an identity
+        provider and it does OpenID Connect with PKCE,
+        roles from group claims and per-site scoping — enforced in the data layer, so
+        a scoped viewer can't widen their own scope through a query string.</p>
+      </article>
+
+      <article class="card">
+        <div class="card-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+        </div>
+        <h3>One binary on an air-gapped network</h3>
+        <p>The HTML, CSS and hand-rolled SVG charts are compiled into the executable.
+        No npm, no bundler, nothing fetched at runtime — which is what lets it send
+        <code>default-src 'self'</code> and mean it, and what makes it work on a
+        management network with no route out. Runs as a Windows service or under
+        systemd, and exports Prometheus metrics.</p>
+      </article>
+    </div>
+
+    <div class="term term-wide">
+      <div class="term-bar"><i></i><i></i><i></i><em>bash</em></div>
+<pre><span class="p">$</span> loadbearer-fleet serve \\fileserver\loadbearer   <span class="c"># scan, then the dashboard</span>
+<span class="p">$</span> loadbearer-fleet report                          <span class="c"># the same thing, as text</span>
+<span class="p">$</span> loadbearer-fleet report --json                    <span class="c"># the whole snapshot, as the UI sees it</span>
+<span class="p">$</span> loadbearer-fleet backup fleet-2026-09-10.db       <span class="c"># consistent, safe while serving</span>
+<span class="p">$</span> loadbearer-fleet forget PC-01                     <span class="c"># retire a decommissioned machine</span></pre>
+    </div>
+
+    <p class="muted-note">
+      The folder stays the source of truth and the index is derived, so rescanning is
+      idempotent — every run is keyed by the SHA-256 of the document it came from.
+      loadbearer-fleet reads the <code>schema</code>-tagged JSON rather than linking
+      loadbearer as a library, which is why the two release independently.
+    </p>
+
+    <div class="hero-ctas">
+      <a class="btn btn-primary" href="https://github.com/issinoho/loadbearer-fleet/releases/latest">Download loadbearer-fleet</a>
+      <a class="btn btn-ghost" href="https://github.com/issinoho/loadbearer-fleet#getting-started">Getting started</a>
+      <a class="btn btn-ghost" href="https://github.com/issinoho/loadbearer-fleet">View on GitHub</a>
+    </div>
+    <p class="hero-meta">
+      Latest release <span class="mono fleet-rel-tag">—</span> ·
+      Windows <code>.zip</code> and Linux <code>.tar.gz</code> · one binary, no runtime
+    </p>
+  </div>
+</section>
+
 <footer>
   <div class="container">
     <span>© 2026 Iain Smith · MIT licensed</span>
     <div class="footer-links">
       <a href="https://github.com/issinoho/loadbearer">GitHub</a>
+      <a href="https://github.com/issinoho/loadbearer-fleet">Fleet</a>
       <a href="https://github.com/issinoho/loadbearer/wiki">Wiki</a>
       <a href="https://github.com/issinoho/loadbearer/releases">Releases</a>
       <a href="https://github.com/issinoho/loadbearer/blob/main/PRIVACY.md">Privacy</a>

@@ -39,4 +39,21 @@
     .catch((err) => {
       console.warn("Could not fetch the latest loadbearer release:", err);
     });
+
+  // The fleet section only shows a tag, not per-asset links, so a failure here
+  // leaves an em dash and its buttons still point at releases/latest.
+  fetch("https://api.github.com/repos/issinoho/loadbearer-fleet/releases/latest")
+    .then((r) => {
+      if (!r.ok) throw new Error(`GitHub API ${r.status}`);
+      return r.json();
+    })
+    .then((release) => {
+      const tag = release.tag_name || "";
+      document.querySelectorAll(".fleet-rel-tag").forEach((el) => {
+        if (tag) el.textContent = tag;
+      });
+    })
+    .catch((err) => {
+      console.warn("Could not fetch the latest loadbearer-fleet release:", err);
+    });
 })();
