@@ -1,3 +1,9 @@
+loadbearer (1.5.2-1) unstable; urgency=medium
+
+  * New upstream release 1.5.2; see CHANGELOG.md for the details.
+
+ -- Iain Smith <iain@issinoho.com>  Thu, 10 Sep 2026 19:54:24 +0100
+
 loadbearer (1.5.1-1) unstable; urgency=medium
 
   * New upstream release 1.5.1; see CHANGELOG.md for the details.
