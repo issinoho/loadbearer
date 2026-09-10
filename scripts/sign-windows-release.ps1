@@ -141,7 +141,17 @@ try {
             $_
         }
     }
-    Set-Content -Path "SHA256SUMS" -Value $sums
+    # LF, explicitly. CI writes this file on Linux; `Set-Content -Value <array>`
+    # would hand it back with CRLF, and `sha256sum -c` then treats the trailing
+    # carriage return as part of the filename:
+    #
+    #   sha256sum: 'loadbearer-1.5.2-...zip'$'\r': No such file or directory
+    #   loadbearer-1.5.2-...zip: FAILED open or read
+    #
+    # -- on a download that is perfectly good. The hashes are right; only the
+    # line endings are wrong, and it breaks for exactly the person following
+    # the README on Linux while Windows `Get-FileHash` users never see it.
+    Set-Content -Path "SHA256SUMS" -Value (($sums -join "`n") + "`n") -NoNewline -Encoding utf8
     Get-Content "SHA256SUMS"
 
     Write-Host "-- Uploading the signed archive + updated checksums to the release"
