@@ -151,7 +151,12 @@ try {
     # -- on a download that is perfectly good. The hashes are right; only the
     # line endings are wrong, and it breaks for exactly the person following
     # the README on Linux while Windows `Get-FileHash` users never see it.
-    Set-Content -Path "SHA256SUMS" -Value (($sums -join "`n") + "`n") -NoNewline -Encoding utf8
+    #
+    # ASCII, not utf8: Windows PowerShell 5.1's `-Encoding utf8` writes a BOM,
+    # which makes `sha256sum -c` call the first line "improperly formatted" and
+    # skip it -- one file silently unverified, and still exit 0. pwsh 7's utf8
+    # is BOM-less, so this only bites on 5.1. Hashes and filenames are ASCII.
+    Set-Content -Path "SHA256SUMS" -Value (($sums -join "`n") + "`n") -NoNewline -Encoding ascii
     Get-Content "SHA256SUMS"
 
     Write-Host "-- Uploading the signed archive + updated checksums to the release"
