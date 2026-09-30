@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
 
 PackageIdentifier: Issinoho.Loadbearer
-PackageVersion: 1.2.1
+PackageVersion: 1.5.2
 PackageLocale: en-US
 Publisher: Iain Smith
 PublisherUrl: https://github.com/issinoho
@@ -32,6 +32,6 @@ Tags:
   - memory
   - performance
   - system-information
-ReleaseNotesUrl: https://github.com/issinoho/loadbearer/releases/tag/v1.2.1
+ReleaseNotesUrl: https://github.com/issinoho/loadbearer/releases/tag/v1.5.2
 ManifestType: defaultLocale
 ManifestVersion: 1.6.0

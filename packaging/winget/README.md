@@ -17,13 +17,13 @@ portable command.
 (2026-09-04). Awaiting the automated validation + a moderator. Once it merges,
 set `WINGET_TOKEN` (below) and every later version is submitted by CI.
 
-The three YAML files here are the seed manifest for **PackageVersion 1.2.1**.
+The three YAML files here are the seed manifest for **PackageVersion 1.5.2**.
 Submit them as a pull request to `microsoft/winget-pkgs` under
-`manifests/i/Issinoho/Loadbearer/1.2.1/`. Easiest path:
+`manifests/i/Issinoho/Loadbearer/1.5.2/`. Easiest path:
 
 ```
 winget install Microsoft.WingetCreate
-wingetcreate new https://github.com/issinoho/loadbearer/releases/download/v1.2.1/loadbearer-1.2.1-x86_64-pc-windows-msvc.zip
+wingetcreate new https://github.com/issinoho/loadbearer/releases/download/v1.5.2/loadbearer-1.5.2-x86_64-pc-windows-msvc.zip
 ```
 
 and cross-check what it generates against these files (in particular
