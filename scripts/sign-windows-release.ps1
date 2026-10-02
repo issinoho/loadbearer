@@ -23,8 +23,8 @@
        "inside" line); the Linux tar.gz lines are left untouched.
     5. Re-uploads the .zip and SHA256SUMS to the release with
        `gh release upload --clobber`, replacing the unsigned assets.
-    6. Optionally re-submits the winget manifest with the new hash
-       (-UpdateWinget) -- see the note below on why this matters.
+    6. Optionally dispatches the winget workflow (-UpdateWinget), which
+       opens the winget-pkgs PR for the signed archive's hash.
 
   Requirements: Windows PowerShell 5.1+ / pwsh, the Windows SDK's
   signtool.exe on PATH, the GitHub CLI (`gh`, authenticated with repo
@@ -44,11 +44,11 @@
   GitHub repo in "owner/name" form. Defaults to issinoho/loadbearer.
 
 .PARAMETER UpdateWinget
-  After a successful re-sign, also re-submit the winget manifest
-  (wingetcreate update --submit) with the new archive hash. Needs
-  wingetcreate.exe on PATH and a GitHub PAT with public_repo scope (pass
-  it via the WINGET_TOKEN environment variable). Only meaningful once the
-  package already exists in microsoft/winget-pkgs (see packaging/winget/).
+  After a successful re-sign, dispatch .github/workflows/winget.yml, which
+  runs `wingetcreate update --submit` against the signed archive using the
+  repo's WINGET_TOKEN secret -- so no token is needed on this machine. The
+  release workflow doesn't submit to winget itself, precisely because its
+  archive is the unsigned one this replaces.
 
 .EXAMPLE
   .\scripts\sign-windows-release.ps1 -Version 1.2.2
@@ -182,15 +182,11 @@ try {
     Write-Host "still work for the untouched Linux tarball." -ForegroundColor Yellow
 
     if ($UpdateWinget) {
-        if (-not $env:WINGET_TOKEN) { throw "-UpdateWinget needs a PAT in the WINGET_TOKEN environment variable." }
         Write-Host ""
-        Write-Host "-- Re-submitting the winget manifest with the signed archive's hash"
-        if (-not (Get-Command wingetcreate.exe -ErrorAction SilentlyContinue)) {
-            Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
-        }
-        $url = "https://github.com/$Repo/releases/download/$tag/$zipName"
-        & .\wingetcreate.exe update Issinoho.Loadbearer --version $Version --urls $url --submit --token $env:WINGET_TOKEN
-        if ($LASTEXITCODE -ne 0) { throw "wingetcreate update failed (exit $LASTEXITCODE)" }
+        Write-Host "-- Dispatching the winget workflow for the signed archive"
+        gh workflow run winget.yml --repo $Repo -f version=$Version
+        if ($LASTEXITCODE -ne 0) { throw "gh workflow run winget.yml failed (exit $LASTEXITCODE)" }
+        Write-Host "Follow it with: gh run list --repo $Repo --workflow winget.yml"
     }
 }
 finally {

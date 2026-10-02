@@ -33,10 +33,9 @@
   GitHub repo in owner/name form.
 
 .PARAMETER UpdateWinget
-  Also re-submit the winget manifest with the signed archive's hash.
-  Needs a PAT in $env:WINGET_TOKEN -- which this checks up front, since
-  the underlying script otherwise discovers it missing only after the
-  signing and upload are done.
+  Once the signed archive is uploaded, dispatch the winget workflow,
+  which opens the winget-pkgs PR with the signed archive's hash. The
+  token it needs is the repo's WINGET_TOKEN secret, not anything here.
 
 .PARAMETER Force
   Sign even though the archive already carries a valid signature. See
@@ -105,13 +104,19 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
 if ($LASTEXITCODE -ne 0) { throw "gh isn't authenticated. Run: gh auth login" }
 Write-Host "  gh authenticated"
 
-# 2. A bare environment read, so it goes early: the underlying script
-#    asks for this only after signing and uploading, which is a miserable
-#    place to discover a missing token.
-if ($UpdateWinget -and -not $env:WINGET_TOKEN) {
-    throw "-UpdateWinget needs a GitHub PAT with public_repo scope in `$env:WINGET_TOKEN. Set it and run again, or drop -UpdateWinget and update the manifest separately."
+# 2. The winget workflow is dispatched only after signing and uploading,
+#    which is a miserable place to discover it can't run. gh can't read a
+#    secret's value, but it can say whether it exists.
+if ($UpdateWinget) {
+    $secrets = & gh secret list --repo $Repo 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Couldn't list $Repo's secrets to check for WINGET_TOKEN. Does this gh login have admin access to the repo?"
+    }
+    if (-not ($secrets | Where-Object { $_ -match '^WINGET_TOKEN\s' })) {
+        throw "-UpdateWinget dispatches the winget workflow, which needs the WINGET_TOKEN secret on $Repo, and it isn't set. See packaging/winget/README.md, or drop -UpdateWinget."
+    }
+    Write-Host "  WINGET_TOKEN secret present on $Repo"
 }
-if ($UpdateWinget) { Write-Host "  WINGET_TOKEN set" }
 
 # 3. sign-windows-release.ps1 invokes signtool bare, so it has to be on
 #    PATH by the time we hand over. Find it and put it there rather than

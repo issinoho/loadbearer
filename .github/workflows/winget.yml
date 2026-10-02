@@ -1,0 +1,76 @@
+name: winget
+
+# Opens the version-bump PR against microsoft/winget-pkgs for a published
+# release. Deliberately not part of release.yml: CI ships the Windows .zip
+# unsigned and scripts/sign-windows-release.ps1 replaces it afterwards, which
+# changes its hash -- a PR opened on the tag push would pin the unsigned
+# archive and go stale the moment it was signed. So this runs on demand, and
+# `publish-loadbearer.ps1 X.Y.Z -UpdateWinget` dispatches it once the signed
+# archive is uploaded. Can also be run by hand from the Actions tab.
+#
+# `wingetcreate update` pulls the existing manifest, swaps in the new version /
+# URL / hash and submits, so it only works for a package already in
+# winget-pkgs (Issinoho.Loadbearer is, since 1.5.2). Needs the WINGET_TOKEN
+# secret: a classic PAT with `public_repo` -- see packaging/winget/README.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version to submit, e.g. 1.5.3 (no leading v)"
+        required: true
+      allow_unsigned:
+        description: "Submit even if loadbearer.exe in the archive isn't Authenticode-signed"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  submit:
+    runs-on: windows-latest
+    env:
+      WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+      VERSION: ${{ inputs.version }}
+      ALLOW_UNSIGNED: ${{ inputs.allow_unsigned }}
+    steps:
+      - name: Check the token is set
+        shell: pwsh
+        run: |
+          if (-not $env:WINGET_TOKEN) {
+            Write-Error "WINGET_TOKEN isn't set - add it under Settings > Secrets and variables > Actions."
+            exit 1
+          }
+
+      - name: Check the archive is signed
+        shell: pwsh
+        run: |
+          $version = $env:VERSION.Trim().TrimStart('v')
+          $name = "loadbearer-$version-x86_64-pc-windows-msvc"
+          $url = "https://github.com/${{ github.repository }}/releases/download/v$version/$name.zip"
+          Invoke-WebRequest $url -OutFile "$name.zip"
+          Expand-Archive "$name.zip" -DestinationPath extracted
+          $sig = Get-AuthenticodeSignature "extracted\$name\loadbearer.exe"
+          Write-Host "Authenticode status: $($sig.Status) $($sig.SignerCertificate.Subject)"
+          if ($sig.Status -ne 'Valid') {
+            if ($env:ALLOW_UNSIGNED -eq 'true') {
+              Write-Warning "loadbearer.exe isn't signed; submitting anyway (allow_unsigned)."
+            } else {
+              Write-Error "loadbearer.exe in $name.zip isn't signed. Run scripts/publish-loadbearer.ps1 $version first, or re-run with allow_unsigned."
+              exit 1
+            }
+          }
+
+      - name: Submit to winget-pkgs
+        shell: pwsh
+        run: |
+          $version = $env:VERSION.Trim().TrimStart('v')
+          $url = "https://github.com/${{ github.repository }}/releases/download/v$version/loadbearer-$version-x86_64-pc-windows-msvc.zip"
+          Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+          .\wingetcreate.exe update Issinoho.Loadbearer `
+            --version $version `
+            --urls "$url" `
+            --submit `
+            --token $env:WINGET_TOKEN
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

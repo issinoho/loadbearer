@@ -87,10 +87,8 @@ release rather than a head start.
 `.github/workflows/release.yml` fires on the `v*` tag and builds+attaches the
 Windows `.zip`, the Linux `.tar.gz` and a Debian/Ubuntu `.deb`, attaches a
 build-provenance attestation to each, GPG-signs `SHA256SUMS` (`SHA256SUMS.asc`, once `GPG_PRIVATE_KEY` /
-`GPG_PASSPHRASE` are set — key details in `CODE_SIGNING_POLICY.md`), and
-(once `WINGET_TOKEN` is set and `Issinoho.Loadbearer` exists in
-`microsoft/winget-pkgs`) opens the winget version-bump PR. Nothing else to do
-from here. The first winget submission is manual — see `packaging/winget/`.
+`GPG_PASSPHRASE` are set — key details in `CODE_SIGNING_POLICY.md`).
+Nothing else to do from here. It does **not** touch winget: see below.
 The GPG signature is CI-automated, unlike Windows code signing below — no
 manual step needed for it on future releases.
 
@@ -103,8 +101,7 @@ re-signs `loadbearer.exe`, re-uploads the archive, and updates `SHA256SUMS`
 on the release. That's a preflight wrapper — it knows the thumbprint, finds
 `signtool` under the Windows Kits if it isn't on PATH, and refuses early on
 a missing release, a still-draft release, a closed SimplySign session, or
-`-UpdateWinget` without a `WINGET_TOKEN` (which the inner script otherwise
-only notices *after* signing and uploading). It calls
+`-UpdateWinget` when the repo has no `WINGET_TOKEN` secret. It calls
 `scripts/sign-windows-release.ps1`, which takes `-Version`/`-Thumbprint`
 directly if you need it. Not something to do from here: it needs a live,
 logged-in SimplySign session, which this environment doesn't have. The
@@ -114,6 +111,17 @@ update it there and in `CODE_SIGNING_POLICY.md` after renewal.
 Re-signing an already-signed archive is refused (`-Force` overrides): it
 would change the archive's hash a second time and invalidate whatever
 pinned the first, the winget manifest above all.
+
+**winget comes after signing.** `Issinoho.Loadbearer` has been in
+`microsoft/winget-pkgs` since 1.5.2 (PR #429367, merged 2026-10-01), and the
+`WINGET_TOKEN` secret (classic PAT, `public_repo`) was set on 2026-10-02 and
+needs renewing within a year. The version-bump PR comes from
+`.github/workflows/winget.yml`, a `workflow_dispatch` job, not the tag push:
+an archive submitted on the tag would be the unsigned one, and its hash goes
+stale when it's signed. `publish-loadbearer.ps1 X.Y.Z -UpdateWinget`
+dispatches it after uploading the signed archive. The workflow refuses an
+unsigned `loadbearer.exe` unless it's run with `allow_unsigned`. The token
+lives only in the repo secret, never on the laptop. See `packaging/winget/`.
 
 Versioning (semver from 1.0.0 — see `VERSIONING.md` for the covered surface):
 breaking change to the CLI or a `schema`-tagged JSON format → **major**; new
