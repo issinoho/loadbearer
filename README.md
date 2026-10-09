@@ -3,6 +3,10 @@
 # loadbearer
 
 [![Tiny Tool Town](https://img.shields.io/badge/Tiny_Tool_Town-featured-6f42c1?style=flat)](https://www.tinytooltown.com/tools/loadbearer)
+[![Release](https://img.shields.io/github/v/release/issinoho/loadbearer?label=release)](https://github.com/issinoho/loadbearer/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/issinoho/loadbearer/total?label=downloads)](https://github.com/issinoho/loadbearer/releases)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue)
+[![License](https://img.shields.io/github/license/issinoho/loadbearer)](LICENSE)
 
 A command-line system-assessment tool. It benchmarks a host machine's **CPU**,
 **memory**, **disk** and **network stack** — and its **GPU** where there is one —
