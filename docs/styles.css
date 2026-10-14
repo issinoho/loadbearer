@@ -99,6 +99,8 @@ h1, h2, h3 { line-height: 1.2; letter-spacing: -0.015em; }
 .lead { color: var(--muted); font-size: 18px; margin: 20px 0 28px; max-width: 40ch; }
 .lead strong { color: var(--text); font-weight: 700; }
 .hero-ctas { display: flex; flex-wrap: wrap; gap: 12px; }
+.hero-install { margin: 14px 0 0; font-size: 14px; color: var(--muted); }
+.hero-install code { color: var(--text); user-select: all; }
 .hero-meta { margin-top: 22px; font-size: 13.5px; color: var(--faint); }
 .hero-meta .mono { color: var(--muted); }
 
