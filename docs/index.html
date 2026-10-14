@@ -334,18 +334,22 @@ Disks
   <div class="container">
     <div class="section-head">
       <span class="eyebrow">Install</span>
-      <h2>Download a binary, or build it</h2>
+      <h2>Install it, download a binary, or build it</h2>
       <p>Every tagged release ships a self-contained <code>loadbearer.exe</code>
       for Windows and a Linux tarball, built from
-      <a href="https://github.com/issinoho/loadbearer">the same source</a> by CI.
+      <a href="https://github.com/issinoho/loadbearer">the same source</a> by CI,
+      and is published to winget and the Ubuntu PPA.
       macOS on Apple Silicon builds and runs from that same source.</p>
     </div>
 
     <div class="install-grid">
       <div class="install-card">
         <h3>🪟 Windows (x86-64)</h3>
-        <p>Unzip and run <code>loadbearer.exe</code> from a terminal.
-        Releases are Authenticode-signed with a Certum Open Source Code
+        <p>Install from the Windows Package Manager, which puts
+        <code>loadbearer</code> on your <code>PATH</code>:</p>
+        <pre>winget install Issinoho.Loadbearer</pre>
+        <p>Or unzip the release and run <code>loadbearer.exe</code> from a
+        terminal. Releases are Authenticode-signed with a Certum Open Source Code
         Signing certificate, applied by hand shortly after each release
         publishes — so a build can be briefly unsigned right after tagging;
         check with <code>Get-AuthenticodeSignature</code>. An unsigned build
