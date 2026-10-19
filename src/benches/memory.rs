@@ -429,9 +429,20 @@ mod tests {
         for (id, v) in [("lat_l1", l1), ("lat_l3", l3), ("lat_loaded", loaded)] {
             assert!(v.is_finite() && v > 0.0, "{id} -> {v}");
         }
-        // A bigger working set can only be slower to chase; wide margin for a
-        // noisy CI box.
-        assert!(l3 > l1 * 1.2, "l1={l1} l3={l3}");
+        // A bigger working set can only be slower to chase, but the single
+        // windows above can't show it: under `cargo test` they share the CPU
+        // with every other test, and time spent descheduled counts as latency
+        // (CI has measured L1 at 20 ns, above L3). Interleave short chases so
+        // both sizes see the same contention, and keep each one's best round,
+        // which is the one least inflated by it.
+        let budget = Duration::from_millis(40);
+        let (l1_cyc, l3_cyc) = (sattolo_cycle(L1_NODES, 1), sattolo_cycle(L3_NODES, 3));
+        let (mut l1, mut l3) = (f64::INFINITY, f64::INFINITY);
+        for _ in 0..8 {
+            l1 = l1.min(latency_ns(&l1_cyc, budget));
+            l3 = l3.min(latency_ns(&l3_cyc, budget));
+        }
+        assert!(l3 > l1 * 1.2, "best of 8: l1={l1} l3={l3}");
     }
 
     #[test]
