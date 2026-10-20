@@ -60,22 +60,30 @@ undo. The steps by hand, which is what it automates:
    `dput` is an outward-facing publish, so expect to approve it.
    See `packaging/ppa/README.md`.
 
-**`cut-release.sh` will not start on the Windows laptop at all** — not just the
-PPA leg. Two independent blocks, both verified on 2026-09-10 while preparing
-1.5.2:
+**On the Windows laptop, only the GitHub half runs, and only from WSL:**
+`cut-release.sh X.Y.Z --skip-ppa` from WSL Ubuntu against the Windows
+checkout (`/mnt/d/Projects/loadbearer`). Made possible on 2026-10-20 and
+verified that far with `--dry-run` — it passes preflight and stops at the
+missing CHANGELOG section, as it should; no real release has gone through it
+yet. What it took, in case it needs redoing:
 
-- **Git Bash** dies in preflight: `dpkg-buildpackage isn't on PATH`. The
-  Windows side has no Debian tooling and cannot get it.
-- **WSL** used to die at line 22 with `$'\r': command not found`, because
-  `core.autocrlf` checked the script out CRLF. `.gitattributes` now keeps
-  `*.sh` and `debian/**` LF (fixed 2026-10-20), and the script gets into
-  preflight — where it stops on `gh isn't on PATH`, since WSL has no `gh`.
-  Past that it would still need the signing key, `dput`, `lintian` and the
-  Launchpad SSH key listed in step 6.
+- `.gitattributes` keeps `*.sh` and `debian/**` LF. Before that the script
+  was checked out CRLF and died at line 22 with `$'\r': command not found`.
+- `gh` installed in WSL from GitHub's apt repo, `gh auth login` and
+  `gh auth setup-git` run there.
+- `git config --local core.autocrlf true`. Windows git gets `true` from Git
+  for Windows' system gitconfig, which WSL git never reads, so without the
+  repo-local setting WSL sees every CRLF file as modified and the script
+  refuses to sweep them into the release commit.
+- The script strips `\r` when reading `Cargo.toml`'s version; a trailing one
+  made the bump's `sed` silently miss, leaving `Cargo.toml` behind
+  `debian/changelog` and failing `build-deb`.
 
-`--dry-run` does skip the `/dev/tty` gate, so the terminal check is not what
-stops it. **Cut releases from the Linux dev box**, which is also where the
-signing key is.
+**Git Bash** can't run it at all: no `dpkg` on the Windows side, and the
+script uses `dpkg --compare-versions` even with `--skip-ppa`. The **PPA leg**
+still needs the Linux dev box (signing key, `dput`, `lintian`, Launchpad SSH
+— step 6), so a laptop release is `--skip-ppa` there, then
+`cut-release.sh X.Y.Z --ppa-only` on the dev box.
 
 Writing the release notes ahead of time and committing them is fine — the
 script's check is `grep "^## X.Y.Z "`, and it reports "CHANGELOG.md already has

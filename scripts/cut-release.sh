@@ -113,7 +113,9 @@ printf '%s' "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' \
 	|| die "'$VERSION' doesn't look like a version -- expected something like 1.2.3."
 TAG="v$VERSION"
 
-CARGO_VERSION="$(sed -n 's/^version *= *"\(.*\)"/\1/p' Cargo.toml | head -n1)"
+# tr: a Windows checkout run from WSL has Cargo.toml CRLF, and a trailing \r
+# here would stop the bump's sed below from ever matching.
+CARGO_VERSION="$(sed -n 's/^version *= *"\(.*\)"/\1/p' Cargo.toml | head -n1 | tr -d '\r')"
 
 printf '\n%sloadbearer %s%s\n' "$BOLD" "$TAG" "$RESET"
 printf 'Repository: %s   PPA: ppa:%s/%s\n' "$REPO" "$LP_USER" "$LP_PPA"
