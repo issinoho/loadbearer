@@ -373,8 +373,9 @@ sudo apt install loadbearer</pre>
         subtests read low, as on Apple Silicon — the build doesn't use Arm
         crypto instructions, and the result says so.</p>
         <p>Elsewhere: extract the x86-64 tarball and run
-        <code>./loadbearer</code>, or grab the standalone <code>.deb</code>
-        attached to each release, or install from source:</p>
+        <code>./loadbearer</code> (glibc 2.34 or newer), or grab the
+        standalone <code>.deb</code> attached to each release (Ubuntu 24.04+ or
+        Debian 13+), or install from source:</p>
         <pre>cargo install --git https://github.com/issinoho/loadbearer --locked</pre>
         <a class="btn btn-ghost" data-dl="linux" href="https://github.com/issinoho/loadbearer/releases/latest">Download .tar.gz</a>
       </div>

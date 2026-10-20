@@ -229,8 +229,8 @@ comparable against an x86 machine's; the rest of the run is.
 
 ### Debian / Ubuntu (standalone `.deb`)
 
-For Debian, or an Ubuntu series the PPA doesn't cover, download
-`loadbearer_<version>-1_amd64.deb` from the
+For Debian 13 (trixie) or later, or an Ubuntu series the PPA doesn't cover,
+download `loadbearer_<version>-1_amd64.deb` from the
 [latest release](https://github.com/issinoho/loadbearer/releases/latest) and
 install it:
 
@@ -241,6 +241,11 @@ sudo apt install ./loadbearer_<version>-1_amd64.deb
 That puts `loadbearer` on your `PATH` and installs the man page
 (`man loadbearer`) and completions for bash, zsh and fish. It depends only on
 the C runtime, so there's nothing else to pull in.
+
+The `.deb` is built on Ubuntu 24.04 and asks for glibc 2.39 or newer, so `apt`
+refuses it on Ubuntu 22.04 and Debian 12. On 22.04 use the PPA above, which
+has a jammy build; on Debian 12 or anything else older, use the tarball below,
+which runs on glibc 2.34 and up.
 
 ### Linux (any distribution)
 
