@@ -1,0 +1,5 @@
+# Shell scripts and Debian packaging are run by bash/make, which read a CRLF
+# as part of each line. Keep them LF even in a core.autocrlf checkout on
+# Windows, so they still run from WSL against the same working tree.
+*.sh       text eol=lf
+debian/**  text eol=lf

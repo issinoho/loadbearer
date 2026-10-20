@@ -66,11 +66,12 @@ PPA leg. Two independent blocks, both verified on 2026-09-10 while preparing
 
 - **Git Bash** dies in preflight: `dpkg-buildpackage isn't on PATH`. The
   Windows side has no Debian tooling and cannot get it.
-- **WSL** dies at line 22 with `$'\r': command not found`. `core.autocrlf` is
-  on for the Windows checkout, so the script is CRLF in the working tree and
-  `bash` reads the carriage returns as part of each command. Cloning fresh
-  inside WSL, or a `.gitattributes` carrying `*.sh text eol=lf`, would fix
-  this; neither is done.
+- **WSL** used to die at line 22 with `$'\r': command not found`, because
+  `core.autocrlf` checked the script out CRLF. `.gitattributes` now keeps
+  `*.sh` and `debian/**` LF (fixed 2026-10-20), and the script gets into
+  preflight — where it stops on `gh isn't on PATH`, since WSL has no `gh`.
+  Past that it would still need the signing key, `dput`, `lintian` and the
+  Launchpad SSH key listed in step 6.
 
 `--dry-run` does skip the `/dev/tty` gate, so the terminal check is not what
 stops it. **Cut releases from the Linux dev box**, which is also where the
