@@ -36,7 +36,10 @@ jobs:
             target: x86_64-pc-windows-msvc
             bin: loadbearer.exe
             archive: zip
-          - os: ubuntu-latest
+          # Pinned, not ubuntu-latest: the binary needs the glibc it was built
+          # against, so a runner-image move would quietly raise the oldest
+          # distro it runs on. Move this deliberately, with build-deb.
+          - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             bin: loadbearer
             archive: tar.gz
@@ -113,7 +116,9 @@ jobs:
     # Built the way a distribution would -- against the archive's own
     # versioned Rust toolchain rather than rustup -- so this job doubles as a
     # rehearsal for the PPA source build, which has neither rustup nor network.
-    runs-on: ubuntu-latest
+    # Pinned for the same reason as the Linux build above, and because the
+    # versioned rustc/cargo package names below are per-series.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
 
