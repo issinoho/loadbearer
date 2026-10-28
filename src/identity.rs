@@ -80,12 +80,15 @@ fn readable(field: &Option<String>) -> &'static str {
 /// Only the Windows and Linux collectors call this, so it is dead code on a
 /// platform with neither — macOS builds from source, which the README covers.
 #[cfg_attr(not(any(windows, target_os = "linux")), allow(dead_code))]
-fn meaningful(s: &str) -> Option<String> {
+pub(crate) fn meaningful(s: &str) -> Option<String> {
     const JUNK: &[&str] = &[
         "to be filled by o.e.m.",
         "to be filled by oem",
         "default string",
         "system serial number",
+        "system product name",
+        "system manufacturer",
+        "system version",
         "system uuid",
         "chassis serial number",
         "base board serial number",
@@ -144,6 +147,13 @@ fn platform_collect() -> MachineId {
     }
 }
 
+/// The raw SMBIOS structure table, for [`crate::firmware`] to read its own
+/// fields from.
+#[cfg(windows)]
+pub(crate) fn raw_smbios_table() -> Option<Vec<u8>> {
+    win::raw_table()
+}
+
 #[cfg(windows)]
 mod win {
     use super::meaningful;
@@ -189,14 +199,14 @@ mod win {
         meaningful(s.trim_end_matches('\0'))
     }
 
-    /// Pull the raw SMBIOS table from firmware and read what we need out of it.
-    /// Returns `(uuid, serial, asset_tag)`.
+    /// Pull the raw SMBIOS table from firmware, without the 8-byte
+    /// `RawSMBIOSData` header. Shared with [`crate::firmware`].
     ///
     /// `GetSystemFirmwareTable` rather than WMI on purpose: no COM to
     /// initialise, no `wmic` subprocess to spawn (it's been removed from
     /// current Windows anyway), and it works in a Session 0 service context,
     /// which is where a deployment tool runs us.
-    pub fn smbios() -> Option<(Option<String>, Option<String>, Option<String>)> {
+    pub fn raw_table() -> Option<Vec<u8>> {
         use windows_sys::Win32::System::SystemInformation::GetSystemFirmwareTable;
 
         // 'RSMB', the raw-SMBIOS provider, big-endian in the API's terms.
@@ -224,7 +234,12 @@ mod win {
         if buf.len() <= 8 {
             return None;
         }
-        Some(super::parse_smbios(&buf[8..]))
+        Some(buf.split_off(8))
+    }
+
+    /// The identity fields out of the SMBIOS table: `(uuid, serial, asset_tag)`.
+    pub fn smbios() -> Option<(Option<String>, Option<String>, Option<String>)> {
+        raw_table().map(|t| super::parse_smbios(&t))
     }
 }
 
@@ -265,26 +280,45 @@ fn platform_collect() -> MachineId {
 // SMBIOS table parsing (used by the Windows path; tested everywhere)
 // ---------------------------------------------------------------------------
 
-/// Walk an SMBIOS structure table and pull the system UUID and serial (type 1)
-/// and the chassis asset tag (type 3). Returns `(uuid, serial, asset_tag)`.
+/// One SMBIOS structure: its type, the formatted area (header included, so
+/// the spec's field offsets index it directly) and its string table.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) struct Structure<'a> {
+    pub kind: u8,
+    pub formatted: &'a [u8],
+    strings: &'a [u8],
+}
+
+#[cfg_attr(not(windows), allow(dead_code))]
+impl Structure<'_> {
+    /// The string-valued field at spec offset `at`, if the structure is long
+    /// enough to have it and it holds something [`meaningful`].
+    pub fn string(&self, at: usize) -> Option<String> {
+        self.formatted
+            .get(at)
+            .and_then(|&i| smbios_string(self.strings, i))
+    }
+}
+
+/// Walk an SMBIOS structure table, stopping at the end-of-table marker or at
+/// the first malformed structure.
 ///
 /// Each structure is a 4-byte header (type, length, 2-byte handle), a formatted
 /// area of `length` bytes total, then a NUL-separated string table terminated
 /// by an empty string. String-valued fields hold a 1-based index into it.
 #[cfg_attr(not(windows), allow(dead_code))]
-fn parse_smbios(table: &[u8]) -> (Option<String>, Option<String>, Option<String>) {
-    let mut uuid = None;
-    let mut serial = None;
-    let mut asset_tag = None;
-
+pub(crate) fn structures(table: &[u8]) -> impl Iterator<Item = Structure<'_>> {
     let mut pos = 0usize;
-    while pos + 4 <= table.len() {
+    std::iter::from_fn(move || {
+        if pos + 4 > table.len() {
+            return None;
+        }
         let kind = table[pos];
         let len = table[pos + 1] as usize;
         // A length inside the header, or past the end, means the table is
         // malformed; stop rather than guess.
         if len < 4 || pos + len > table.len() {
-            break;
+            return None;
         }
         let formatted = &table[pos..pos + len];
 
@@ -295,29 +329,38 @@ fn parse_smbios(table: &[u8]) -> (Option<String>, Option<String>, Option<String>
             end += 1;
         }
         let strings = &table[strings_at..end.min(table.len())];
+        pos = end + 2;
 
-        match kind {
+        // Type 127 is the end-of-table marker.
+        (kind != 127).then_some(Structure {
+            kind,
+            formatted,
+            strings,
+        })
+    })
+}
+
+/// Pull the system UUID and serial (type 1) and the chassis asset tag (type 3)
+/// out of an SMBIOS table. Returns `(uuid, serial, asset_tag)`.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn parse_smbios(table: &[u8]) -> (Option<String>, Option<String>, Option<String>) {
+    let mut uuid = None;
+    let mut serial = None;
+    let mut asset_tag = None;
+
+    for s in structures(table) {
+        match s.kind {
             // Type 1, System Information: serial at 0x07, UUID at 0x08.
             1 => {
-                if len > 0x07 {
-                    serial = smbios_string(strings, formatted[0x07]);
-                }
-                if len >= 0x18 {
-                    uuid = format_smbios_uuid(&formatted[0x08..0x18]);
+                serial = s.string(0x07);
+                if s.formatted.len() >= 0x18 {
+                    uuid = format_smbios_uuid(&s.formatted[0x08..0x18]);
                 }
             }
             // Type 3, System Enclosure: asset tag at 0x08.
-            3 => {
-                if len > 0x08 {
-                    asset_tag = smbios_string(strings, formatted[0x08]);
-                }
-            }
-            // Type 127 is the end-of-table marker.
-            127 => break,
+            3 => asset_tag = s.string(0x08),
             _ => {}
         }
-
-        pos = end + 2;
     }
 
     (uuid, serial, asset_tag)

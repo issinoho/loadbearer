@@ -47,6 +47,12 @@ A breaking change to any of these is a major release:
   `model_ref` "vs typical hardware" block it drives. Also calibration data:
   entries and values change as more machines are measured, and the block is
   never folded into a grade.
+- **The values in `machine.age`.** The block's fields are covered by the
+  result schema like any other, but what fills them is derived from a CPU
+  launch-date table embedded as data: entries are added and corrected in any
+  release, a CPU it didn't know may start resolving, and `cpu_family` is
+  descriptive text that may be reworded. Key on `cpu_launched` and
+  `max_age_months`, not the wording.
 - **Informational subtests** — rows shown under a component as "informational
   (not graded)" and carried in `raw` with `"scored": false` (CPU thread-scaling
   points, the memory cache-latency ladder, deep-queue disk IOPS, …). Which ones

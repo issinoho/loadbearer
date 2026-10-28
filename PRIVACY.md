@@ -28,6 +28,14 @@ server side.
   read. Nothing suppresses it selectively today; if you need a result file
   without it, strip `machine.identity` before sharing.
 
+  The inventory also carries `machine.firmware` (the system vendor and model,
+  and the BIOS version and release date), `machine.nvme` (each NVMe drive's
+  model and health counters: power-on hours, power cycles, wear, data written,
+  error counts) and `machine.age`, an estimate of how old the machine is,
+  derived from those and from the CPU model and battery cycle count. None of
+  these is per-unit: every machine of a model reports the same model and
+  firmware strings, and no drive serial number is read.
+
   Anything a `--tag` puts in the file is text you supplied, so don't put
   personal data in one.
 
@@ -47,7 +55,8 @@ server side.
 - **A scratch file** in `--target-dir` for the disk benchmark, deleted when the
   run ends.
 
-Nothing is written to the registry. No elevated privileges are needed.
+Nothing is written to the registry. No elevated privileges are needed — the
+few reads that want them are skipped without.
 
 ## What it reads
 
@@ -62,7 +71,20 @@ Beyond the CPU / memory / disk / GPU / battery inventory above, collecting
   `/sys/class/dmi/id/`. The UUID and serial there are root-only by default, so
   an unprivileged run simply doesn't get them.
 
-Both are ordinary reads of local system information, and both fail quietly.
+Collecting `machine.firmware` reads the same SMBIOS table on Windows, and the
+world-readable `sys_vendor`, `product_name`, `product_version`, `bios_version`
+and `bios_date` files under `/sys/class/dmi/id/` on Linux.
+
+Collecting `machine.nvme` asks each NVMe controller for its SMART / Health
+Information log page — a read-only admin command:
+
+- **Windows** — `IOCTL_STORAGE_QUERY_PROPERTY` on `\\.\PhysicalDriveN`,
+  opened with no read or write access.
+- **Linux** — the `NVME_IOCTL_ADMIN_CMD` ioctl on `/dev/nvmeN`, which is
+  root-only by default, so an unprivileged run simply doesn't get it.
+
+All of these are ordinary reads of local system information, and all of them
+fail quietly.
 
 ## Network
 

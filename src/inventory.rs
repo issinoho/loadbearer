@@ -11,6 +11,10 @@ pub struct Inventory {
     /// apart from a machine not seen before. Absent when none could be read.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub identity: Option<crate::identity::MachineId>,
+    /// System model and firmware version / date. Absent when none could be
+    /// read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub firmware: Option<crate::firmware::Firmware>,
     pub os: Option<String>,
     pub kernel: Option<String>,
     pub arch: String,
@@ -24,12 +28,20 @@ pub struct Inventory {
     pub ram_bytes: u64,
     pub swap_bytes: u64,
     pub disks: Vec<DiskInfo>,
+    /// Health counters for each NVMe drive this process could query — empty
+    /// without root / admin, or with no NVMe drives.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub nvme: Vec<crate::nvme::NvmeHealth>,
     /// The GPU `loadbearer` would benchmark via OpenCL, if any was found.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gpu: Option<crate::benches::GpuInfo>,
     /// The primary battery and its wear state, on a machine that has one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub battery: Option<crate::battery::BatteryInfo>,
+    /// How old the machine is, as far as its CPU, firmware, drive and battery
+    /// say. Not graded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub age: Option<crate::age::Age>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,6 +64,7 @@ impl Inventory {
         Inventory {
             hostname: None,
             identity: None,
+            firmware: None,
             os: None,
             kernel: None,
             arch: String::new(),
@@ -63,8 +76,10 @@ impl Inventory {
             ram_bytes: 0,
             swap_bytes: 0,
             disks: Vec::new(),
+            nvme: Vec::new(),
             gpu: None,
             battery: None,
+            age: None,
         }
     }
 }
@@ -109,9 +124,10 @@ pub fn collect() -> Inventory {
         })
         .collect();
 
-    let inv = Inventory {
+    let mut inv = Inventory {
         hostname: System::host_name(),
         identity: crate::identity::collect(),
+        firmware: crate::firmware::collect(),
         os: System::long_os_version().or_else(System::os_version),
         kernel: System::kernel_version(),
         arch: System::cpu_arch(),
@@ -123,9 +139,12 @@ pub fn collect() -> Inventory {
         ram_bytes: sys.total_memory(),
         swap_bytes: sys.total_swap(),
         disks,
+        nvme: crate::nvme::collect(),
         gpu: crate::benches::gpu_probe().cloned(),
         battery: crate::battery::probe().cloned(),
+        age: None,
     };
+    inv.age = crate::age::Age::assess(&inv, crate::age::this_month());
     log::debug!(
         target: "loadbearer::inventory",
         // No hostname: a machine name is frequently a person's name, and the

@@ -517,6 +517,39 @@ fn draw_results(f: &mut Frame, scroll: &mut u16, r: &ResultFile, area: Rect) {
         }
     }
 
+    if let Some(a) = crate::age::Age::for_machine(&r.machine, &r.timestamp) {
+        lines.push(Line::raw(""));
+        lines.push(Line::from(Span::styled(
+            format!("AGE  ({} · not graded)", a.summary()),
+            Style::default().add_modifier(Modifier::BOLD),
+        )));
+        let fw = r.machine.firmware.as_ref().and_then(|f| f.bios_line());
+        for line in [a.platform(), fw.map(|b| format!("firmware {b}")), a.usage()]
+            .into_iter()
+            .flatten()
+        {
+            lines.push(Line::from(Span::styled(
+                format!("  {line}"),
+                Style::default().fg(DIM),
+            )));
+        }
+        if let Some(c) = a.ceiling() {
+            lines.push(Line::from(Span::styled(
+                format!("  → {c} at this run"),
+                Style::default().fg(DIM),
+            )));
+        }
+        for n in [a.firmware_note(), a.usage_note().map(str::to_string)]
+            .into_iter()
+            .flatten()
+        {
+            lines.push(Line::from(Span::styled(
+                format!("  note: {n}"),
+                Style::default().fg(DIM),
+            )));
+        }
+    }
+
     if let Some(s) = &r.soak {
         lines.push(Line::raw(""));
         lines.push(Line::from(Span::styled(

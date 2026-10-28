@@ -46,6 +46,14 @@ pub fn print_inventory(inv: &Inventory) {
     row("OS", inv.os.as_deref().unwrap_or("unknown"));
     row("Kernel", inv.kernel.as_deref().unwrap_or("unknown"));
     row("Architecture", &inv.arch);
+    if let Some(fw) = &inv.firmware {
+        if let Some(name) = fw.system_name() {
+            row("System", name);
+        }
+        if let Some(b) = fw.bios_line() {
+            row("Firmware", b);
+        }
+    }
 
     section("CPU");
     row("Model", &inv.cpu_model);
@@ -121,6 +129,62 @@ pub fn print_inventory(inv: &Inventory) {
         }
         if let Some(t) = b.temperature_c {
             row("Temperature", format!("{t:.0} °C"));
+        }
+    }
+
+    if !inv.nvme.is_empty() {
+        section("NVMe health");
+        for d in &inv.nvme {
+            let name = match &d.model {
+                Some(m) => format!("{} ({m})", d.device),
+                None => d.device.clone(),
+            };
+            row("Drive", name);
+            row(
+                "Powered",
+                format!(
+                    "{} h · {} power cycles",
+                    crate::age::thousands(d.power_on_hours),
+                    d.power_cycles
+                ),
+            );
+            row(
+                "Wear",
+                format!(
+                    "{}% of rated endurance · {:.1} TB written · {}% spare",
+                    d.percentage_used, d.data_written_tb, d.available_spare_pct
+                ),
+            );
+            if d.critical_warning != 0 || d.media_errors != 0 {
+                row(
+                    "Warnings",
+                    format!(
+                        "critical-warning flags {:#04x} · {} media errors",
+                        d.critical_warning, d.media_errors
+                    ),
+                );
+            }
+        }
+    }
+
+    let age = inv
+        .age
+        .clone()
+        .or_else(|| crate::age::Age::assess(inv, crate::age::this_month()));
+    if let Some(a) = age {
+        section("Age (not graded)");
+        if let Some(p) = a.platform() {
+            row("Platform", p);
+        }
+        row("Estimate", estimate(&a));
+        if let Some(n) = a.firmware_note() {
+            row("", format!("note: {n}"));
+        }
+        if let Some(u) = a.usage() {
+            row("Use", u);
+        }
+        if let Some(n) = a.usage_note() {
+            row("", format!("note: {n}"));
         }
     }
 
@@ -392,6 +456,10 @@ pub fn print_scored_report(result: &ResultFile) {
         print_battery_block(b);
     }
 
+    if let Some(a) = crate::age::Age::for_machine(&result.machine, &result.timestamp) {
+        print_age_block(&a, &result.machine);
+    }
+
     if let Some(link) = &result.link {
         println!("\n  Link to {} (measured, not graded)", link.target);
         println!(
@@ -474,6 +542,37 @@ fn print_battery_block(b: &crate::battery::BatteryInfo) {
         println!("    \u{2192} {v}");
     }
     if let Some(n) = b.power_note() {
+        println!("    note: {n}");
+    }
+}
+
+/// "built Jan 2022 or later — at most 4.8 years old".
+fn estimate(a: &crate::age::Age) -> String {
+    match a.ceiling() {
+        Some(c) => format!("{} — {c}", a.summary()),
+        None => a.summary(),
+    }
+}
+
+/// When the machine dates from, as far as the CPU and firmware say. Not graded.
+fn print_age_block(a: &crate::age::Age, m: &Inventory) {
+    println!("\n  {:<8} {} · not graded", "AGE", a.summary());
+    if let Some(p) = a.platform() {
+        println!("    {:<12} {p}", "Platform");
+    }
+    if let Some(b) = m.firmware.as_ref().and_then(|f| f.bios_line()) {
+        println!("    {:<12} {b}", "Firmware");
+    }
+    if let Some(u) = a.usage() {
+        println!("    {:<12} {u}", "Use");
+    }
+    if let Some(c) = a.ceiling() {
+        println!("    \u{2192} {c} at this run");
+    }
+    for n in [a.firmware_note().as_deref(), a.usage_note()]
+        .into_iter()
+        .flatten()
+    {
         println!("    note: {n}");
     }
 }

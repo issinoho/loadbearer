@@ -1,14 +1,17 @@
+mod age;
 mod battery;
 mod benches;
 mod cli;
 mod compare;
 mod config;
 mod engine;
+mod firmware;
 mod gates;
 mod identity;
 mod inventory;
 mod logging;
 mod mem;
+mod nvme;
 mod output;
 mod run;
 mod score;

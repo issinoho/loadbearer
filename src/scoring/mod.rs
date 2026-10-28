@@ -569,6 +569,7 @@ mod tests {
         Inventory {
             hostname: Some("host".into()),
             identity: None,
+            firmware: None,
             os: Some("TestOS".into()),
             kernel: None,
             arch: "x86_64".into(),
@@ -580,8 +581,10 @@ mod tests {
             ram_bytes: 16 << 30,
             swap_bytes: 0,
             disks: vec![],
+            nvme: vec![],
             gpu: None,
             battery: None,
+            age: None,
         }
     }
 
