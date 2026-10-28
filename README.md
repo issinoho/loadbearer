@@ -385,8 +385,9 @@ loadbearer net-server [--bind ADDR]
   throttling set in, and how steady the clock held. **Not scored** — it's the
   signal that separates two laptops with identical burst numbers. Also available
   as `loadbearer run --soak`, which embeds the result in the result JSON.
-- **`info`** — machine inventory (host, CPU, memory, disks, and the GPU and
-  battery where present) and nothing else.
+- **`info`** — machine inventory (host, system model and firmware, CPU,
+  memory, disks, drive health, and the GPU and battery where present) plus the
+  [age estimate](#how-old-the-machine-is), and nothing else.
 - **`mem`** — per-program memory use right now, in the style of
   [`ps_mem`](https://github.com/pixelb/ps_mem): grouped by program, smallest
   first, with a grand total. On Linux the numbers are true **PSS**
@@ -638,6 +639,10 @@ What makes that work across repeat sweeps:
   repeat run of one machine from a machine you haven't seen; the firmware
   identifiers survive a reimage and are what asset and warranty records key
   on. Best-effort, and absent where the firmware or OS won't say.
+- **`machine.age`** — how old the machine is, from its CPU's launch, its
+  firmware date and its drive's power-on hours, in a form a collector can sort
+  an estate by. [loadbearer-fleet](https://github.com/issinoho/loadbearer-fleet)
+  turns it into a replacement list.
 - **`--tag k=v`** — the organisational context a benchmark can't discover for
   itself (site, department, deployment ring). Whatever orchestrates the run
   already knows it; tags carry it into the result for grouping later. Metadata
@@ -724,6 +729,25 @@ separate block, but neither touches a grade.
 machine speed, so it never touches a grade; a machine on battery power also gets
 a note, since a power profile may be capping clocks. A machine with no battery
 shows none of this.
+
+### How old the machine is
+
+Nothing on a PC records when it was built, so the `AGE` block reasons from what
+does carry a date or a count — and is never graded:
+
+- **The CPU.** Every CPU generation has a launch date and a machine can't be
+  older than its CPU, so the launch is a floor on the build date: *built Jan
+  2023 or later, at most 3.8 years old*. A CPU the launch table doesn't know (a
+  Xeon, a Core 2) gets no estimate rather than a guess.
+- **The firmware date.** Not a bound either way, since an update moves it
+  forward — but within a year of the CPU's launch it is probably what the
+  machine shipped with, and the block says so.
+- **Use.** The boot drive's power-on hours and the battery's charge cycles
+  measure how hard the machine has been used rather than when it was made, and
+  either part may have been replaced. Drive hours are read from the NVMe health
+  log or a SATA drive's Device Statistics — no elevation needed on Windows,
+  root on Linux. Some SATA SSDs stop counting when idle; a drive that averages
+  minutes per power cycle is marked *likely undercounted*.
 
 **Grades.** `S ≥ 1400`, `A ≥ 1150`, `B ≥ 850`, `C ≥ 600`, `D ≥ 400`, else `F` —
 centred so the baseline (1000) lands in the middle of B.
@@ -821,6 +845,15 @@ benchmark; use `--only cpu,memory,network` to skip it.
   before (`hostname` is renameable and gets reissued). Best-effort: fields are
   absent where firmware doesn't report them or the OS won't say without root,
   and the whole block is absent when none could be read.
+- `machine.firmware` — system vendor and model, BIOS version and release date.
+- `machine.drives` — each NVMe or SATA drive's health counters (power-on hours,
+  power cycles, endurance used, data written; NVMe adds spare, unsafe
+  shutdowns, media errors and warning flags). Absent without root on Linux.
+- `machine.age` — the [age estimate](#how-old-the-machine-is) in
+  machine-readable form: `cpu_launched` and `firmware_dated` as `YYYY-MM`,
+  `max_age_months`, `firmware_likely_original`, `drive_power_on_hours`,
+  `drive_hours_undercounted`, `battery_cycles`, all as of `as_of`. The values
+  come from an embedded launch table that is data, not API.
 - `link` — the `--net-target` link probe, if one ran (ungraded).
 - `soak` — the `--soak` sustained-load result, if one ran (ungraded): every
   per-second sample plus the derived peak / steady / retained / onset figures.
