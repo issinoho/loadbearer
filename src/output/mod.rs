@@ -142,7 +142,7 @@ pub fn print_inventory(inv: &Inventory) {
             row("Drive", name);
             let mut powered = format!("{} h", crate::age::thousands(d.power_on_hours));
             if let Some(c) = d.power_cycles {
-                powered += &format!(" · {c} power cycles");
+                powered += &format!(" · {} power cycles", crate::age::thousands(c));
             }
             row("Powered", powered);
             let wear: Vec<String> = [
