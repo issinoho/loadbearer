@@ -2,6 +2,51 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 1.6.0 - Wed, 28 Oct 2026
+
+**How old is this machine?** Nothing on a PC records when it was built, so
+loadbearer now reasons from what does carry a date or a count, and says how
+far each piece of evidence goes. No measurement changes: 1.5.x scores and
+result files are directly comparable, and nothing here touches a grade.
+
+- **An age estimate.** A machine can't be older than its CPU, so the launch of
+  the CPU's generation is a floor on when it was built — "built Jan 2023 or
+  later, at most 3.8 years old". The firmware date isn't a bound either way,
+  since an update moves it forward, but within a year of the CPU's launch it is
+  probably what the machine shipped with, and the estimate says so. `info`
+  shows it as an **Age** section, a scored report and the results screen as an
+  `AGE` block. The launch table covers Intel Core from the first generation
+  through Core Ultra Series 3, the N-series and Atom-class Celeron/Pentium,
+  Ryzen, Ryzen AI, Threadripper, EPYC, Apple M1–M5 and Snapdragon X; a CPU it
+  doesn't know — a Xeon, a Core 2 — gets no estimate rather than a guess.
+- **Drive health, and the drive's hours as an odometer.** Each NVMe drive's
+  SMART / health log and each SATA drive's ATA Device Statistics: power-on
+  hours, power cycles, endurance used, data written, and for NVMe spare,
+  unsafe shutdowns, media errors and the critical-warning flags. SATA is read
+  from the statistics log rather than SMART attribute 9, whose unit is whatever
+  the vendor chose. On Windows it needs no elevation; on Linux the device nodes
+  are root-only, so an unprivileged run simply leaves it out. Checked against
+  `smartctl` / `nvme smart-log` on Windows NVMe, Linux NVMe and Linux SATA;
+  **Windows SATA has not yet been tried on hardware.**
+- **Drive hours that measure working time are called out.** Some SATA SSDs
+  stop counting in low-power idle — one laptop's reported 175 hours over 4,314
+  power cycles and 17 TB written. A drive averaging under fifteen minutes per
+  power cycle is marked "likely undercounted" and its hours aren't read as time
+  in service.
+- **System model and firmware** in the inventory: "Dell Inc. Latitude 7440",
+  or Lenovo's marketing name beside its type code, and the BIOS version and
+  release date. Not per-unit — every machine of a model reports the same
+  strings — and no drive serial is read.
+- **All of it is in the result file**, for a fleet collector: `machine.age` in
+  machine-readable form (`YYYY-MM` dates, whole months, hours), plus
+  `machine.firmware` and `machine.drives`. New optional fields under
+  `loadbearer.result/1`, so nothing reading 1.5 files breaks. The values in
+  `machine.age` come from the launch table, which is data rather than API and
+  will be corrected and extended in later releases (see `VERSIONING.md`); key
+  on `cpu_launched` and `max_age_months`, not the wording.
+  [loadbearer-fleet](https://github.com/issinoho/loadbearer-fleet) 0.7.0 reads
+  them.
+
 ## 1.5.2 - Thu, 10 Sep 2026
 
 Fixes only, and no measurement changes at all — 1.5.1 scores and result files
