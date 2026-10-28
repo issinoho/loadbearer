@@ -132,36 +132,37 @@ pub fn print_inventory(inv: &Inventory) {
         }
     }
 
-    if !inv.nvme.is_empty() {
-        section("NVMe health");
-        for d in &inv.nvme {
+    if !inv.drives.is_empty() {
+        section("Drive health");
+        for d in &inv.drives {
             let name = match &d.model {
-                Some(m) => format!("{} ({m})", d.device),
-                None => d.device.clone(),
+                Some(m) => format!("{} ({m}, {})", d.device, d.interface.to_uppercase()),
+                None => format!("{} ({})", d.device, d.interface.to_uppercase()),
             };
             row("Drive", name);
-            row(
-                "Powered",
-                format!(
-                    "{} h · {} power cycles",
-                    crate::age::thousands(d.power_on_hours),
-                    d.power_cycles
-                ),
-            );
-            row(
-                "Wear",
-                format!(
-                    "{}% of rated endurance · {:.1} TB written · {}% spare",
-                    d.percentage_used, d.data_written_tb, d.available_spare_pct
-                ),
-            );
-            if d.critical_warning != 0 || d.media_errors != 0 {
+            let mut powered = format!("{} h", crate::age::thousands(d.power_on_hours));
+            if let Some(c) = d.power_cycles {
+                powered += &format!(" · {c} power cycles");
+            }
+            row("Powered", powered);
+            let wear: Vec<String> = [
+                d.percentage_used
+                    .map(|p| format!("{p}% of rated endurance")),
+                d.data_written_tb.map(|t| format!("{t:.1} TB written")),
+                d.available_spare_pct.map(|s| format!("{s}% spare")),
+            ]
+            .into_iter()
+            .flatten()
+            .collect();
+            if !wear.is_empty() {
+                row("Wear", wear.join(" · "));
+            }
+            let warning = d.critical_warning.unwrap_or(0);
+            let errors = d.media_errors.unwrap_or(0);
+            if warning != 0 || errors != 0 {
                 row(
                     "Warnings",
-                    format!(
-                        "critical-warning flags {:#04x} · {} media errors",
-                        d.critical_warning, d.media_errors
-                    ),
+                    format!("critical-warning flags {warning:#04x} · {errors} media errors"),
                 );
             }
         }

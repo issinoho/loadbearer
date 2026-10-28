@@ -9,7 +9,7 @@
 //! - **The firmware date** ([`crate::firmware`]). Not a bound either way — an
 //!   update moves it forward — but when it sits close to the CPU's launch it's
 //!   probably the firmware the machine shipped with, which narrows things.
-//! - **Use**: the boot NVMe drive's power-on hours ([`crate::nvme`]) and the
+//! - **Use**: the boot drive's power-on hours ([`crate::drives`]) and the
 //!   battery's charge cycles. These measure how hard the machine has been
 //!   used rather than when it was made, and either part may have been
 //!   replaced.
@@ -68,7 +68,7 @@ pub struct Age {
     /// about `firmware_dated`. False means it has likely been updated.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub firmware_likely_original: Option<bool>,
-    /// Power-on hours of the first NVMe drive (`nvme0`, or the lowest-numbered
+    /// Power-on hours of the first drive (`nvme0`, then `sda`; or the lowest-numbered
     /// physical drive) — usually the boot drive. Absent without root / admin.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub drive_power_on_hours: Option<u64>,
@@ -93,7 +93,7 @@ impl Age {
             firmware_dated: fw.map(ym),
             firmware_after_launch_months: gap,
             firmware_likely_original: gap.map(|g| g <= AS_SHIPPED_MONTHS),
-            drive_power_on_hours: inv.nvme.first().map(|d| d.power_on_hours),
+            drive_power_on_hours: inv.drives.first().map(|d| d.power_on_hours),
             battery_cycles: inv.battery.as_ref().and_then(|b| b.cycle_count),
         };
         (a != Age {
@@ -693,18 +693,19 @@ mod tests {
             bios_date: Some(d.to_string()),
             ..Default::default()
         });
-        inv.nvme = drive_hours
-            .map(|h| crate::nvme::NvmeHealth {
-                device: "nvme0".into(),
+        inv.drives = drive_hours
+            .map(|h| crate::drives::DriveHealth {
+                device: "sda".into(),
+                interface: "sata".into(),
                 model: None,
                 power_on_hours: h,
-                power_cycles: 0,
-                unsafe_shutdowns: 0,
-                percentage_used: 0,
-                available_spare_pct: 100,
-                data_written_tb: 0.0,
-                media_errors: 0,
-                critical_warning: 0,
+                power_cycles: None,
+                unsafe_shutdowns: None,
+                percentage_used: None,
+                available_spare_pct: None,
+                data_written_tb: None,
+                media_errors: None,
+                critical_warning: None,
             })
             .into_iter()
             .collect();

@@ -28,10 +28,10 @@ pub struct Inventory {
     pub ram_bytes: u64,
     pub swap_bytes: u64,
     pub disks: Vec<DiskInfo>,
-    /// Health counters for each NVMe drive this process could query — empty
-    /// without root / admin, or with no NVMe drives.
+    /// Health counters for each NVMe or SATA drive this process could query
+    /// — empty without root / admin, or with no drive that reports them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub nvme: Vec<crate::nvme::NvmeHealth>,
+    pub drives: Vec<crate::drives::DriveHealth>,
     /// The GPU `loadbearer` would benchmark via OpenCL, if any was found.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gpu: Option<crate::benches::GpuInfo>,
@@ -76,7 +76,7 @@ impl Inventory {
             ram_bytes: 0,
             swap_bytes: 0,
             disks: Vec::new(),
-            nvme: Vec::new(),
+            drives: Vec::new(),
             gpu: None,
             battery: None,
             age: None,
@@ -139,7 +139,7 @@ pub fn collect() -> Inventory {
         ram_bytes: sys.total_memory(),
         swap_bytes: sys.total_swap(),
         disks,
-        nvme: crate::nvme::collect(),
+        drives: crate::drives::collect(),
         gpu: crate::benches::gpu_probe().cloned(),
         battery: crate::battery::probe().cloned(),
         age: None,

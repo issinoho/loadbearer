@@ -581,7 +581,7 @@ mod tests {
             ram_bytes: 16 << 30,
             swap_bytes: 0,
             disks: vec![],
-            nvme: vec![],
+            drives: vec![],
             gpu: None,
             battery: None,
             age: None,

@@ -29,9 +29,9 @@ server side.
   without it, strip `machine.identity` before sharing.
 
   The inventory also carries `machine.firmware` (the system vendor and model,
-  and the BIOS version and release date), `machine.nvme` (each NVMe drive's
-  model and health counters: power-on hours, power cycles, wear, data written,
-  error counts) and `machine.age`, an estimate of how old the machine is,
+  and the BIOS version and release date), `machine.drives` (each NVMe or SATA
+  drive's model and health counters: power-on hours, power cycles, wear, data
+  written, error counts) and `machine.age`, an estimate of how old the machine is,
   derived from those and from the CPU model and battery cycle count. None of
   these is per-unit: every machine of a model reports the same model and
   firmware strings, and no drive serial number is read.
@@ -75,13 +75,16 @@ Collecting `machine.firmware` reads the same SMBIOS table on Windows, and the
 world-readable `sys_vendor`, `product_name`, `product_version`, `bios_version`
 and `bios_date` files under `/sys/class/dmi/id/` on Linux.
 
-Collecting `machine.nvme` asks each NVMe controller for its SMART / Health
-Information log page — a read-only admin command:
+Collecting `machine.drives` asks each drive for a read-only health log — the
+SMART / Health Information page from an NVMe controller, the Device Statistics
+log from a SATA drive:
 
 - **Windows** — `IOCTL_STORAGE_QUERY_PROPERTY` on `\\.\PhysicalDriveN`,
   opened with no read or write access.
-- **Linux** — the `NVME_IOCTL_ADMIN_CMD` ioctl on `/dev/nvmeN`, which is
-  root-only by default, so an unprivileged run simply doesn't get it.
+- **Linux** — the `NVME_IOCTL_ADMIN_CMD` ioctl on `/dev/nvmeN`, and an ATA
+  PASS-THROUGH `READ LOG EXT` via `SG_IO` on `/dev/sdX` (removable devices
+  are skipped). Both nodes are root-only by default, so an unprivileged run
+  simply doesn't get them.
 
 All of these are ordinary reads of local system information, and all of them
 fail quietly.
