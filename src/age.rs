@@ -38,6 +38,12 @@ pub struct Launch {
 /// the machine shipped with.
 const AS_SHIPPED_MONTHS: u32 = 12;
 
+/// Average minutes powered per power cycle below which a drive's hours are
+/// taken as undercounted. Even a machine that's only ever woken to check
+/// something averages far more than this; a drive that stops its clock when
+/// idle averages a few minutes.
+pub const UNDERCOUNT_MINUTES: u64 = 15;
+
 /// The age evidence for one machine — `machine.age` in a result file. Dates
 /// are `YYYY-MM`, spans are whole months, and every field but `as_of` is
 /// absent when its source couldn't be read.
@@ -72,6 +78,15 @@ pub struct Age {
     /// physical drive) — usually the boot drive. Absent without root / admin.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub drive_power_on_hours: Option<u64>,
+    /// True when the drive's hours look undercounted: under
+    /// [`UNDERCOUNT_MINUTES`] per power cycle on average. Some SATA SSDs stop
+    /// the clock in their low-power idle states, so they count only time
+    /// spent working — one laptop's SanDisk reported 175 hours over 4,314
+    /// power cycles and 17 TB written. The hours are kept as reported; this
+    /// says not to read them as time in service. Absent when the drive
+    /// reports no power-cycle count to judge by.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drive_hours_undercounted: Option<bool>,
     /// The battery's charge cycles, on a machine that reports them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub battery_cycles: Option<u32>,
@@ -94,6 +109,10 @@ impl Age {
             firmware_after_launch_months: gap,
             firmware_likely_original: gap.map(|g| g <= AS_SHIPPED_MONTHS),
             drive_power_on_hours: inv.drives.first().map(|d| d.power_on_hours),
+            drive_hours_undercounted: inv.drives.first().and_then(|d| {
+                let cycles = d.power_cycles.filter(|&c| c > 0)?;
+                Some(d.power_on_hours * 60 < cycles * UNDERCOUNT_MINUTES)
+            }),
             battery_cycles: inv.battery.as_ref().and_then(|b| b.cycle_count),
         };
         (a != Age {
@@ -156,20 +175,32 @@ impl Age {
     /// "drive powered 11,800 h (1.3 years continuous) · battery 49 cycles".
     pub fn usage(&self) -> Option<String> {
         let drive = self.drive_power_on_hours.map(|h| {
-            format!(
-                "drive powered {} h ({} continuous)",
-                thousands(h),
-                span(hours_to_months(h)),
-            )
+            if self.drive_hours_undercounted == Some(true) {
+                return format!("drive reports {} h (likely undercounted)", thousands(h));
+            }
+            let months = hours_to_months(h);
+            let continuous = if months == 0 {
+                "under a month".to_string()
+            } else {
+                span(months)
+            };
+            format!("drive powered {} h ({continuous} continuous)", thousands(h))
         });
         let battery = self.battery_cycles.map(|c| format!("battery {c} cycles"));
         let parts: Vec<String> = [drive, battery].into_iter().flatten().collect();
         (!parts.is_empty()).then(|| parts.join(" · "))
     }
 
-    /// Set when the drive's hours don't fit the CPU's age — it has been
-    /// powered for longer than the CPU has existed.
+    /// Set when the drive's hours can't be read at face value: they look
+    /// undercounted, or the drive has been powered for longer than the CPU has
+    /// existed.
     pub fn usage_note(&self) -> Option<&'static str> {
+        if self.drive_hours_undercounted == Some(true) {
+            return Some(
+                "the drive averages minutes per power cycle — it probably stops counting in \
+                 low-power idle, so its hours measure time spent working, not time in service",
+            );
+        }
         let hours = self.drive_power_on_hours?;
         let ceiling = self.max_age_months?;
         // A month's grace for the launch table's month-level precision.
@@ -687,6 +718,14 @@ mod tests {
     }
 
     fn machine(cpu: &str, firmware: Option<&str>, drive_hours: Option<u64>) -> Inventory {
+        machine_with_cycles(cpu, firmware, drive_hours.map(|h| (h, None)))
+    }
+
+    fn machine_with_cycles(
+        cpu: &str,
+        firmware: Option<&str>,
+        drive_hours: Option<(u64, Option<u64>)>,
+    ) -> Inventory {
         let mut inv = Inventory::blank();
         inv.cpu_model = cpu.to_string();
         inv.firmware = firmware.map(|d| crate::firmware::Firmware {
@@ -694,12 +733,12 @@ mod tests {
             ..Default::default()
         });
         inv.drives = drive_hours
-            .map(|h| crate::drives::DriveHealth {
+            .map(|(h, cycles)| crate::drives::DriveHealth {
                 device: "sda".into(),
                 interface: "sata".into(),
                 model: None,
                 power_on_hours: h,
-                power_cycles: None,
+                power_cycles: cycles,
                 unsafe_shutdowns: None,
                 percentage_used: None,
                 available_spare_pct: None,
@@ -768,6 +807,39 @@ mod tests {
         let inv = machine("Intel Core i7-1265U", None, Some(52_560));
         let a = Age::assess(&inv, (2026, 10)).unwrap();
         assert!(a.usage_note().is_some());
+    }
+
+    #[test]
+    fn a_drive_that_counts_only_working_time_is_flagged() {
+        // The ThinkPad X280's SanDisk: 175 h over 4,314 power cycles.
+        let inv = machine_with_cycles("Intel Core i5-8350U", None, Some((175, Some(4_314))));
+        let a = Age::assess(&inv, (2026, 10)).unwrap();
+        assert_eq!(a.drive_hours_undercounted, Some(true));
+        assert_eq!(a.drive_power_on_hours, Some(175));
+        assert_eq!(
+            a.usage().as_deref(),
+            Some("drive reports 175 h (likely undercounted)")
+        );
+        assert!(a.usage_note().unwrap().contains("low-power idle"));
+
+        // This laptop's KIOXIA: 12,881 h over 667 cycles is ordinary.
+        let inv = machine_with_cycles("Intel Core i7-1370P", None, Some((12_881, Some(667))));
+        let a = Age::assess(&inv, (2026, 10)).unwrap();
+        assert_eq!(a.drive_hours_undercounted, Some(false));
+        assert_eq!(a.usage_note(), None);
+
+        // No cycle count: nothing to judge by, so no verdict either way.
+        let a = Age::assess(&machine("Intel Core i7-1370P", None, Some(100)), (2026, 10)).unwrap();
+        assert_eq!(a.drive_hours_undercounted, None);
+    }
+
+    #[test]
+    fn a_new_drive_is_under_a_month_not_zero_months() {
+        let a = Age::assess(&machine("Intel Core i7-1370P", None, Some(300)), (2026, 10)).unwrap();
+        assert_eq!(
+            a.usage().as_deref(),
+            Some("drive powered 300 h (under a month continuous)")
+        );
     }
 
     #[test]

@@ -144,6 +144,23 @@ fn ata_stat(page: &[u8], at: usize) -> Option<u64> {
     (supported && valid).then_some(q & 0x0000_FFFF_FFFF_FFFF)
 }
 
+/// The model string from an ATA IDENTIFY DEVICE response: words 27–46, each
+/// word's two bytes swapped, space-padded.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn ata_identify_model(identify: &[u8]) -> Option<String> {
+    let raw = identify.get(54..94)?;
+    let bytes: Vec<u8> = raw
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .flat_map(|&[a, b]| [b, a])
+        .collect();
+    let model = String::from_utf8_lossy(&bytes).trim().to_string();
+    // An all-zero or all-space response is a bridge that didn't pass the
+    // command through, not a drive with no name.
+    (model.chars().any(|c| c.is_ascii_alphanumeric())).then_some(model)
+}
+
 /// Decode the General Statistics page and, if the drive has one, the Solid
 /// State page. `None` unless the drive reports its power-on hours.
 #[cfg_attr(not(any(windows, target_os = "linux")), allow(dead_code))]
@@ -251,8 +268,13 @@ mod linux {
             // upset a cheap bridge.
             .filter(|name| sysfs(format!("/sys/block/{name}/removable")).as_deref() != Some("1"))
             .filter_map(|name| {
-                let model = sysfs(format!("/sys/block/{name}/device/model"));
                 let dev = open(&name)?;
+                // The drive's own name for itself. sysfs only has the SCSI
+                // INQUIRY product field, which is cut at 16 characters —
+                // "SanDisk SD8TN8U2" for an SD8TN8U256G1001.
+                let model = ata_identify(&dev, &name)
+                    .and_then(|id| super::ata_identify_model(&id))
+                    .or_else(|| sysfs(format!("/sys/block/{name}/device/model")));
                 let general = ata_read_log(&dev, &name, super::ATA_STATS_GENERAL)?;
                 let solid_state = ata_read_log(&dev, &name, super::ATA_STATS_SOLID_STATE);
                 let parsed =
@@ -348,9 +370,7 @@ mod linux {
     const SG_IO: u32 = 0x2285;
     const SG_DXFER_FROM_DEV: i32 = -3;
 
-    /// READ LOG EXT for one page of the Device Statistics log, sent through
-    /// the kernel's SCSI layer as an ATA PASS-THROUGH (16) command — the
-    /// same route `smartctl -d sat` takes.
+    /// READ LOG EXT for one page of the Device Statistics log.
     fn ata_read_log(dev: &std::fs::File, name: &str, page: u8) -> Option<Vec<u8>> {
         let cdb: [u8; 16] = [
             0x85,                             // ATA PASS-THROUGH (16)
@@ -370,6 +390,40 @@ mod linux {
             0x2F,                             // READ LOG EXT
             0,                                // CONTROL
         ];
+        ata_pio_in(
+            dev,
+            &format!("READ LOG EXT 04h page {page} on /dev/{name}"),
+            &cdb,
+        )
+    }
+
+    /// IDENTIFY DEVICE: 512 bytes describing the drive, its model among them.
+    fn ata_identify(dev: &std::fs::File, name: &str) -> Option<Vec<u8>> {
+        let cdb: [u8; 16] = [
+            0x85,   // ATA PASS-THROUGH (16)
+            4 << 1, // PIO data-in, 28-bit command
+            0x0E,   // to host, in blocks, length in COUNT
+            0,      // FEATURES 15:8
+            0,      // FEATURES 7:0
+            0,      // COUNT 15:8
+            1,      // COUNT 7:0: one block
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,    // LBA
+            0,    // DEVICE
+            0xEC, // IDENTIFY DEVICE
+            0,    // CONTROL
+        ];
+        ata_pio_in(dev, &format!("IDENTIFY DEVICE on /dev/{name}"), &cdb)
+    }
+
+    /// Send one 512-byte PIO data-in ATA command through the kernel's SCSI
+    /// layer as an ATA PASS-THROUGH (16) — the same route `smartctl -d sat`
+    /// takes. `what` names the command for the log.
+    fn ata_pio_in(dev: &std::fs::File, what: &str, cdb: &[u8; 16]) -> Option<Vec<u8>> {
         let mut buf = vec![0u8; super::LOG_LEN];
         let mut sense = [0u8; 32];
         let mut hdr = SgIoHdr {
@@ -404,8 +458,7 @@ mod linux {
         if rc != 0 || hdr.info & 1 != 0 || hdr.status != 0 || hdr.host_status != 0 {
             log::debug!(
                 target: "loadbearer::drives",
-                "READ LOG EXT 04h page {page} on /dev/{name} failed: rc={rc} status={} \
-                 host={} driver={} {}",
+                "{what} failed: rc={rc} status={} host={} driver={} {}",
                 hdr.status,
                 hdr.host_status,
                 hdr.driver_status,
@@ -688,6 +741,25 @@ mod tests {
         assert_eq!(h.unsafe_shutdowns, None);
         assert_eq!(h.available_spare_pct, None);
         assert_eq!(h.critical_warning, None);
+    }
+
+    #[test]
+    fn the_identify_model_is_byte_swapped_and_trimmed() {
+        let mut id = [0u8; 512];
+        // "SanDisk SD8TN8U256G1001" as ATA stores it: each pair swapped,
+        // padded with spaces to 40 characters.
+        let mut model = *b"SanDisk SD8TN8U256G1001                 ";
+        for pair in model.as_chunks_mut::<2>().0 {
+            pair.swap(0, 1);
+        }
+        id[54..94].copy_from_slice(&model);
+        assert_eq!(
+            ata_identify_model(&id).as_deref(),
+            Some("SanDisk SD8TN8U256G1001")
+        );
+        assert_eq!(ata_identify_model(&[0u8; 512]), None);
+        assert_eq!(ata_identify_model(&[b' '; 512]), None);
+        assert_eq!(ata_identify_model(&[0u8; 60]), None);
     }
 
     #[test]
