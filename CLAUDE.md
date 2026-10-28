@@ -62,10 +62,9 @@ undo. The steps by hand, which is what it automates:
 
 **On the Windows laptop, only the GitHub half runs, and only from WSL:**
 `cut-release.sh X.Y.Z --skip-ppa` from WSL Ubuntu against the Windows
-checkout (`/mnt/d/Projects/loadbearer`). Made possible on 2026-10-20 and
-verified that far with `--dry-run` — it passes preflight and stops at the
-missing CHANGELOG section, as it should; no real release has gone through it
-yet. What it took, in case it needs redoing:
+checkout (`/mnt/d/Projects/loadbearer`). Made possible on 2026-10-20; 1.6.0
+(2026-10-28) was the first real release cut this way. What it took, in case
+it needs redoing:
 
 - `.gitattributes` keeps `*.sh` and `debian/**` LF. Before that the script
   was checked out CRLF and died at line 22 with `$'\r': command not found`.
@@ -75,6 +74,12 @@ yet. What it took, in case it needs redoing:
   for Windows' system gitconfig, which WSL git never reads, so without the
   repo-local setting WSL sees every CRLF file as modified and the script
   refuses to sweep them into the release commit.
+- `git config --global user.name` / `user.email` set in WSL. Like
+  `core.autocrlf`, Windows git's identity is invisible to WSL git, and the
+  script's release commit dies with "Author identity unknown" after the
+  confirmation — having already staged the version bump, so a rerun needs
+  `git restore --staged` and `git checkout --` on Cargo.toml, Cargo.lock and
+  debian/changelog (keeping CHANGELOG.md) before it will pass preflight.
 - The script strips `\r` when reading `Cargo.toml`'s version; a trailing one
   made the bump's `sed` silently miss, leaving `Cargo.toml` behind
   `debian/changelog` and failing `build-deb`.

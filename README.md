@@ -745,8 +745,8 @@ does carry a date or a count — and is never graded:
 - **Use.** The boot drive's power-on hours and the battery's charge cycles
   measure how hard the machine has been used rather than when it was made, and
   either part may have been replaced. Drive hours are read from the NVMe health
-  log or a SATA drive's Device Statistics — no elevation needed on Windows,
-  root on Linux. Some SATA SSDs stop counting when idle; a drive that averages
+  log or a SATA drive's Device Statistics — root on Linux; on Windows an NVMe
+  drive needs no elevation (SATA there is untried). Some SATA SSDs stop counting when idle; a drive that averages
   minutes per power cycle is marked *likely undercounted*.
 
 **Grades.** `S ≥ 1400`, `A ≥ 1150`, `B ≥ 850`, `C ≥ 600`, `D ≥ 400`, else `F` —

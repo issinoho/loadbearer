@@ -144,9 +144,11 @@
         A profile-weighted
         geometric mean of CPU, memory and disk becomes one <b>overall grade</b>,
         with a plain-language note on what moved it. Network, the GPU (FP32 +
-        VRAM bandwidth, via OpenCL), battery health, and the sustained-load test
-        are shown alongside — OS, optional hardware, wear, cooling — so they
-        don't skew the grade. When the CPU or GPU model is in the reference
+        VRAM bandwidth, via OpenCL), battery and drive health, an estimate of
+        <b>how old the machine is</b> (from its CPU's launch, its firmware date and
+        its drive's power-on hours), and the sustained-load test are shown
+        alongside — OS, optional hardware, wear, age, cooling — so they don't skew
+        the grade. When the CPU or GPU model is in the reference
         table, a <b>vs typical hardware</b> line says whether it's performing to
         spec for its model — also ungraded.</p>
       </article>
@@ -425,8 +427,8 @@ sudo apt install loadbearer</pre>
       <h2>Now do it for every machine you own</h2>
       <p><strong>loadbearer-fleet</strong> is a companion server. Point it at the
       folder your deployment tool drops result files into and it indexes them and
-      reports across the estate — summary, peer groups, drilldown, and the red
-      flags worth acting on. Separate repository, separate release, also MIT.
+      reports across the estate — summary, peer groups, drilldown, how old each
+      machine is, and the red flags worth acting on. Separate repository, separate release, also MIT.
       <b>Early, but usable.</b></p>
     </div>
 
