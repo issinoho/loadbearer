@@ -2,6 +2,46 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 1.7.0 - Thu, 29 Oct 2026
+
+**What the run was allowed to do.** A laptop on battery, or in a
+power-saving mode, comes in slow for reasons that have nothing to do with its
+hardware — and until now the only hint was a note when it was on battery.
+loadbearer now records the power settings in force and names whatever held a
+run back. No measurement changes: 1.6.x scores and result files are directly
+comparable, and nothing here touches a grade.
+
+- **A POWER block** in a scored report and the results screen, and a **Power**
+  section in `info`: mains or battery, and the plan, mode or profile in force.
+  Its note names what held the run back — battery power, energy saver, Best
+  power efficiency, a maximum processor state below 100%, boost or turbo off,
+  a low-power platform profile. The battery block's old "on battery" note
+  gives way to it.
+- **Windows: both columns.** Every power setting on Windows has a plugged-in
+  and an on-battery value, and both are shown: the Windows 11 power mode (Best
+  power efficiency / Balanced / Best performance) beside the plan's processor
+  limits and boost mode, plus energy saver. The power mode is applied on top of
+  the plan without changing its figures, so they're labelled as the plan's.
+  No elevation needed.
+- **Linux: what's in force now**, since Linux has no plugged-in / on-battery
+  split: the ACPI platform profile (which power-profiles-daemon and tuned-ppd
+  set), the CPU governor and energy-performance preference, and whether turbo
+  is on. A `powersave` governor alongside a preference is the normal
+  intel_pstate / amd-pstate setup and isn't counted against the run.
+- **In the result file as `machine.power`**, for a fleet collector: `source`,
+  the plan's name and `plan_guid` (the name is in the OS's language), the two
+  Windows columns, the Linux readings, and `held_back` — the settings that
+  would hold a benchmark back, so a collector needn't repeat the rules. New
+  optional fields under `loadbearer.result/1`, so nothing reading 1.6 files
+  breaks. The wording in `held_back` is descriptive and not covered by
+  `VERSIONING.md`; key on whether it's empty.
+  [loadbearer-fleet](https://github.com/issinoho/loadbearer-fleet) 0.8.0 reads
+  it.
+
+Vendor tools that apply their own limits — Dell Optimizer's thermal modes,
+Lenovo's Intelligent Cooling — don't appear in either OS's settings, so a
+machine can still be held back without the block saying so.
+
 ## 1.6.0 - Wed, 28 Oct 2026
 
 **How old is this machine?** Nothing on a PC records when it was built, so
