@@ -132,6 +132,46 @@ pub fn print_inventory(inv: &Inventory) {
         }
     }
 
+    if let Some(p) = crate::power::collect() {
+        section("Power (not graded)");
+        if let Some(s) = &p.source {
+            let mut source = s.clone();
+            if p.energy_saver == Some(true) {
+                source += " · energy saver on";
+            }
+            row("Running on", source);
+        }
+        if let Some(plan) = &p.plan {
+            row("Plan", plan);
+        }
+        for (key, column) in [("Plugged in", &p.plugged_in), ("On battery", &p.on_battery)] {
+            if let Some(m) = column {
+                row(key, m.summary());
+            }
+        }
+        if let Some(profile) = &p.platform_profile {
+            row("Profile", profile);
+        }
+        let cpu: Vec<String> = [
+            p.governor.as_ref().map(|g| format!("{g} governor")),
+            p.energy_preference
+                .as_ref()
+                .map(|e| format!("preference {e}")),
+            p.turbo
+                .map(|t| format!("turbo {}", if t { "on" } else { "off" })),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        if !cpu.is_empty() {
+            row("CPU", cpu.join(" · "));
+        }
+        let limits = p.limits();
+        if !limits.is_empty() {
+            row("Holding back", limits.join(" · "));
+        }
+    }
+
     if !inv.drives.is_empty() {
         section("Drive health");
         for d in &inv.drives {

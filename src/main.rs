@@ -13,6 +13,7 @@ mod inventory;
 mod logging;
 mod mem;
 mod output;
+mod power;
 mod run;
 mod score;
 mod scoring;
