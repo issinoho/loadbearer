@@ -53,6 +53,9 @@ A breaking change to any of these is a major release:
   release, a CPU it didn't know may start resolving, and `cpu_family` is
   descriptive text that may be reworded. Key on `cpu_launched` and
   `max_age_months`, not the wording.
+- **The wording in `machine.power.held_back`** — descriptive text, reworded
+  as the rules for what counts as holding a run back are refined. Key on
+  whether the list is empty.
 - **Informational subtests** — rows shown under a component as "informational
   (not graded)" and carried in `raw` with `"scored": false` (CPU thread-scaling
   points, the memory cache-latency ladder, deep-queue disk IOPS, …). Which ones

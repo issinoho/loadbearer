@@ -509,7 +509,31 @@ fn draw_results(f: &mut Frame, scroll: &mut u16, r: &ResultFile, area: Rect) {
                 Style::default().fg(DIM),
             )));
         }
-        if let Some(n) = b.power_note() {
+        // The power block says this itself; a file from before 1.7 has only
+        // this.
+        if let Some(n) = b.power_note().filter(|_| r.machine.power.is_none()) {
+            lines.push(Line::from(Span::styled(
+                format!("  note: {n}"),
+                Style::default().fg(Color::Yellow),
+            )));
+        }
+    }
+
+    if let Some(p) = &r.machine.power {
+        lines.push(Line::raw(""));
+        lines.push(Line::from(Span::styled(
+            format!("POWER  ({} · not graded)", p.summary()),
+            Style::default().add_modifier(Modifier::BOLD),
+        )));
+        for (key, column) in [("plugged in", &p.plugged_in), ("on battery", &p.on_battery)] {
+            if let Some(m) = column {
+                lines.push(Line::from(Span::styled(
+                    format!("  {key}: {}", m.summary()),
+                    Style::default().fg(DIM),
+                )));
+            }
+        }
+        if let Some(n) = p.held_back_note() {
             lines.push(Line::from(Span::styled(
                 format!("  note: {n}"),
                 Style::default().fg(Color::Yellow),

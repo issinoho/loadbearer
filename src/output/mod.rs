@@ -132,7 +132,7 @@ pub fn print_inventory(inv: &Inventory) {
         }
     }
 
-    if let Some(p) = crate::power::collect() {
+    if let Some(p) = &inv.power {
         section("Power (not graded)");
         if let Some(s) = &p.source {
             let mut source = s.clone();
@@ -494,7 +494,13 @@ pub fn print_scored_report(result: &ResultFile) {
     }
 
     if let Some(b) = &result.machine.battery {
-        print_battery_block(b);
+        // The power block says "running on battery" itself, with the rest of
+        // what held the run back; a file from before 1.7 has only this.
+        print_battery_block(b, result.machine.power.is_none());
+    }
+
+    if let Some(p) = &result.machine.power {
+        print_power_block(p);
     }
 
     if let Some(a) = crate::age::Age::for_machine(&result.machine, &result.timestamp) {
@@ -554,7 +560,7 @@ fn print_model_ref(refs: &[crate::scoring::models::ModelRef]) {
 
 /// The battery-health block at the foot of a `run` report. Not graded — pack
 /// wear is a property of the consumable, not of the silicon under test.
-fn print_battery_block(b: &crate::battery::BatteryInfo) {
+fn print_battery_block(b: &crate::battery::BatteryInfo, power_note: bool) {
     println!("\n  {:<8} {} · not graded", "BATTERY", b.summary());
     println!("    {:<12} {:.0}% ({})", "Charge", b.charge_pct, b.state);
     match (b.energy_full_wh, b.energy_full_design_wh, b.health_pct) {
@@ -582,7 +588,25 @@ fn print_battery_block(b: &crate::battery::BatteryInfo) {
     if let Some(v) = b.health_verdict() {
         println!("    \u{2192} {v}");
     }
-    if let Some(n) = b.power_note() {
+    if let Some(n) = b.power_note().filter(|_| power_note) {
+        println!("    note: {n}");
+    }
+}
+
+/// Mains or battery and the plan / mode / profile the run had. Not graded.
+fn print_power_block(p: &crate::power::Power) {
+    println!(
+        "
+  {:<8} {} · not graded",
+        "POWER",
+        p.summary()
+    );
+    for (key, column) in [("Plugged in", &p.plugged_in), ("On battery", &p.on_battery)] {
+        if let Some(m) = column {
+            println!("    {key:<12} {}", m.summary());
+        }
+    }
+    if let Some(n) = p.held_back_note() {
         println!("    note: {n}");
     }
 }

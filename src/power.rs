@@ -25,9 +25,18 @@ pub struct Power {
     /// Windows' energy saver (battery saver) is on.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub energy_saver: Option<bool>,
-    /// The active power plan's name, e.g. "Balanced" (Windows).
+    /// The active power plan's name, e.g. "Balanced" (Windows). In the
+    /// display language, so "Ausbalanciert" on a German install; key on
+    /// `plan_guid`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plan: Option<String>,
+    /// The active power plan's GUID, lowercase without braces. The built-in
+    /// plans have fixed ones: Balanced is
+    /// `381b4222-f694-41f0-9685-ff5bb260df2e`, High performance
+    /// `8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c`, Power saver
+    /// `a1841308-3541-4fab-bc81-f71556f20b4a` (Windows).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plan_guid: Option<String>,
     /// The settings that apply when plugged in (Windows).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plugged_in: Option<ModeSettings>,
@@ -47,6 +56,12 @@ pub struct Power {
     /// Whether turbo / boost clocks are enabled (Linux).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub turbo: Option<bool>,
+    /// The settings in force that would hold a benchmark back, e.g.
+    /// `"Best power efficiency mode"`, `"turbo disabled"` — empty when none
+    /// does. Battery power isn't listed; that's `source`. Descriptive text:
+    /// key on whether it's empty, not on the wording.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub held_back: Vec<String>,
 }
 
 /// One column of a Windows power plan: plugged in, or on battery.
@@ -68,21 +83,27 @@ pub struct ModeSettings {
 }
 
 impl ModeSettings {
-    /// "Balanced mode · processor 5–100% · boost aggressive".
+    /// "Best performance mode · plan: processor 5–100%, boost aggressive".
+    ///
+    /// The processor figures are the plan's own. The power mode is applied on
+    /// top of them without changing them, so a plan's "boost aggressive" can
+    /// sit beside Best power efficiency, which reins it in.
     pub fn summary(&self) -> String {
-        let mut parts = Vec::new();
-        if let Some(m) = &self.power_mode {
-            parts.push(format!("{} mode", capitalise(m)));
-        }
+        let mut plan = Vec::new();
         match (self.min_processor_pct, self.max_processor_pct) {
-            (Some(lo), Some(hi)) => parts.push(format!("processor {lo}–{hi}%")),
-            (None, Some(hi)) => parts.push(format!("processor up to {hi}%")),
+            (Some(lo), Some(hi)) => plan.push(format!("processor {lo}–{hi}%")),
+            (None, Some(hi)) => plan.push(format!("processor up to {hi}%")),
             _ => {}
         }
         if let Some(b) = &self.boost {
-            parts.push(format!("boost {b}"));
+            plan.push(format!("boost {b}"));
         }
-        parts.join(" · ")
+        let plan = plan.join(", ");
+        match (&self.power_mode, plan.is_empty()) {
+            (Some(m), true) => format!("{} mode", capitalise(m)),
+            (Some(m), false) => format!("{} mode · plan: {plan}", capitalise(m)),
+            (None, _) => plan,
+        }
     }
 
     /// Settings in this column that hold the CPU back.
@@ -120,13 +141,55 @@ impl Power {
         }
     }
 
-    /// What, in the settings in force now, would hold a benchmark back —
-    /// empty when nothing does.
+    /// "on mains · Balanced plan · Best performance mode", or on Linux "on
+    /// mains · balanced profile · turbo on" — the settings in force now.
+    pub fn summary(&self) -> String {
+        let mut parts = Vec::new();
+        if let Some(s) = &self.source {
+            parts.push(format!("on {s}"));
+        }
+        if let Some(p) = &self.plan {
+            parts.push(format!("{p} plan"));
+        }
+        if let Some(m) = self.current().and_then(|m| m.power_mode.as_deref()) {
+            parts.push(format!("{} mode", capitalise(m)));
+        }
+        if let Some(p) = &self.platform_profile {
+            parts.push(format!("{p} profile"));
+        }
+        if let Some(t) = self.turbo {
+            parts.push(format!("turbo {}", if t { "on" } else { "off" }));
+        }
+        parts.join(" · ")
+    }
+
+    /// For a scored report: what held the run back, or `None` when nothing
+    /// did.
+    pub fn held_back_note(&self) -> Option<String> {
+        let limits = self.limits();
+        (!limits.is_empty()).then(|| {
+            format!(
+                "held back by {} — clocks may be capped; prefer mains and a                  performance mode for a clean grade",
+                limits.join(", ")
+            )
+        })
+    }
+
+    /// What would hold a benchmark back now — battery power, then the
+    /// settings in `held_back` — empty when nothing does.
     pub fn limits(&self) -> Vec<String> {
         let mut out = Vec::new();
         if self.on_battery_now() {
             out.push("running on battery".to_string());
         }
+        out.extend(self.setting_limits());
+        out
+    }
+
+    /// The settings in force that would hold a benchmark back, which is what
+    /// `held_back` records.
+    fn setting_limits(&self) -> Vec<String> {
+        let mut out = Vec::new();
         if self.energy_saver == Some(true) {
             out.push("energy saver on".to_string());
         }
@@ -169,7 +232,8 @@ fn capitalise(s: &str) -> String {
 
 /// Collect what this platform will tell us, or `None` if that's nothing.
 pub fn collect() -> Option<Power> {
-    let p = platform_collect();
+    let mut p = platform_collect();
+    p.held_back = p.setting_limits();
     log::debug!(target: "loadbearer::power", "{p:?}");
     if p.is_empty() { None } else { Some(p) }
 }
@@ -306,6 +370,7 @@ fn platform_collect() -> Power {
 
     if let Some(scheme) = win::active_scheme() {
         p.plan = win::friendly_name(&scheme);
+        p.plan_guid = Some(win::guid_string(&scheme));
         // The power mode only exists under Balanced: Settings greys it out
         // under any other plan, and the overlay values left behind from when
         // Balanced was active don't apply.
@@ -349,6 +414,15 @@ mod win {
     /// `windows_sys`'s GUID has no `PartialEq`.
     pub fn same(a: &GUID, b: &GUID) -> bool {
         (a.data1, a.data2, a.data3, a.data4) == (b.data1, b.data2, b.data3, b.data4)
+    }
+
+    /// `381b4222-f694-41f0-9685-ff5bb260df2e`.
+    pub fn guid_string(g: &GUID) -> String {
+        let d = g.data4;
+        format!(
+            "{:08x}-{:04x}-{:04x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+            g.data1, g.data2, g.data3, d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7]
+        )
     }
 
     /// The active power plan's GUID.
@@ -514,7 +588,47 @@ mod tests {
         };
         assert_eq!(
             m.summary(),
-            "Best power efficiency mode · processor 5–100% · boost aggressive"
+            "Best power efficiency mode · plan: processor 5–100%, boost aggressive"
+        );
+        let plan_only = ModeSettings {
+            power_mode: None,
+            ..m
+        };
+        assert_eq!(plan_only.summary(), "processor 5–100%, boost aggressive");
+    }
+
+    #[test]
+    fn summary_shows_the_mode_in_force() {
+        let p = Power {
+            source: Some("battery".into()),
+            plan: Some("Balanced".into()),
+            plugged_in: Some(ModeSettings {
+                power_mode: Some("best performance".into()),
+                ..ModeSettings::default()
+            }),
+            on_battery: Some(ModeSettings {
+                power_mode: Some("best power efficiency".into()),
+                ..ModeSettings::default()
+            }),
+            ..Power::default()
+        };
+        assert_eq!(
+            p.summary(),
+            "on battery · Balanced plan · Best power efficiency mode"
+        );
+        assert!(
+            p.held_back_note()
+                .unwrap()
+                .starts_with("held back by running on battery, Best power efficiency mode —")
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn guids_format_like_the_registry() {
+        assert_eq!(
+            win::guid_string(&win::BALANCED),
+            "381b4222-f694-41f0-9685-ff5bb260df2e"
         );
     }
 

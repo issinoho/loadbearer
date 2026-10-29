@@ -109,7 +109,11 @@ loadbearer 1.0.0 — assessment
     Cycles       257
     Voltage      12.09 V
     → healthy — minor capacity loss
-    note: on battery power — clocks may be capped; prefer mains for a clean grade
+
+  POWER    on battery · Balanced plan · Best power efficiency mode · not graded
+    Plugged in   Balanced mode · plan: processor 5–100%, boost aggressive
+    On battery   Best power efficiency mode · plan: processor 5–100%, boost aggressive
+    note: held back by running on battery, Best power efficiency mode — clocks may be capped; prefer mains and a performance mode for a clean grade
 ```
 
 Each subtest row is: raw measurement, its ratio to the baseline, its score, and a
@@ -386,8 +390,9 @@ loadbearer net-server [--bind ADDR]
   signal that separates two laptops with identical burst numbers. Also available
   as `loadbearer run --soak`, which embeds the result in the result JSON.
 - **`info`** — machine inventory (host, system model and firmware, CPU,
-  memory, disks, drive health, and the GPU and battery where present) plus the
-  [age estimate](#how-old-the-machine-is), and nothing else.
+  memory, disks, drive health, [power settings](#power-settings), and the GPU
+  and battery where present) plus the [age estimate](#how-old-the-machine-is),
+  and nothing else.
 - **`mem`** — per-program memory use right now, in the style of
   [`ps_mem`](https://github.com/pixelb/ps_mem): grouped by program, smallest
   first, with a grand total. On Linux the numbers are true **PSS**
@@ -643,6 +648,9 @@ What makes that work across repeat sweeps:
   firmware date and its drive's power-on hours, in a form a collector can sort
   an estate by. [loadbearer-fleet](https://github.com/issinoho/loadbearer-fleet)
   turns it into a replacement list.
+- **`machine.power`** — whether the run was on mains or battery, and the power
+  plan, mode or profile in force, so runs taken on battery or in a power-saving
+  mode can be filtered out or explained.
 - **`--tag k=v`** — the organisational context a benchmark can't discover for
   itself (site, department, deployment ring). Whatever orchestrates the run
   already knows it; tags carry it into the result for grouping later. Metadata
@@ -726,9 +734,31 @@ separate block, but neither touches a grade.
 **Battery health** is read into the inventory on a machine that has a battery
 (design vs current full-charge capacity, cycle count, charge, technology) and a
 `run` prints a `BATTERY` block with a wear verdict. It is pack condition, not
-machine speed, so it never touches a grade; a machine on battery power also gets
-a note, since a power profile may be capping clocks. A machine with no battery
-shows none of this.
+machine speed, so it never touches a grade. A machine with no battery shows
+none of this.
+
+### Power settings
+
+A `POWER` block (a **Power** section in `info`) records what the run was
+allowed to do — never graded, but the first thing to check when a score is low:
+
+- **Windows** reports mains or battery, energy saver, the active power plan,
+  and for both *plugged in* and *on battery* the Windows 11 power mode (Best
+  power efficiency / Balanced / Best performance) beside the plan's own
+  processor limits and boost mode. The power mode is applied on top of the
+  plan without changing its figures, so a plan's "boost aggressive" can sit
+  beside Best power efficiency, which reins it in.
+- **Linux** has no plugged-in / on-battery split, so it reports what's in force
+  now: mains or battery, the ACPI platform profile (which power-profiles-daemon
+  and tuned-ppd set), the CPU governor and energy-performance preference, and
+  whether turbo is on.
+
+Anything in force that would hold a benchmark back — battery power, energy
+saver, Best power efficiency, a processor cap below 100%, boost or turbo off, a
+low-power profile — is named in a note. No elevation needed anywhere. Vendor
+tools that apply their own limits (Dell Optimizer's thermal modes, Lenovo's
+Intelligent Cooling) don't appear in either OS's settings, so a machine can be
+held back without this block saying so.
 
 ### How old the machine is
 
@@ -854,6 +884,13 @@ benchmark; use `--only cpu,memory,network` to skip it.
   `max_age_months`, `firmware_likely_original`, `drive_power_on_hours`,
   `drive_hours_undercounted`, `battery_cycles`, all as of `as_of`. The values
   come from an embedded launch table that is data, not API.
+- `machine.power` — the [power settings](#power-settings): `source` (`mains`
+  / `battery`), and on Windows `energy_saver`, `plan` (display text, in the
+  OS's language), `plan_guid`, and `plugged_in` / `on_battery` each with
+  `power_mode`, `min_processor_pct`, `max_processor_pct` and `boost`; on Linux
+  `platform_profile`, `governor`, `energy_preference` and `turbo`; on both,
+  `held_back`, the settings in force that would hold a benchmark back (battery
+  power aside, which is `source`). Empty — and absent — when none would.
 - `link` — the `--net-target` link probe, if one ran (ungraded).
 - `soak` — the `--soak` sustained-load result, if one ran (ungraded): every
   per-second sample plus the derived peak / steady / retained / onset figures.

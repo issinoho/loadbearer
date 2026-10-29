@@ -38,6 +38,10 @@ pub struct Inventory {
     /// The primary battery and its wear state, on a machine that has one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub battery: Option<crate::battery::BatteryInfo>,
+    /// Mains or battery, and the power plan / mode / profile in force. Not
+    /// graded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power: Option<crate::power::Power>,
     /// How old the machine is, as far as its CPU, firmware, drive and battery
     /// say. Not graded.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -79,6 +83,7 @@ impl Inventory {
             drives: Vec::new(),
             gpu: None,
             battery: None,
+            power: None,
             age: None,
         }
     }
@@ -142,6 +147,7 @@ pub fn collect() -> Inventory {
         drives: crate::drives::collect(),
         gpu: crate::benches::gpu_probe().cloned(),
         battery: crate::battery::probe().cloned(),
+        power: crate::power::collect(),
         age: None,
     };
     inv.age = crate::age::Age::assess(&inv, crate::age::this_month());

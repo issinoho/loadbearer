@@ -32,8 +32,10 @@ server side.
   and the BIOS version and release date), `machine.drives` (each NVMe or SATA
   drive's model and health counters: power-on hours, power cycles, wear, data
   written, error counts) and `machine.age`, an estimate of how old the machine is,
-  derived from those and from the CPU model and battery cycle count. None of
-  these is per-unit: every machine of a model reports the same model and
+  derived from those and from the CPU model and battery cycle count, and
+  `machine.power` (mains or battery and the power settings in force — on
+  Windows that includes the power plan's name, which an IT department may
+  have chosen). None of these is per-unit: every machine of a model reports the same model and
   firmware strings, and no drive serial number is read.
 
   Anything a `--tag` puts in the file is text you supplied, so don't put

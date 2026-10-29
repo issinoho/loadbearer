@@ -281,6 +281,7 @@ mod tests {
             drives: vec![],
             gpu: None,
             battery: None,
+            power: None,
             age: None,
         }
     }
