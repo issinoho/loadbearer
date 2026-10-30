@@ -60,6 +60,7 @@ struct Resolved {
     target_dir: Option<std::path::PathBuf>,
     only: Vec<String>,
     tags: crate::tags::Tags,
+    upload: Option<crate::upload::Target>,
 }
 
 fn resolve(args: &RunArgs) -> Result<Resolved> {
@@ -100,6 +101,15 @@ fn resolve(args: &RunArgs) -> Result<Resolved> {
         args.only.clone()
     };
 
+    // Here, before anything runs: a missing token or a URL that would leak
+    // one should cost a second, not a whole benchmark.
+    let upload = crate::upload::resolve(
+        args.upload.as_deref(),
+        args.upload_token_file.as_deref(),
+        file.upload.as_ref(),
+        std::env::var(crate::upload::TOKEN_ENV).ok(),
+    )?;
+
     Ok(Resolved {
         profile,
         duration,
@@ -109,6 +119,7 @@ fn resolve(args: &RunArgs) -> Result<Resolved> {
         target_dir: args.target_dir.clone().or(file.target_dir),
         only,
         tags: crate::tags::resolve(file.tags.as_ref(), &args.tags)?,
+        upload,
     })
 }
 
@@ -187,6 +198,7 @@ pub fn execute(args: RunArgs) -> Result<u8> {
             config,
             r.tags,
             gate_report,
+            r.upload.as_ref(),
         )
     } else {
         run_plain(
@@ -200,6 +212,7 @@ pub fn execute(args: RunArgs) -> Result<u8> {
             config,
             r.tags,
             gate_report,
+            r.upload.as_ref(),
         )
     }
 }
@@ -216,6 +229,7 @@ fn run_interactive(
     config: RunConfig,
     tags: crate::tags::Tags,
     gate_report: crate::gates::GateReport,
+    upload: Option<&crate::upload::Target>,
 ) -> Result<u8> {
     let header = format!(
         "{} · {} · {} threads · {} preset · {} profile",
@@ -246,7 +260,10 @@ fn run_interactive(
             result.notes.extend(link_notes);
             result.tags = tags;
             result.gates = (!gate_report.is_empty()).then_some(gate_report);
-            write_output(&result, args.output.as_deref())?;
+            let json = serde_json::to_string_pretty(&result)?;
+            if let Some(path) = &args.output {
+                write_output(&json, path)?;
+            }
             let written = match &args.output {
                 Some(p) => format!(" · written to {}", p.display()),
                 None => String::new(),
@@ -264,7 +281,8 @@ fn run_interactive(
                     result.overall.profile
                 );
             }
-            threshold_code(args, &result)
+            let code = threshold_code(args, &result);
+            deliver(upload, &json, code, false)
         }
         None => {
             println!("run cancelled.");
@@ -286,6 +304,7 @@ fn run_plain(
     config: RunConfig,
     tags: crate::tags::Tags,
     gate_report: crate::gates::GateReport,
+    upload: Option<&crate::upload::Target>,
 ) -> Result<u8> {
     if !args.json {
         eprintln!(
@@ -330,7 +349,6 @@ fn run_plain(
 
     if args.json {
         result.soak = run_soak(args);
-        println!("{}", serde_json::to_string_pretty(&result)?);
     } else {
         output::print_scored_report(&result);
         result.soak = run_soak(args);
@@ -338,13 +356,53 @@ fn run_plain(
             output::print_soak_block(soak);
         }
     }
+    // One serialisation for stdout, the file and the upload, so all three
+    // are the same bytes — which is what lets the server recognise a result
+    // it has already been sent another way.
+    let json = serde_json::to_string_pretty(&result)?;
+    if args.json {
+        println!("{json}");
+    }
     if let Some(path) = &args.output {
-        write_output(&result, Some(path))?;
+        write_output(&json, path)?;
         if !args.json {
             eprintln!("\nresult written to {}", path.display());
         }
     }
-    Ok(threshold_code(args, &result))
+    let code = threshold_code(args, &result);
+    Ok(deliver(upload, &json, code, args.json))
+}
+
+/// Post the finished result, if `--upload` asked for it, and settle the exit
+/// code: a result the fleet never received outranks a low grade, because the
+/// grade is already on the screen and the missing result is not.
+fn deliver(upload: Option<&crate::upload::Target>, json: &str, code: u8, quiet: bool) -> u8 {
+    let Some(target) = upload else {
+        return code;
+    };
+    if !quiet {
+        eprintln!("uploading result to {} …", target.url);
+    }
+    match crate::upload::send(target, json) {
+        Ok(delivered) => {
+            let what = match delivered {
+                crate::upload::Delivered::Added => "added",
+                crate::upload::Delivered::AlreadyIndexed => "already indexed",
+            };
+            info!(target: "loadbearer::upload", "uploaded to {}: {what}", target.url);
+            if !quiet {
+                eprintln!("result uploaded to {} ({what})", target.url);
+            }
+            code
+        }
+        // Said even under --json: stdout is the document, stderr is where a
+        // deployment tool looks for why the step failed.
+        Err(e) => {
+            warn!(target: "loadbearer::upload", "upload to {} failed: {e:#}", target.url);
+            eprintln!("upload to {} failed: {e:#}", target.url);
+            crate::exit::UPLOAD_FAILED
+        }
+    }
 }
 
 /// Build the unattended-run gates from the command line. The hostname comes
@@ -535,14 +593,11 @@ fn threshold_code(args: &RunArgs, result: &ResultFile) -> u8 {
     code
 }
 
-fn write_output(result: &ResultFile, path: Option<&Path>) -> Result<()> {
-    if let Some(path) = path {
-        crate::util::ensure_parent_dir(path)
-            .with_context(|| format!("creating directory for {}", path.display()))?;
-        let json = serde_json::to_string_pretty(result)?;
-        std::fs::write(path, json).with_context(|| format!("writing {}", path.display()))?;
-        info!(target: "loadbearer::run", "result written to {}", path.display());
-    }
+fn write_output(json: &str, path: &Path) -> Result<()> {
+    crate::util::ensure_parent_dir(path)
+        .with_context(|| format!("creating directory for {}", path.display()))?;
+    std::fs::write(path, json).with_context(|| format!("writing {}", path.display()))?;
+    info!(target: "loadbearer::run", "result written to {}", path.display());
     Ok(())
 }
 

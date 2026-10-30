@@ -35,12 +35,29 @@ loadbearer is a local command-line tool. It:
   leaves the machine;
 - reads `/sys/devices/system/cpu/…` (Linux, for core-affinity and
   filesystem detection) and the target directory's filesystem type;
-- makes an **outbound** connection only when you pass `--net-target`, and
-  opens a **listening** socket only when you run `loadbearer net-server`.
+- makes an **outbound** connection only when you pass `--net-target`, or
+  `--upload` (one HTTPS `POST` of the result to a loadbearer-fleet server),
+  and opens a **listening** socket only when you run `loadbearer net-server`.
 
-It stores no credentials or secrets and needs no elevated privileges.
+It stores no credentials or secrets and needs no elevated privileges. For
+`--upload` it *reads* one — a fleet ingest token, from the file named by
+`--upload-token-file` or `[upload] token_file`, or from
+`LOADBEARER_UPLOAD_TOKEN` — and sends it only as the `Authorization` header of
+that request. There is deliberately no way to give it on the command line or
+in the URL, where process listings, proxy logs and deployment tools would keep
+a copy. TLS is rustls, with certificates checked against the operating
+system's trust store; plain `http://` is refused except to loopback, and
+redirects are not followed, so the header cannot be sent anywhere but the URL
+you named.
 
 ## Before you report: known, by-design behavior
+
+- **An upload token is readable by anyone who can read its file.** It is a
+  bearer credential for the fleet server, normally one per site and so shared
+  by every machine there. Make the file readable only by the account
+  loadbearer runs as (SYSTEM / Administrators, or root). The server limits
+  what it can do — submit results carrying its site's tags, and read nothing —
+  but cannot tell a fabricated result from a real one.
 
 - **`loadbearer net-server` binds `0.0.0.0:47913` by default and has no
   authentication.** It is a bare TCP data sink / TCP echo / UDP sink,

@@ -1,10 +1,13 @@
 # Privacy
 
-**loadbearer collects no data and sends nothing anywhere.**
+**loadbearer collects no data, and sends nothing anywhere unless you tell it
+to.**
 
 It is a local command-line tool. It has no telemetry, no analytics, no crash
 reporting, no update check, and no account or licence system. There is no
-server side.
+server side of its own. The one thing it will send is a result file, to a
+[loadbearer-fleet](https://github.com/issinoho/loadbearer-fleet) server you
+name with `run --upload URL` — see [Network](#network).
 
 ## What it writes, and where — all local
 
@@ -42,7 +45,8 @@ server side.
   personal data in one.
 
   Treat a result file like any other machine fingerprint before you share it.
-  loadbearer never uploads one; you choose what to do with it.
+  loadbearer uploads one only when `run --upload` says where to; otherwise
+  you choose what to do with it.
 - **A diagnostic log** at `%LOCALAPPDATA%\loadbearer\loadbearer.log` (Windows) /
   `$XDG_CACHE_HOME/loadbearer/loadbearer.log` (Linux), or wherever `--log-file`
   points. It records the run's settings, per-benchmark timings, and errors. It
@@ -96,8 +100,15 @@ fail quietly.
 - The `network` benchmark is **loopback only** (`127.0.0.1`) — nothing leaves
   the machine.
 - An **outbound** connection is made only when you pass `--net-target HOST:PORT`
-  (a deliberate two-machine link test), and a **listening** socket is opened
-  only when you run `loadbearer net-server`.
+  (a deliberate two-machine link test) or `--upload URL`, and a **listening**
+  socket is opened only when you run `loadbearer net-server`.
+- `--upload` sends **the result file and nothing else** — the same document
+  `--output` writes, inventory and `machine.identity` included — in one HTTPS
+  `POST` to the URL you give, when the run finishes. It carries the ingest
+  token you supply, read from a file or `LOADBEARER_UPLOAD_TOKEN`, as an
+  `Authorization` header, and a `User-Agent` naming the loadbearer version.
+  Plain `http://` is refused except to this machine, and redirects are not
+  followed. The token is never logged or written into the result.
 - The GPU probe and benchmark load the OS OpenCL driver locally; no network.
 
 ## The website

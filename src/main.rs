@@ -21,6 +21,7 @@ mod soak;
 mod tags;
 mod telemetry;
 mod tui;
+mod upload;
 mod util;
 
 use anyhow::Result;
@@ -67,6 +68,10 @@ pub mod exit {
     pub const ERROR: u8 = 1;
     /// Ran fine, but the grade came in under `--fail-under`.
     pub const BELOW_THRESHOLD: u8 = 3;
+    /// Ran and produced a result, but `--upload` could not deliver it. Wins
+    /// over `BELOW_THRESHOLD`: a result the fleet never received is the one
+    /// nobody will otherwise notice. `--output` was still written.
+    pub const UPLOAD_FAILED: u8 = 4;
 }
 
 fn main() -> std::process::ExitCode {
@@ -136,7 +141,7 @@ fn dispatch(cli: Cli) -> Result<u8> {
             output::print_catalog(&benches::all(), &scoring::Baseline::reference_v1());
             Ok(exit::OK)
         }
-        Command::Run(args) => run::execute(args),
+        Command::Run(args) => run::execute(*args),
         Command::Compare(args) => compare::execute(args).map(|()| exit::OK),
         Command::Score(args) => score::execute(args).map(|()| exit::OK),
         Command::Baseline(args) => {
