@@ -149,8 +149,8 @@ baseline's four-iGPU GPU anchor is.
   back to buffered reads (page-cache-influenced) with a note in the result.
   Intel Macs aren't a target but should build.
 - No admin/root privileges and no config required to run. Nothing leaves the
-  machine unless you explicitly pass `--net-target`; the network benchmark itself
-  is loopback only.
+  machine unless you explicitly pass `--net-target` or `--upload`; the network
+  benchmark itself is loopback only.
 
 ## Install
 
@@ -440,6 +440,8 @@ loadbearer net-server [--bind ADDR]
 | `--jitter SECS` | Wait a random 0–`SECS` before starting, so an estate told to run at 09:00 doesn't all hit the same file share at 09:00. Seeded per host, so machines pick different delays. Only paid by a run that's actually going to happen. |
 | `--skip-if-newer-than AGE` | Don't run if `--output` already exists and is newer than `AGE` (`30s`, `15m`, `12h`, `7d`) — so a deployment tool retrying doesn't re-benchmark. Skipping exits 0. Requires `--output`, whose mtime is the record; nothing extra is persisted. A bare number is rejected rather than guessed at. |
 | `--output FILE` | Write the full result as a versioned JSON file. Works alongside the TUI or plain output. |
+| `--upload URL` | When the run finishes, post the result to a [loadbearer-fleet](https://github.com/issinoho/loadbearer-fleet) server's `/api/upload` at `URL`. https only, except to loopback; redirects aren't followed; a URL with a user, password or query string is refused. A failed upload exits **4** — after `--output` has been written. Also settable as `[upload] url` in the config file. See [Fleet use](#fleet-use). |
+| `--upload-token-file FILE` | The fleet ingest token for `--upload`, read from a file so it never appears on a command line. Falls back to `[upload] token_file`, then `LOADBEARER_UPLOAD_TOKEN`. |
 | `--plain` | Disable the TUI and emit the plain-text report. Implied automatically when stdout is not a terminal. |
 | `--json` | Disable the TUI and emit only the result JSON to stdout. |
 | `--config FILE` | Load defaults from a TOML config file. Explicit switches still win. See [Configuration](#configuration). |
@@ -622,8 +624,8 @@ target_dir = "/var/tmp"
 ## Fleet use
 
 One self-contained binary with no runtime, no service, no persistence and no
-network calls, so the unattended case is mostly just a command. A PDQ Deploy
-step, or the equivalent in Intune / ConfigMgr / Ansible:
+network calls unless asked for one, so the unattended case is mostly just a
+command. A PDQ Deploy step, or the equivalent in Intune / ConfigMgr / Ansible:
 
 ```
 loadbearer.exe run --no-gpu --plain --duration short ^
@@ -636,6 +638,26 @@ Then collect the `.json` files to a share and treat them as a corpus —
 `loadbearer compare fleet\*.json`, or [`baseline`](#recalibrating-the-baseline)
 a house standard from the machines you consider par and `score` everything
 against it without re-running anything.
+
+**Or have each machine post its own result** to a
+[loadbearer-fleet](https://github.com/issinoho/loadbearer-fleet) server, for
+an estate where machines can't reach a share. Generate a token on the server
+(`loadbearer-fleet token new --name site-glasgow --tag site=glasgow`), deploy
+it once as a file only administrators can read, then add:
+
+```
+  --upload https://fleet.example.com/api/upload ^
+  --upload-token-file "%ProgramData%\loadbearer\fleet-token"
+```
+
+The token is read from a file (or `LOADBEARER_UPLOAD_TOKEN`) and never taken
+on the command line or in the URL, where process listings and deployment logs
+would keep it. The result is posted after `--output` is written, as the same
+bytes, so keep `--output`: a failed upload exits **`4`** with the file still
+on disk, and a result that reaches the server both ways is stored once. A
+token scoped to a site only accepts results carrying that site's `--tag`. A
+rate-limited server's `Retry-After` is honoured, up to two minutes; behind a
+proxy, set `HTTPS_PROXY`.
 
 What makes that work across repeat sweeps:
 
@@ -662,7 +684,8 @@ What makes that work across repeat sweeps:
   failing still fails the run.
 - **`--fail-under GRADE`** — exit `3` for a machine that grades below your
   floor, which a management tool can act on while still telling that apart
-  from exit `1`, "this run broke".
+  from exit `1`, "this run broke". `--upload` adds exit `4`, "ran, but the
+  result didn't arrive", which wins over `3`.
 - **Gates, so a sweep isn't disruptive.** A benchmark pins every core for
   minutes, which is unwelcome on someone's laptop mid-meeting and pointless on
   a machine running off battery. `--not-on-battery`, `--if-idle`,
@@ -1021,8 +1044,8 @@ enforces, and how to add a benchmark. All participants follow the
 [Code of Conduct](CODE_OF_CONDUCT.md). Security reports go through
 [SECURITY.md](SECURITY.md), not the public tracker.
 
-loadbearer collects no data and sends nothing anywhere — see
-[PRIVACY.md](PRIVACY.md).
+loadbearer collects no data, and sends nothing anywhere unless `run --upload`
+names a server to send a result to — see [PRIVACY.md](PRIVACY.md).
 
 ## License
 

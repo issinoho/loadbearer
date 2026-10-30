@@ -31,3 +31,14 @@ curve_k = 0.5
 # site = "glasgow"
 # department = "engineering"
 # ring = "pilot"
+
+# Post the result to a loadbearer-fleet server when the run finishes. Off
+# unless set: without it loadbearer makes no network call of its own. The
+# token is read from a file, never written here, so this file can be copied
+# and shared without the credential going with it. Generate one on the server
+# with `loadbearer-fleet token new`, and make the file readable only by the
+# account loadbearer runs as. A token scoped to a site needs that site's tag
+# above. --upload / --upload-token-file override these.
+# [upload]
+# url = "https://fleet.example.com/api/upload"
+# token_file = "C:/ProgramData/loadbearer/fleet-token"

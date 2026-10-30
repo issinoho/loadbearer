@@ -20,6 +20,20 @@ pub struct FileConfig {
     /// `key = "value"` labels carried into the result file. `--tag` wins per
     /// key; see `crate::tags`.
     pub tags: Option<crate::tags::Tags>,
+    /// Where `run` posts its result. `--upload` / `--upload-token-file` win.
+    pub upload: Option<UploadConfig>,
+}
+
+/// `[upload]`: a loadbearer-fleet server to post the result to.
+///
+/// A path to the token rather than the token, so a config file that is
+/// copied, attached to a ticket or checked in does not carry the credential
+/// with it.
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UploadConfig {
+    pub url: Option<String>,
+    pub token_file: Option<PathBuf>,
 }
 
 impl FileConfig {
@@ -66,5 +80,26 @@ mod tests {
     #[test]
     fn unknown_key_is_rejected() {
         assert!(toml::from_str::<FileConfig>("nope = 1").is_err());
+    }
+
+    #[test]
+    fn parses_an_upload_section_and_refuses_an_inline_token() {
+        let cfg: FileConfig = toml::from_str(
+            r#"
+            [upload]
+            url = "https://fleet.example/api/upload"
+            token_file = "C:/ProgramData/loadbearer/fleet-token"
+        "#,
+        )
+        .unwrap();
+        let upload = cfg.upload.expect("section");
+        assert_eq!(
+            upload.url.as_deref(),
+            Some("https://fleet.example/api/upload")
+        );
+        assert!(upload.token_file.is_some());
+
+        // There is deliberately no `token` key: the secret goes in a file.
+        assert!(toml::from_str::<FileConfig>("[upload]\ntoken = \"lbf_x\"\n").is_err());
     }
 }

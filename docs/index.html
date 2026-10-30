@@ -79,7 +79,7 @@
       </p>
       <p class="hero-meta">
         Latest release <span class="mono rel-tag">—</span> ·
-        one self-contained binary · no runtime, no network access
+        one self-contained binary · no runtime, no network calls unless asked
       </p>
     </div>
 
@@ -181,8 +181,9 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg>
         </div>
         <h3>Honest and self-contained</h3>
-        <p>One static binary, no runtime. No network calls — the network test is
-        loopback only. Disk reads bypass the OS page cache
+        <p>One static binary, no runtime. No network calls unless you ask for
+        one — the network test is loopback only, and a result goes to a fleet
+        server only with <code>--upload</code>. Disk reads bypass the OS page cache
         (<code>O_DIRECT</code> / <code>FILE_FLAG_NO_BUFFERING</code>). Workloads
         are reproducible with <code>--seed</code>.</p>
       </article>

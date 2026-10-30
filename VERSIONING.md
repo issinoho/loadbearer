@@ -26,11 +26,13 @@ A breaking change to any of these is a major release:
   `machine` block of `loadbearer.result/1` and is covered by that schema.
 - **Exit codes.** `0` on success, non-zero on any failure. Scripts can rely on
   that distinction. Which *particular* non-zero code appears is not covered,
-  with one exception that is: `run --fail-under GRADE` exits **`3`** when the
+  with two exceptions that are: `run --fail-under GRADE` exits **`3`** when the
   machine graded below `GRADE`, so a fleet tool can tell "this machine is
-  slow" from "this run broke" (`1`). `--fail-under` is opt-in; without it a
-  low grade is still a successful run and exits `0`. Note `2` is clap's
-  usage-error code and is not used for anything else.
+  slow" from "this run broke" (`1`); and `run --upload` exits **`4`** when the
+  run completed but the result could not be delivered, which takes precedence
+  over `3`. `--fail-under` is opt-in; without it a low grade is still a
+  successful run and exits `0`. Note `2` is clap's usage-error code and is not
+  used for anything else.
 
 ## Not covered — may change in any release
 

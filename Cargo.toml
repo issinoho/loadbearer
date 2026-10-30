@@ -28,6 +28,11 @@ sha2 = "0.11"
 libloading = "0.9"
 starship-battery = "0.10.2"
 log = { version = "0.4", features = ["std"] }
+# `run --upload` only: the one outbound HTTP call loadbearer can make, and
+# only when asked. rustls rather than the OS TLS stack so there is one
+# implementation on every platform; the platform verifier so certificates are
+# checked against the OS trust store, which is where a corporate root CA lives.
+ureq = { version = "3.5", default-features = false, features = ["rustls", "platform-verifier"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

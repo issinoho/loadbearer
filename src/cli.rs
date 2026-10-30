@@ -86,7 +86,7 @@ pub enum Command {
     /// List available benchmarks, the active baseline and scoring profiles.
     List,
     /// Run benchmarks and produce a graded result.
-    Run(RunArgs),
+    Run(Box<RunArgs>),
     /// Compare two or more result files and explain the winner.
     Compare(CompareArgs),
     /// Re-score an existing result file against a different baseline, profile
@@ -248,6 +248,19 @@ pub struct RunArgs {
     /// Write the result JSON to a file.
     #[arg(long, value_name = "FILE")]
     pub output: Option<PathBuf>,
+
+    /// When the run finishes, post the result to a loadbearer-fleet server at
+    /// this URL (its `/api/upload`). The only network call loadbearer makes
+    /// without `--net-target`, and only when asked. Needs a token: see
+    /// `--upload-token-file`. A failed upload exits 4.
+    #[arg(long, value_name = "URL")]
+    pub upload: Option<String>,
+
+    /// File holding the fleet ingest token for `--upload`. Kept out of the
+    /// command line on purpose, where process listings and deployment logs
+    /// would show it; `LOADBEARER_UPLOAD_TOKEN` is read if this is not given.
+    #[arg(long, value_name = "FILE")]
+    pub upload_token_file: Option<PathBuf>,
 
     /// Disable the TUI and emit structured lines (implied when stdout is not a terminal).
     #[arg(long)]
