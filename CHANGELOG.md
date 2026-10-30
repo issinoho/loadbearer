@@ -2,6 +2,44 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 1.8.0 - Fri, 30 Oct 2026
+
+**Results that send themselves.** A machine that can't reach a file share can
+now post its result straight to a
+[loadbearer-fleet](https://github.com/issinoho/loadbearer-fleet) server when
+the run finishes. It is opt-in: without `--upload`, loadbearer still makes no
+network call of its own. No measurement changes: 1.7.x scores and result files
+are directly comparable, and nothing here touches a grade.
+
+- **`run --upload URL`** posts the finished result to the server's
+  `/api/upload`. It sends the same document `--output` writes and nothing
+  else, after the file is written, so a failed upload loses nothing and a
+  result that also reaches the server from a share is stored once. Also
+  settable as `[upload] url` in the config file.
+- **The token comes from a file, never the command line or the URL.**
+  `--upload-token-file FILE`, then `[upload] token_file`, then
+  `LOADBEARER_UPLOAD_TOKEN`. A command line shows up in process listings and
+  deployment logs, and a URL in every proxy log it passes, so a URL carrying a
+  user, a password or a query string is refused. Generate a token on the
+  server with `loadbearer-fleet token new` (0.9.0 or later); one scoped to a
+  site only accepts results carrying that site's `--tag`.
+- **A bad URL or a missing token is found before anything runs**, not after
+  a five-minute benchmark.
+- **https, except to this machine.** Plain `http://` is refused unless it's to
+  loopback. Certificates are checked against the operating system's trust
+  store, so a corporate root CA works. Redirects aren't followed, so the token
+  can only go to the URL you named. Behind a proxy, set `HTTPS_PROXY`.
+- **It copes with a busy server.** A rate limit's `Retry-After` is waited out,
+  up to two minutes; a server error or an unreachable server is retried twice;
+  a refused token isn't retried. The server's refusals come back as messages
+  that say what to fix.
+- **Exit `4`: ran, but the result didn't arrive.** It wins over
+  `--fail-under`'s `3`, and is now among the exit codes `VERSIONING.md`
+  covers.
+
+PRIVACY.md and SECURITY.md say exactly what `--upload` sends, where, and how
+the token is handled.
+
 ## 1.7.0 - Thu, 29 Oct 2026
 
 **What the run was allowed to do.** A laptop on battery, or in a
