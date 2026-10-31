@@ -8,6 +8,7 @@ mod drives;
 mod engine;
 mod firmware;
 mod gates;
+mod help;
 mod identity;
 mod inventory;
 mod logging;
@@ -25,7 +26,7 @@ mod upload;
 mod util;
 
 use anyhow::Result;
-use clap::Parser;
+use clap::FromArgMatches;
 use log::{LevelFilter, error, info};
 
 use cli::{Cli, Command, LogLevelArg};
@@ -75,7 +76,7 @@ pub mod exit {
 }
 
 fn main() -> std::process::ExitCode {
-    let cli = Cli::parse();
+    let cli = Cli::from_arg_matches(&help::command().get_matches()).unwrap_or_else(|e| e.exit());
 
     if let Some(path) = logging::init(cli.log_target(), cli.log_level.map(Into::into)) {
         info!(
