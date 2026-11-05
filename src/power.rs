@@ -68,7 +68,8 @@ pub struct Power {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModeSettings {
     /// The Windows 11 power mode: `"best power efficiency"`, `"balanced"` or
-    /// `"best performance"`. Only the Balanced plan has one.
+    /// `"best performance"`. Only a Balanced-type plan has one — the built-in
+    /// Balanced, or a custom plan derived from it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub power_mode: Option<String>,
     /// Minimum processor state, percent.
@@ -373,8 +374,11 @@ fn platform_collect() -> Power {
         p.plan_guid = Some(win::guid_string(&scheme));
         // The power mode only exists under Balanced: Settings greys it out
         // under any other plan, and the overlay values left behind from when
-        // Balanced was active don't apply.
-        let balanced = win::same(&scheme, &win::BALANCED);
+        // Balanced was active don't apply. "Balanced" is the plan's type, not
+        // its GUID — a plan an OEM or IT department derives from Balanced has
+        // its own GUID (often its own copy of the name) and still gets the
+        // power mode.
+        let balanced = win::is_balanced(&scheme);
         let column = |ac: bool| {
             let mode = balanced
                 .then(|| {
@@ -411,9 +415,38 @@ mod win {
     pub const THROTTLE_MAXIMUM: GUID = GUID::from_u128(0xbc5038f7_23e0_4960_96da_33abaf5935ec);
     pub const PERF_BOOST_MODE: GUID = GUID::from_u128(0xbe337238_0d82_4146_a960_4f3749d470c7);
 
+    const NO_SUBGROUP: GUID = GUID::from_u128(0xfea3413e_7e05_4911_9a71_700331f1c294);
+    /// The hidden "Power plan type" setting: 0 Power saver, 1 High
+    /// performance, 2 Balanced. Plans derived from a built-in one inherit it.
+    const PERSONALITY: GUID = GUID::from_u128(0x245d8541_3943_4422_b025_13a784f679b7);
+    const PERSONALITY_BALANCED: u32 = 2;
+
     /// `windows_sys`'s GUID has no `PartialEq`.
     pub fn same(a: &GUID, b: &GUID) -> bool {
         (a.data1, a.data2, a.data3, a.data4) == (b.data1, b.data2, b.data3, b.data4)
+    }
+
+    /// Whether `scheme` is a Balanced-type plan — the built-in one, or a
+    /// custom plan whose type is Balanced — which is when Windows 11 applies
+    /// a power mode on top of it.
+    pub fn is_balanced(scheme: &GUID) -> bool {
+        use windows_sys::Win32::System::Power::PowerReadACValueIndex;
+
+        if same(scheme, &BALANCED) {
+            return true;
+        }
+        let mut v = 0u32;
+        // SAFETY: every GUID pointer is to a live GUID, `v` is writable.
+        let rc = unsafe {
+            PowerReadACValueIndex(
+                std::ptr::null_mut(),
+                scheme,
+                &NO_SUBGROUP,
+                &PERSONALITY,
+                &mut v,
+            )
+        };
+        rc == 0 && v == PERSONALITY_BALANCED
     }
 
     /// `381b4222-f694-41f0-9685-ff5bb260df2e`.
