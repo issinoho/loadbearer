@@ -17,7 +17,10 @@ cargo clippy --all-targets --locked -- -D warnings
 cargo test --locked
 ```
 
-CI runs on ubuntu-latest **and** windows-latest. `--locked` matters: after a
+CI runs on ubuntu-latest **and** windows-latest. The Windows laptop runs all
+three natively too, since 2026-11-05 (rustup + VS 2022 Build Tools' C++
+workload, both via winget) — so `#[cfg(windows)]` code can be built and
+tested there, not just on CI. `--locked` matters: after a
 version bump, run `cargo build` once to refresh `Cargo.lock` or `--locked` fails.
 Clippy on CI's toolchain is sometimes stricter than a local one — if in doubt
 `rustup update stable`.
@@ -63,8 +66,21 @@ undo. The steps by hand, which is what it automates:
 **On the Windows laptop, only the GitHub half runs, and only from WSL:**
 `cut-release.sh X.Y.Z --skip-ppa` from WSL Ubuntu against the Windows
 checkout (`/mnt/d/Projects/loadbearer`). Made possible on 2026-10-20; 1.6.0
-(2026-10-28) was the first real release cut this way. What it took, in case
-it needs redoing:
+(2026-10-28) was the first real release cut this way, 1.8.1 (2026-11-05) the
+second. Use `wsl -d Ubuntu`: the default distro is `docker-desktop`, which has
+no bash, so a bare `wsl -e bash …` fails with `execvpe(bash) failed`.
+
+**The WSL setup does not stay put — check it before a release.** By
+2026-11-05 every piece below had gone (distro reset or reinstalled): no `gh`,
+no Rust, no C compiler, no `~/.gitconfig`, and even the repo-local
+`core.autocrlf` was missing. The dry run (`--skip-ppa --dry-run`) finds them
+one at a time in preflight ("gh isn't on PATH", "cargo isn't on PATH"), so
+it's the quickest check. The parts needing `sudo` or an interactive login
+(`apt install`, `gh auth login`) have to be run by Iain in a WSL terminal;
+so does the real release, whose confirmations read `/dev/tty`. Also needed
+beyond the list below: Rust via rustup (`curl … sh.rustup.rs | sh -s -- -y
+-c rustfmt,clippy`, no sudo) and `sudo apt install build-essential` for a
+linker. What it took, in case it needs redoing:
 
 - `.gitattributes` keeps `*.sh` and `debian/**` LF. Before that the script
   was checked out CRLF and died at line 22 with `$'\r': command not found`.
