@@ -2,6 +2,28 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 1.8.1 - Thu, 5 Nov 2026
+
+A fix and a help-text improvement, with no measurement changes: 1.8.0 scores
+and result files are directly comparable, and nothing here touches a grade.
+
+- **The Windows 11 power mode is reported under a custom Balanced plan.**
+  loadbearer only read the power mode (Best power efficiency / Balanced / Best
+  performance) when the active plan was the built-in Balanced one, recognised
+  by its GUID. A plan that an OEM or IT department derives from Balanced has
+  its own GUID, often under the same "Balanced" name, and Windows still applies
+  the power mode on top of it. So `info` and result files showed "Balanced
+  plan" with no mode, while Settings showed Best performance, and a run held
+  back by Best power efficiency went unflagged. Whether a plan has a power mode
+  now follows the plan's hidden *type* setting, which is what Windows itself
+  goes by.
+- **`--help` lists every command and all of its options.** The top-level help
+  named the commands but none of their options, so finding a flag took a
+  `help <command>` per subcommand. `--help` now ends with each command's
+  options, their one-line help, defaults and choices, built from the same
+  definitions as the parser so it can't drift. `-h` is still the short
+  summary.
+
 ## 1.8.0 - Fri, 30 Oct 2026
 
 **Results that send themselves.** A machine that can't reach a file share can
