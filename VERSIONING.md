@@ -19,6 +19,9 @@ A breaking change to any of these is a major release:
   - `loadbearer.soak/1` — `loadbearer soak --output` / `--json`
   - `loadbearer.compare/1` — `loadbearer compare --json`
   - `loadbearer.mem/1` — `loadbearer mem --json`
+  - `loadbearer.run-status/1` — the record a skipped `loadbearer run` posts
+    to its `--upload` server (see [README](README.md#fleet-use)); it is sent,
+    never written to a file, and the server is its only consumer
 
   Removing, renaming, or changing the type of a field is breaking and bumps the
   number after the slash (`/1` → `/2`). **Adding a new optional field does
@@ -32,7 +35,9 @@ A breaking change to any of these is a major release:
   run completed but the result could not be delivered, which takes precedence
   over `3`. `--fail-under` is opt-in; without it a low grade is still a
   successful run and exits `0`. Note `2` is clap's usage-error code and is not
-  used for anything else.
+  used for anything else. The exit codes are unchanged by the run status
+  record: a skipped run exits `0` whatever happens to the record, so `4` still
+  means only "a run completed but its result could not be delivered".
 
 ## Not covered — may change in any release
 

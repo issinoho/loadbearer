@@ -277,7 +277,9 @@ pub struct RunArgs {
     /// When the run finishes, post the result to a loadbearer-fleet server at
     /// this URL (its `/api/upload`). The only network call loadbearer makes
     /// without `--net-target`, and only when asked. Needs a token: see
-    /// `--upload-token-file`. A failed upload exits 4.
+    /// `--upload-token-file`. A failed upload exits 4. A skipped run also
+    /// reports itself here unless `--no-status`, and that never changes the
+    /// exit code.
     #[arg(long, value_name = "URL")]
     pub upload: Option<String>,
 
@@ -286,6 +288,16 @@ pub struct RunArgs {
     /// would show it; `LOADBEARER_UPLOAD_TOKEN` is read if this is not given.
     #[arg(long, value_name = "FILE")]
     pub upload_token_file: Option<PathBuf>,
+
+    /// Don't tell the `--upload` server about a skipped run. By default a run
+    /// skipped by `--not-on-battery` or `--if-idle` posts a small status
+    /// record (hostname, identity, tags, and why) to the same server, so the
+    /// fleet can tell a machine that keeps being skipped from one that has
+    /// gone quiet. Never sent for `--skip-if-newer-than`, or without
+    /// `--upload`. The config file spelling is `status = false` under
+    /// `[upload]`. A skip exits 0 either way.
+    #[arg(long)]
+    pub no_status: bool,
 
     /// Disable the TUI and emit structured lines (implied when stdout is not a terminal).
     #[arg(long)]

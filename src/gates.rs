@@ -19,7 +19,11 @@
 //!
 //! Nothing here is persisted: `--skip-if-newer-than` reads the mtime of the
 //! `--output` file the previous run already wrote, so there is no state file
-//! and no registry key (see PRIVACY.md).
+//! and no registry key (see PRIVACY.md). A skip writes no result and no
+//! `--output`; the one thing it may do is *report* itself, and only when an
+//! upload target is configured: a battery or busy skip posts a run status
+//! record (`crate::status`) to that target. A recent-result skip never does.
+//! The gates only decide and say why (`Skip`); sending is `run`'s business.
 
 use std::path::Path;
 use std::time::Duration;
@@ -60,7 +64,44 @@ pub enum Decision {
     /// Go ahead; carry this into the result file.
     Proceed(Box<GateReport>),
     /// Don't run, for this reason. The caller exits 0.
-    Skip(String),
+    Skip(Skip),
+}
+
+/// Why a run was skipped. The words are the `reason` of a run status record
+/// (see `crate::status`), so they are stable: a fleet server groups by them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SkipReason {
+    /// `--skip-if-newer-than`: a recent result exists. Never reported, since
+    /// the result already says everything a status record could.
+    RecentResult,
+    OnBattery,
+    Busy,
+}
+
+impl SkipReason {
+    /// The `reason` word of a status record, or `None` for a skip that sends
+    /// no record.
+    pub fn status_word(self) -> Option<&'static str> {
+        match self {
+            Self::RecentResult => None,
+            Self::OnBattery => Some("on_battery"),
+            Self::Busy => Some("busy"),
+        }
+    }
+}
+
+/// A decision not to run: the machine-readable reason, and the sentence that
+/// is printed (and sent as the record's `detail`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Skip {
+    pub reason: SkipReason,
+    pub detail: String,
+}
+
+impl std::fmt::Display for Skip {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.detail)
+    }
 }
 
 /// Is this machine on mains?
@@ -168,12 +209,15 @@ impl Gates<'_> {
             && let Some(age) = age_of(path)
             && age < max_age
         {
-            return Decision::Skip(format!(
-                "{} was written {}s ago, inside the --skip-if-newer-than window of {}s",
-                path.display(),
-                age.as_secs(),
-                max_age.as_secs(),
-            ));
+            return Decision::Skip(Skip {
+                reason: SkipReason::RecentResult,
+                detail: format!(
+                    "{} was written {}s ago, inside the --skip-if-newer-than window of {}s",
+                    path.display(),
+                    age.as_secs(),
+                    max_age.as_secs(),
+                ),
+            });
         }
 
         if self.not_on_battery {
@@ -181,11 +225,12 @@ impl Gates<'_> {
             match on_mains(state.as_deref()) {
                 Some(true) => report.on_ac = Some(true),
                 Some(false) => {
-                    return Decision::Skip(
-                        "on battery power, and --not-on-battery was given (clocks are \
-                         usually capped on battery, so the numbers wouldn't be comparable)"
+                    return Decision::Skip(Skip {
+                        reason: SkipReason::OnBattery,
+                        detail: "on battery power, and --not-on-battery was given (clocks are \
+                                 usually capped on battery, so the numbers wouldn't be comparable)"
                             .to_string(),
-                    );
+                    });
                 }
                 None => {
                     // Fail open, and say so rather than skipping silently.
@@ -206,10 +251,13 @@ impl Gates<'_> {
             let load = sample_cpu_load();
             report.cpu_load_pct = Some(load as f64);
             if !is_idle(load, IDLE_MAX_LOAD_PCT) {
-                return Decision::Skip(format!(
-                    "CPU load is {load:.0}%, at or above the --if-idle limit of \
-                     {IDLE_MAX_LOAD_PCT:.0}%"
-                ));
+                return Decision::Skip(Skip {
+                    reason: SkipReason::Busy,
+                    detail: format!(
+                        "CPU load is {load:.0}%, at or above the --if-idle limit of \
+                         {IDLE_MAX_LOAD_PCT:.0}%"
+                    ),
+                });
             }
         }
 

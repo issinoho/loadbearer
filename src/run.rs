@@ -62,6 +62,9 @@ struct Resolved {
     only: Vec<String>,
     tags: crate::tags::Tags,
     upload: Option<crate::upload::Target>,
+    /// Whether a skipped run reports itself to `upload`: on unless
+    /// `--no-status` or `[upload] status = false` says not.
+    status: bool,
     /// What to collect beyond the default inventory: config plus CLI.
     collect: crate::optin::Choice,
 }
@@ -104,6 +107,8 @@ fn resolve(args: &RunArgs) -> Result<Resolved> {
         args.only.clone()
     };
 
+    let file_status = file.upload.as_ref().and_then(|u| u.status).unwrap_or(true);
+
     // Here, before anything runs: a missing token or a URL that would leak
     // one should cost a second, not a whole benchmark.
     let upload = crate::upload::resolve(
@@ -123,6 +128,7 @@ fn resolve(args: &RunArgs) -> Result<Resolved> {
         only,
         tags: crate::tags::resolve(file.tags.as_ref(), &args.tags)?,
         upload,
+        status: !args.no_status && file_status,
         collect: crate::optin::Choice::resolve(file.collect.as_deref(), &args.collect),
     })
 }
@@ -145,11 +151,13 @@ pub fn execute(args: RunArgs) -> Result<u8> {
     // Before the baseline, the inventory, the scratch directory — anything a
     // skipped run shouldn't pay for. A gate declining to run is not a failure,
     // so this leaves with 0 and writes no result file.
-    let gate_report = match gates(&args)?.evaluate() {
+    let gates = gates(&args)?;
+    let gate_report = match gates.evaluate() {
         crate::gates::Decision::Proceed(report) => *report,
-        crate::gates::Decision::Skip(why) => {
-            info!(target: "loadbearer::run", "skipped: {why}");
-            eprintln!("loadbearer run skipped — {why}");
+        crate::gates::Decision::Skip(skip) => {
+            info!(target: "loadbearer::run", "skipped: {skip}");
+            report_skip(&skip, &r, &gates);
+            eprintln!("loadbearer run skipped — {skip}");
             return Ok(crate::exit::OK);
         }
     };
@@ -387,6 +395,59 @@ fn run_plain(
     }
     let code = threshold_code(args, &result);
     Ok(deliver(upload, &json, code, args.json))
+}
+
+/// Tell the `--upload` server about a skip, when one is due (see
+/// `crate::status`). Never fails the run: the worst case is one warning, on
+/// stderr even under `--json` and in the log, and the caller exits 0 anyway.
+///
+/// `--jitter` is honoured here. The gates only sleep it for a run that will
+/// happen, so a skip never waited; but a fleet skipping together at 09:00 is
+/// exactly the stampede the flag exists to prevent, and a machine that was
+/// told to spread its load should spread this too. It costs at most what the
+/// operator asked for, and nothing at all when no record is due.
+fn report_skip(skip: &crate::gates::Skip, r: &Resolved, gates: &crate::gates::Gates<'_>) {
+    use crate::status::{Reported, Steps};
+    let wait = || {
+        let Some(max) = gates.jitter else { return };
+        let wait = crate::gates::pick_jitter(max, gates.hostname.as_deref());
+        info!(
+            target: "loadbearer::run",
+            "--jitter {}s: waiting {:.1}s before reporting the skip",
+            max.as_secs(),
+            wait.as_secs_f64(),
+        );
+        eprintln!(
+            "waiting {:.0}s (--jitter) before reporting the skip …",
+            wait.as_secs_f64()
+        );
+        std::thread::sleep(wait);
+    };
+    let outcome = crate::status::report(
+        skip,
+        r.upload.as_ref(),
+        r.status,
+        gates.hostname.clone(),
+        &r.tags,
+        &Steps {
+            wait: &wait,
+            identity: &crate::identity::collect,
+            send: &crate::upload::send_status,
+        },
+    );
+    let url = r.upload.as_ref().map_or("", |t| t.url.as_str());
+    match outcome {
+        Reported::NotDue(why) => {
+            debug!(target: "loadbearer::run", "skip not reported: {}", why.why());
+        }
+        Reported::Sent => {
+            info!(target: "loadbearer::upload", "skip reported to {url}: recorded");
+        }
+        Reported::Failed(e) => {
+            warn!(target: "loadbearer::upload", "skip not reported to {url}: {e:#}");
+            eprintln!("warning: this skip was not reported to the fleet server: {e:#}");
+        }
+    }
 }
 
 /// Post the finished result, if `--upload` asked for it, and settle the exit
@@ -657,7 +718,145 @@ fn select_benchmarks(only: &[String]) -> Result<Vec<Box<dyn Benchmark>>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::gates::{Skip, SkipReason};
     use crate::scoring::Grade;
+    use crate::upload::test_support::{reply, server};
+    use clap::Parser;
+
+    /// A scratch directory holding a token file, and the `run` arguments
+    /// that point at `url` with it, plus whatever else is given.
+    fn run_args(tag: &str, url: &str, extra: &[&str]) -> (std::path::PathBuf, RunArgs) {
+        let dir = std::env::temp_dir().join(format!("lb-status-{tag}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let token = dir.join("token");
+        std::fs::write(&token, "lbf_s3cret").unwrap();
+        let mut argv = vec!["loadbearer".to_string(), "run".to_string()];
+        argv.extend(["--upload".to_string(), url.to_string()]);
+        argv.extend([
+            "--upload-token-file".to_string(),
+            token.display().to_string(),
+        ]);
+        argv.extend(["--tag".to_string(), "site=glasgow".to_string()]);
+        argv.extend(extra.iter().map(|s| s.to_string()));
+        let cli = crate::cli::Cli::try_parse_from(argv).unwrap();
+        let crate::cli::Command::Run(args) = cli.command else {
+            panic!("not a run command");
+        };
+        (dir, *args)
+    }
+
+    fn busy() -> Skip {
+        Skip {
+            reason: SkipReason::Busy,
+            detail: "a synthetic detail".into(),
+        }
+    }
+
+    #[test]
+    fn a_battery_or_busy_skip_with_an_upload_posts_one_record() {
+        for reason in [SkipReason::OnBattery, SkipReason::Busy] {
+            let (url, seen) = server(vec![reply("200 OK", "", r#"{"outcome":"recorded"}"#)]);
+            let (dir, args) = run_args("sent", &url, &[]);
+            let r = resolve(&args).unwrap();
+            assert!(r.status);
+            report_skip(
+                &Skip {
+                    reason,
+                    detail: "a synthetic detail".into(),
+                },
+                &r,
+                &gates(&args).unwrap(),
+            );
+            let seen = seen.lock().unwrap();
+            assert_eq!(seen.len(), 1);
+            assert!(seen[0].contains(r#""schema":"loadbearer.run-status/1""#));
+            assert!(seen[0].contains(r#""site":"glasgow""#));
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+    }
+
+    #[test]
+    fn no_status_on_the_command_line_sends_nothing() {
+        let (url, seen) = server(vec![reply("200 OK", "", r#"{"outcome":"recorded"}"#)]);
+        let (dir, args) = run_args("flag", &url, &["--no-status"]);
+        let r = resolve(&args).unwrap();
+        assert!(!r.status);
+        report_skip(&busy(), &r, &gates(&args).unwrap());
+        assert!(seen.lock().unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn status_false_in_the_config_sends_nothing_and_the_flag_cannot_turn_it_on() {
+        let (url, seen) = server(vec![reply("200 OK", "", r#"{"outcome":"recorded"}"#)]);
+        let (dir, mut args) = run_args("config", &url, &[]);
+        let config = dir.join("lb.toml");
+        std::fs::write(&config, "[upload]\nstatus = false\n").unwrap();
+        args.config = Some(config.clone());
+        let r = resolve(&args).unwrap();
+        assert!(!r.status);
+        report_skip(&busy(), &r, &gates(&args).unwrap());
+        assert!(seen.lock().unwrap().is_empty());
+
+        // The config's true, or its silence, leaves it on; the flag alone
+        // turns it off. Either turning it off wins.
+        for (text, no_status, want) in [
+            ("[upload]\nstatus = true\n", false, true),
+            ("[upload]\nstatus = true\n", true, false),
+            ("[upload]\nstatus = false\n", true, false),
+            ("tags = {}\n", false, true),
+        ] {
+            std::fs::write(&config, text).unwrap();
+            args.no_status = no_status;
+            assert_eq!(resolve(&args).unwrap().status, want, "{text} {no_status}");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_recent_result_skip_sends_nothing_through_the_whole_run() {
+        let (url, seen) = server(vec![reply("200 OK", "", r#"{"outcome":"recorded"}"#)]);
+        let (dir, mut args) = run_args("recent", &url, &[]);
+        let output = dir.join("result.json");
+        std::fs::write(&output, b"{}").unwrap();
+        args.output = Some(output);
+        args.skip_if_newer_than = Some("1h".into());
+        assert_eq!(execute(args).unwrap(), crate::exit::OK);
+        assert!(seen.lock().unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_skip_whose_report_is_refused_or_unreachable_is_still_just_a_skip() {
+        // An older server: 400. One post, then the caller carries on.
+        let (url, seen) = server(vec![reply("400 Bad Request", "", r#"{"error":"nope"}"#)]);
+        let (dir, args) = run_args("old", &url, &[]);
+        let r = resolve(&args).unwrap();
+        report_skip(&busy(), &r, &gates(&args).unwrap());
+        assert_eq!(seen.lock().unwrap().len(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
+
+        // Nothing listening: returns, and quickly.
+        let port = std::net::TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let (dir, args) = run_args("down", &format!("http://127.0.0.1:{port}/api/upload"), &[]);
+        let r = resolve(&args).unwrap();
+        let started = std::time::Instant::now();
+        report_skip(&busy(), &r, &gates(&args).unwrap());
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_bad_upload_is_refused_before_the_gates_whether_or_not_the_run_would_skip() {
+        let (dir, args) = run_args("bad", "http://fleet.example/api/upload", &[]);
+        let err = execute(args).unwrap_err().to_string();
+        assert!(err.contains("in the clear"), "{err}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn no_threshold_never_fails_a_run() {

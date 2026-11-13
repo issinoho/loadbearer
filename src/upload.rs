@@ -22,6 +22,11 @@
 //! is written, as exactly those bytes — so a machine whose file is also
 //! collected from a share is indexed once, because the server deduplicates
 //! by the hash of the document.
+//!
+//! The same target, token and transport rules also carry the **run status
+//! record** a skipped run sends (`crate::status`). That one is a courtesy,
+//! not a delivery: it gets one short attempt and no retry, because a
+//! scheduled task that decided not to run should finish in seconds.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -40,6 +45,10 @@ const ATTEMPTS: u32 = 3;
 /// a deployment step has a timeout; waiting out a long one belongs to the next
 /// run, which will find the result on disk under `--output`.
 const MAX_WAIT: Duration = Duration::from_secs(120);
+
+/// How long a status record may take, connect to last byte. A result
+/// upload allows 30 s per attempt; a skip is not worth that.
+const STATUS_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Where to send, and who is sending. The token is deliberately not `Debug`.
 pub struct Target {
@@ -146,11 +155,15 @@ fn is_loopback(host: &str) -> bool {
 
 /// The agent every upload goes through.
 fn agent() -> ureq::Agent {
+    agent_with_timeout(Duration::from_secs(30))
+}
+
+fn agent_with_timeout(timeout: Duration) -> ureq::Agent {
     use ureq::tls::{RootCerts, TlsConfig};
     ureq::Agent::config_builder()
         .max_redirects(0)
         .http_status_as_error(false)
-        .timeout_global(Some(Duration::from_secs(30)))
+        .timeout_global(Some(timeout))
         .user_agent(format!("loadbearer/{}", env!("LOADBEARER_VERSION")))
         .tls_config(
             TlsConfig::builder()
@@ -174,6 +187,55 @@ fn send_with(
     body: &str,
     sleep: &dyn Fn(Duration),
 ) -> Result<Delivered> {
+    exchange(agent, target, body, ATTEMPTS, sleep).into_outcome(&target.url)
+}
+
+/// Post one run status record: a single attempt, ten seconds at most, no
+/// retry and no waiting out a `Retry-After`. Succeeds only on the 200
+/// `{"outcome":"recorded"}` a server that knows the document answers with;
+/// the error says what to check, for the one warning line a skip prints.
+pub fn send_status(target: &Target, body: &str) -> Result<()> {
+    send_status_with(&agent_with_timeout(STATUS_TIMEOUT), target, body)
+}
+
+fn send_status_with(agent: &ureq::Agent, target: &Target, body: &str) -> Result<()> {
+    let reply = exchange(agent, target, body, 1, &|_| {});
+    // A server that predates the document refuses it as not a result. It is
+    // the likeliest failure on the day this ships, so it is named.
+    if let Reply::Status {
+        code: 400, text, ..
+    } = &reply
+    {
+        bail!(
+            "{} answered HTTP 400 ({}); the server may be older than run status records",
+            target.url,
+            server_said(text)
+        );
+    }
+    let text = reply.accepted(&target.url, "status record")?;
+    let outcome = serde_json::from_str::<serde_json::Value>(&text)
+        .ok()
+        .and_then(|v| v["outcome"].as_str().map(str::to_string));
+    match outcome.as_deref() {
+        Some("recorded") => Ok(()),
+        _ => bail!(
+            "{} answered 200 but did not say it recorded the status ({}); the server may be \
+             older than run status records",
+            target.url,
+            server_said(&text)
+        ),
+    }
+}
+
+/// Post, and keep posting while the answer is worth another try, up to
+/// `attempts`. Returns the last reply.
+fn exchange(
+    agent: &ureq::Agent,
+    target: &Target,
+    body: &str,
+    attempts: u32,
+    sleep: &dyn Fn(Duration),
+) -> Reply {
     let mut attempt = 1;
     loop {
         let reply = post(agent, target, body);
@@ -187,18 +249,18 @@ fn send_with(
             Reply::Unreachable(_) => Some(backoff(attempt)),
             _ => None,
         };
-        match (wait, attempt < ATTEMPTS) {
+        match (wait, attempt < attempts) {
             (Some(wait), true) if wait <= MAX_WAIT => {
                 warn!(
                     target: "loadbearer::upload",
-                    "attempt {attempt} of {ATTEMPTS} did not land ({}); retrying in {}s",
+                    "attempt {attempt} of {attempts} did not land ({}); retrying in {}s",
                     reply.summary(),
                     wait.as_secs()
                 );
                 sleep(wait);
                 attempt += 1;
             }
-            _ => return reply.into_outcome(&target.url),
+            _ => return reply,
         }
     }
 }
@@ -264,9 +326,28 @@ impl Reply {
         }
     }
 
-    /// What a final reply means, said so that the person reading a
-    /// deployment tool's log can fix it without looking anything up.
+    /// What a final reply means for a result upload.
     fn into_outcome(self, url: &str) -> Result<Delivered> {
+        let text = self.accepted(url, "result")?;
+        let said = server_said(&text);
+        let outcome = serde_json::from_str::<serde_json::Value>(&text)
+            .ok()
+            .and_then(|v| v["outcome"].as_str().map(str::to_string));
+        match outcome.as_deref() {
+            Some("added") => Ok(Delivered::Added),
+            Some("already indexed") => Ok(Delivered::AlreadyIndexed),
+            _ => bail!(
+                "{url} answered 200 but not as a loadbearer-fleet upload endpoint would \
+                 ({said}); check the URL ends in /api/upload"
+            ),
+        }
+    }
+
+    /// The body of a 200 answer, or what any other final reply means, said so
+    /// that the person reading a deployment tool's log can fix it without
+    /// looking anything up. `what` names the document: "result" or
+    /// "status record".
+    fn accepted(self, url: &str, what: &str) -> Result<String> {
         let (code, location, text) = match self {
             Self::Unreachable(why) => bail!(
                 "could not reach {url}: {why}. If this machine reaches the web through a proxy, \
@@ -281,19 +362,7 @@ impl Reply {
         };
         let said = server_said(&text);
         match code {
-            200 => {
-                let outcome = serde_json::from_str::<serde_json::Value>(&text)
-                    .ok()
-                    .and_then(|v| v["outcome"].as_str().map(str::to_string));
-                match outcome.as_deref() {
-                    Some("added") => Ok(Delivered::Added),
-                    Some("already indexed") => Ok(Delivered::AlreadyIndexed),
-                    _ => bail!(
-                        "{url} answered 200 but not as a loadbearer-fleet upload endpoint would \
-                         ({said}); check the URL ends in /api/upload"
-                    ),
-                }
-            }
+            200 => Ok(text),
             300..=399 => bail!(
                 "{url} redirected to {}; not followed, because that would send the token there \
                  too. Use the address it redirects to as --upload.",
@@ -305,15 +374,20 @@ impl Reply {
             ),
             // loadbearer-fleet already names `--tag` in its 403; an older or
             // different server may not, and then the hint is the diagnosis.
-            403 if said.contains("--tag") => bail!("the server refused this result: {said}"),
+            403 if said.contains("--tag") => bail!("the server refused this {what}: {said}"),
             403 => bail!(
-                "the server refused this result: {said}. A token scoped to a site only accepts \
-                 results carrying that site's tags — run with the --tag it was issued for."
+                "the server refused this {what}: {said}. A token scoped to a site only accepts \
+                 {what}s carrying that site's tags — run with the --tag it was issued for."
             ),
             404 | 405 => bail!(
                 "{url} has no upload endpoint (HTTP {code}); the URL wants to end in /api/upload"
             ),
-            413 => bail!("the server refused the result as too large (HTTP 413): {said}"),
+            413 => bail!("the server refused the {what} as too large (HTTP 413): {said}"),
+            // Only a result has a file to fall back on, and a next run to
+            // deliver it; a status record is simply not sent again.
+            429 if what != "result" => {
+                bail!("the server is rate-limiting this token (HTTP 429): {said}")
+            }
             429 => bail!(
                 "the server is rate-limiting this token and asked for longer than this run will \
                  wait: {said}. The result is in --output if one was given; the next run will \
@@ -342,19 +416,71 @@ fn server_said(text: &str) -> String {
     short.trim_end_matches('.').to_string()
 }
 
+/// Loopback fixtures shared with the tests of `crate::status`.
 #[cfg(test)]
-mod tests {
+pub(crate) mod test_support {
     use super::*;
     use std::io::{BufRead, BufReader, Read, Write};
     use std::net::TcpListener;
     use std::sync::{Arc, Mutex};
 
-    fn target(url: &str) -> Target {
+    pub(crate) fn target(url: &str) -> Target {
         Target {
             url: url.to_string(),
             token: "lbf_s3cret".to_string(),
         }
     }
+
+    /// One canned reply per connection, in order, recording each request.
+    pub(crate) fn server(replies: Vec<String>) -> (String, Arc<Mutex<Vec<String>>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/api/upload", listener.local_addr().unwrap());
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let log = Arc::clone(&seen);
+        std::thread::spawn(move || {
+            for reply in replies {
+                let Ok((stream, _)) = listener.accept() else {
+                    return;
+                };
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                let mut head = String::new();
+                let mut length = 0;
+                loop {
+                    let mut line = String::new();
+                    if reader.read_line(&mut line).unwrap_or(0) == 0 || line == "\r\n" {
+                        break;
+                    }
+                    if let Some(v) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                        length = v.trim().parse().unwrap_or(0);
+                    }
+                    head.push_str(&line);
+                }
+                let mut body = vec![0; length];
+                reader.read_exact(&mut body).unwrap();
+                log.lock()
+                    .unwrap()
+                    .push(format!("{head}\r\n{}", String::from_utf8_lossy(&body)));
+                let mut stream = stream;
+                stream.write_all(reply.as_bytes()).unwrap();
+            }
+        });
+        (url, seen)
+    }
+
+    pub(crate) fn reply(status: &str, headers: &str, body: &str) -> String {
+        format!(
+            "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n{headers}\r\n{body}",
+            body.len()
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::test_support::{reply, server, target};
+    use super::*;
+    use std::net::TcpListener;
+    use std::sync::Mutex;
 
     #[test]
     fn a_url_that_would_carry_or_leak_the_token_is_refused() {
@@ -397,6 +523,7 @@ mod tests {
         let cfg = crate::config::UploadConfig {
             url: Some("https://fleet.example/api/upload".into()),
             token_file: Some(file.clone()),
+            status: None,
         };
         let env = || Some("lbf_from_env".to_string());
 
@@ -439,49 +566,6 @@ mod tests {
         .to_string();
         assert!(err.contains("empty"), "{err}");
         let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    /// One canned reply per connection, in order, recording each request.
-    fn server(replies: Vec<String>) -> (String, Arc<Mutex<Vec<String>>>) {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let url = format!("http://{}/api/upload", listener.local_addr().unwrap());
-        let seen = Arc::new(Mutex::new(Vec::new()));
-        let log = Arc::clone(&seen);
-        std::thread::spawn(move || {
-            for reply in replies {
-                let Ok((stream, _)) = listener.accept() else {
-                    return;
-                };
-                let mut reader = BufReader::new(stream.try_clone().unwrap());
-                let mut head = String::new();
-                let mut length = 0;
-                loop {
-                    let mut line = String::new();
-                    if reader.read_line(&mut line).unwrap_or(0) == 0 || line == "\r\n" {
-                        break;
-                    }
-                    if let Some(v) = line.to_ascii_lowercase().strip_prefix("content-length:") {
-                        length = v.trim().parse().unwrap_or(0);
-                    }
-                    head.push_str(&line);
-                }
-                let mut body = vec![0; length];
-                reader.read_exact(&mut body).unwrap();
-                log.lock()
-                    .unwrap()
-                    .push(format!("{head}\r\n{}", String::from_utf8_lossy(&body)));
-                let mut stream = stream;
-                stream.write_all(reply.as_bytes()).unwrap();
-            }
-        });
-        (url, seen)
-    }
-
-    fn reply(status: &str, headers: &str, body: &str) -> String {
-        format!(
-            "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n{headers}\r\n{body}",
-            body.len()
-        )
     }
 
     const ADDED: &str = r#"{"outcome":"added","machine_key":"K","hostname":"PC-01"}"#;

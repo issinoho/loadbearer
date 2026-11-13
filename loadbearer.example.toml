@@ -49,6 +49,15 @@ curve_k = 0.5
 # with `loadbearer-fleet token new`, and make the file readable only by the
 # account loadbearer runs as. A token scoped to a site needs that site's tag
 # above. --upload / --upload-token-file override these.
+#
+# A run skipped by --not-on-battery or --if-idle also posts a small status
+# record (hostname, identity, tags and why) to this server, so the fleet can
+# tell a machine that keeps being skipped from one that has gone quiet.
+# `status = false` turns that off, as does --no-status; neither can turn it
+# back on. Never sent for --skip-if-newer-than. An older loadbearer refuses a
+# config file with the status key, like any key it does not know (it arrived
+# after 1.8.1): upgrade the estate before adding it.
 # [upload]
 # url = "https://fleet.example.com/api/upload"
 # token_file = "C:/ProgramData/loadbearer/fleet-token"
+# status = false

@@ -39,6 +39,12 @@ pub struct FileConfig {
 pub struct UploadConfig {
     pub url: Option<String>,
     pub token_file: Option<PathBuf>,
+    /// `status = false` stops a skipped run sending its run status record
+    /// to this server; absent means on. `--no-status` turns it off too, and
+    /// neither can turn it back on. A loadbearer older than this key refuses
+    /// the whole file, like any unknown key, so a config carrying it must
+    /// not be handed to one.
+    pub status: Option<bool>,
 }
 
 impl FileConfig {
@@ -110,6 +116,17 @@ mod tests {
     }
 
     #[test]
+    fn parses_the_status_switch_under_upload_and_nowhere_else() {
+        let cfg: FileConfig = toml::from_str(
+            "[upload]\nurl = \"https://fleet.example/api/upload\"\nstatus = false\n",
+        )
+        .unwrap();
+        assert_eq!(cfg.upload.unwrap().status, Some(false));
+        assert!(toml::from_str::<FileConfig>("status = false").is_err());
+        assert!(toml::from_str::<FileConfig>("[upload]\nstatus = \"off\"\n").is_err());
+    }
+
+    #[test]
     fn parses_an_upload_section_and_refuses_an_inline_token() {
         let cfg: FileConfig = toml::from_str(
             r#"
@@ -125,6 +142,7 @@ mod tests {
             Some("https://fleet.example/api/upload")
         );
         assert!(upload.token_file.is_some());
+        assert_eq!(upload.status, None, "on unless said otherwise");
 
         // There is deliberately no `token` key: the secret goes in a file.
         assert!(toml::from_str::<FileConfig>("[upload]\ntoken = \"lbf_x\"\n").is_err());
