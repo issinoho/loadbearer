@@ -363,8 +363,12 @@ fn draw_results(f: &mut Frame, scroll: &mut u16, r: &ResultFile, area: Rect) {
     )));
     lines.push(Line::from(Span::styled(
         format!(
-            "{} · k={} · baseline {} · {} preset",
-            r.config.profile, r.config.curve_k, r.config.baseline, r.config.duration_preset
+            "{} · k={} · baseline {} · {} preset{}",
+            r.config.profile,
+            r.config.curve_k,
+            r.config.baseline,
+            r.config.duration_preset,
+            crate::output::took(r),
         ),
         Style::default().fg(DIM),
     )));

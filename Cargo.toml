@@ -25,6 +25,9 @@ flate2 = { version = "1", default-features = false, features = ["rust_backend"] 
 core_affinity = "0.8"
 aes-gcm = "0.11"
 sha2 = "0.11"
+# The run ID (`run.id`): already in the tree through aes-gcm, so naming it
+# here adds no crate, only the OS randomness source itself.
+getrandom = "0.4"
 libloading = "0.9"
 starship-battery = "0.10.2"
 log = { version = "0.4", features = ["std"] }

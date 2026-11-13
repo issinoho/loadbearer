@@ -17,6 +17,10 @@ pub struct Inventory {
     pub firmware: Option<crate::firmware::Firmware>,
     pub os: Option<String>,
     pub kernel: Option<String>,
+    /// The OS release in parts — build, version, edition, distribution —
+    /// beside the free-text `os` / `kernel`. Absent when none could be read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub os_detail: Option<crate::os_detail::OsDetail>,
     pub arch: String,
     pub cpu_model: String,
     pub cpu_vendor: String,
@@ -27,6 +31,10 @@ pub struct Inventory {
     pub cpu_mhz_spot: u64,
     pub ram_bytes: u64,
     pub swap_bytes: u64,
+    /// Slots, populated slots, and each module's size, type and speed.
+    /// Absent where the firmware table can't be read (Linux without root).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub memory: Option<crate::ram::Memory>,
     pub disks: Vec<DiskInfo>,
     /// Health counters for each NVMe or SATA drive this process could query
     /// — empty without root / admin, or with no drive that reports them.
@@ -71,6 +79,7 @@ impl Inventory {
             firmware: None,
             os: None,
             kernel: None,
+            os_detail: None,
             arch: String::new(),
             cpu_model: String::new(),
             cpu_vendor: String::new(),
@@ -79,6 +88,7 @@ impl Inventory {
             cpu_mhz_spot: 0,
             ram_bytes: 0,
             swap_bytes: 0,
+            memory: None,
             disks: Vec::new(),
             drives: Vec::new(),
             gpu: None,
@@ -135,6 +145,7 @@ pub fn collect() -> Inventory {
         firmware: crate::firmware::collect(),
         os: System::long_os_version().or_else(System::os_version),
         kernel: System::kernel_version(),
+        os_detail: crate::os_detail::collect(),
         arch: System::cpu_arch(),
         cpu_model,
         cpu_vendor,
@@ -143,6 +154,7 @@ pub fn collect() -> Inventory {
         cpu_mhz_spot,
         ram_bytes: sys.total_memory(),
         swap_bytes: sys.total_swap(),
+        memory: crate::ram::collect(),
         disks,
         drives: crate::drives::collect(),
         gpu: crate::benches::gpu_probe().cloned(),

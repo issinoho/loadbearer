@@ -18,6 +18,7 @@ use crate::engine::progress::PlainProgress;
 use crate::engine::{Benchmark, BenchmarkOutcome, DurationPreset, RunContext, run_benchmark};
 use crate::inventory::Inventory;
 use crate::output;
+use crate::run_info::RunClock;
 use crate::scoring::{
     Baseline, Profile, ResultFile, RunConfig, profile_by_name, profile_names, score_run,
 };
@@ -319,7 +320,7 @@ fn run_plain(
 
     let mut progress = PlainProgress::new();
     let sampler = crate::telemetry::Sampler::start(!args.no_telemetry);
-    let (mut outcomes, mut notes) = run_benchmarks(selected, ctx, &mut progress)?;
+    let (mut outcomes, mut notes, clock) = run_benchmarks(selected, ctx, &mut progress)?;
     let telemetry = sampler.finish();
 
     // Before scoring, so the raw and scored views agree on confidence.
@@ -331,6 +332,9 @@ fn run_plain(
     }
 
     let scored = score_run(&outcomes, baseline, profile, curve_k)?;
+    // Stopped before the link probe: the TUI probes only after its results
+    // screen closes, so this is the last point the two paths agree on.
+    let run = clock.finish();
     let (link, link_notes) = probe_link(args);
     notes.extend(link_notes);
     let model_ref = model_ref(
@@ -340,7 +344,7 @@ fn run_plain(
         &config.build_isa,
         &config.duration_preset,
     );
-    let mut result = ResultFile::assemble(machine, config, outcomes, scored, link);
+    let mut result = ResultFile::assemble(machine, config, outcomes, scored, link, Some(run));
     result.model_ref = model_ref;
     result.telemetry = telemetry;
     result.tags = tags;
@@ -512,7 +516,10 @@ pub(crate) fn run_benchmarks(
     selected: &[Box<dyn Benchmark>],
     ctx: &RunContext,
     progress: &mut dyn crate::engine::progress::Progress,
-) -> Result<(Vec<BenchmarkOutcome>, Vec<String>)> {
+) -> Result<(Vec<BenchmarkOutcome>, Vec<String>, RunClock)> {
+    // Started here, the one function both output paths run the benchmarks
+    // through, so they can't time different spans.
+    let clock = RunClock::start();
     let mut outcomes = Vec::with_capacity(selected.len());
     let mut notes = Vec::new();
     for bench in selected {
@@ -540,7 +547,7 @@ pub(crate) fn run_benchmarks(
             }
         );
     }
-    Ok((outcomes, notes))
+    Ok((outcomes, notes, clock))
 }
 
 /// The exit code `--fail-under` implies, and why, so the caller can say so.

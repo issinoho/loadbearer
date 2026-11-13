@@ -498,8 +498,9 @@ pub fn synthetic_result(kind: &str, entry: &ModelEntry) -> Result<crate::scoring
         only: vec![kind.to_string()],
         build_isa: entry.build.clone(),
     };
+    // No run produced a reference, so no `run` block.
     Ok(super::ResultFile::assemble(
-        machine, config, outcomes, scored, None,
+        machine, config, outcomes, scored, None, None,
     ))
 }
 

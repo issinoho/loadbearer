@@ -86,7 +86,7 @@ pub fn execute(args: ScoreArgs) -> Result<()> {
 }
 
 /// Recompute `components` / `overall` for `original` against a new baseline,
-/// profile and curve. `machine`, `raw`, `link` and `soak` are carried over
+/// profile and curve. `machine`, `raw`, `run`, `link` and `soak` are carried over
 /// unchanged; `config` is updated to record what it was scored with.
 ///
 /// Subtests the baseline has no entry for are left out of the score rather than
@@ -130,6 +130,8 @@ pub fn rescore(
         original.raw.clone(),
         scored,
         original.link.clone(),
+        // The run that measured these numbers; re-grading them isn't a run.
+        original.run.clone(),
     );
     out.soak = original.soak.clone();
     // Re-scoring changes the grade, not who the machine belongs to or how
@@ -259,7 +261,7 @@ mod tests {
             only: vec!["cpu".into()],
             build_isa: String::new(),
         };
-        ResultFile::assemble(fake_inventory(), config, raw, scored, None)
+        ResultFile::assemble(fake_inventory(), config, raw, scored, None, None)
     }
 
     fn fake_inventory() -> Inventory {
@@ -269,6 +271,7 @@ mod tests {
             firmware: None,
             os: Some("TestOS".into()),
             kernel: None,
+            os_detail: None,
             arch: "x86_64".into(),
             cpu_model: "Test CPU".into(),
             cpu_vendor: "TestVendor".into(),
@@ -277,6 +280,7 @@ mod tests {
             cpu_mhz_spot: 0,
             ram_bytes: 16 << 30,
             swap_bytes: 0,
+            memory: None,
             disks: vec![],
             drives: vec![],
             gpu: None,
@@ -323,6 +327,25 @@ mod tests {
         // raw is carried through untouched.
         assert_eq!(out.raw.len(), original.raw.len());
         assert_eq!(out.raw[0].subtests.len(), original.raw[0].subtests.len());
+    }
+
+    #[test]
+    fn rescoring_carries_the_original_run_block() {
+        let mut original = baseline_matching_cpu_result();
+        let run = crate::run_info::RunInfo {
+            id: Some("0f8fad5b-d9cb-469f-a165-70867728950e".into()),
+            started_at: Some("2026-11-13T09:00:00Z".into()),
+            duration_secs: Some(42.0),
+        };
+        original.run = Some(run.clone());
+        let (out, _) = rescore(
+            &original,
+            &softer_baseline(),
+            profile_by_name("general").unwrap(),
+            0.5,
+        )
+        .unwrap();
+        assert_eq!(out.run, Some(run));
     }
 
     #[test]
