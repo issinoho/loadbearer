@@ -600,6 +600,8 @@ mod tests {
             battery: None,
             power: None,
             age: None,
+            boot: None,
+            security: None,
         }
     }
 
@@ -639,6 +641,7 @@ mod tests {
             id: Some("0f8fad5b-d9cb-469f-a165-70867728950e".into()),
             started_at: Some("2026-11-13T09:00:00Z".into()),
             duration_secs: Some(61.25),
+            ..Default::default()
         };
         result.run = Some(run.clone());
         let json = serde_json::to_string(&result).unwrap();
@@ -667,6 +670,99 @@ mod tests {
         );
         let text = serde_json::to_string(&empty).unwrap();
         assert!(!text.contains("\"run\""), "{text}");
+    }
+
+    /// A result as `run` assembles it, from what `optin::gather` returned.
+    fn result_with(asked: &crate::optin::Gathered) -> ResultFile {
+        let base = result_matching_baseline();
+        let invocation = crate::run_info::Invocation::from(asked);
+        ResultFile::assemble(
+            fake_inventory().with_opt_in(asked),
+            base.config.clone(),
+            base.raw.clone(),
+            ScoredRun {
+                components: base.components.clone(),
+                overall: base.overall.clone(),
+            },
+            None,
+            Some(crate::run_info::RunClock::start().finish(&invocation)),
+        )
+    }
+
+    #[test]
+    fn by_default_a_result_has_none_of_the_opt_in_blocks() {
+        let asked = crate::optin::gather(&crate::optin::Choice::default(), &crate::optin::Host);
+        let v = serde_json::to_value(result_with(&asked)).unwrap();
+        for key in ["boot", "security"] {
+            assert!(v["machine"].get(key).is_none(), "machine.{key}");
+        }
+        for key in ["collect", "elevated"] {
+            assert!(v["run"].get(key).is_none(), "run.{key}");
+        }
+        assert!(crate::output::opt_in_line(&result_with(&asked)).is_none());
+    }
+
+    #[test]
+    fn opted_in_blocks_round_trip_and_files_without_them_still_read() {
+        use crate::optin::{Choice, Gathered, Item};
+        let asked = Gathered {
+            asked: Choice::of([Item::Uptime, Item::Elevation, Item::Security]),
+            boot: Some(crate::boot::Boot {
+                booted_at: "2026-11-13T08:00:00Z".into(),
+                uptime_secs: 3 * 3600 + 300,
+            }),
+            elevated: Some(false),
+            security: Some(crate::security::Security {
+                firmware_mode: Some("uefi".into()),
+                secure_boot: Some(true),
+                tpm: Some(crate::security::Tpm {
+                    present: true,
+                    version: Some("2.0".into()),
+                }),
+                disk_encryption: None,
+            }),
+        };
+        let result = result_with(&asked);
+        let v = serde_json::to_value(&result).unwrap();
+        assert_eq!(v["machine"]["boot"]["uptime_secs"], 11_100);
+        assert_eq!(v["machine"]["security"]["tpm"]["version"], "2.0");
+        assert_eq!(
+            v["run"]["collect"],
+            serde_json::json!(["uptime", "elevation", "security"])
+        );
+        assert_eq!(v["run"]["elevated"], false);
+        assert_eq!(
+            crate::output::opt_in_line(&result).as_deref(),
+            Some("up 3h 05m · not elevated · UEFI · Secure Boot on · TPM 2.0")
+        );
+
+        let back: ResultFile = serde_json::from_value(v.clone()).unwrap();
+        assert_eq!(back.machine.boot, asked.boot);
+        assert_eq!(back.machine.security, asked.security);
+
+        // What `compare` and `score` read from an older file: none of it.
+        let mut old = v;
+        old["machine"].as_object_mut().unwrap().remove("boot");
+        old["machine"].as_object_mut().unwrap().remove("security");
+        old["run"].as_object_mut().unwrap().remove("collect");
+        old["run"].as_object_mut().unwrap().remove("elevated");
+        let old: ResultFile = serde_json::from_value(old).unwrap();
+        assert!(old.machine.boot.is_none() && old.machine.security.is_none());
+        assert!(old.run.as_ref().unwrap().collect.is_empty());
+        assert!(crate::output::opt_in_line(&old).is_none());
+
+        // Asked for, but nothing readable: listed in `collect`, no blocks.
+        let unread = Gathered {
+            asked: Choice::of([Item::Uptime, Item::Security]),
+            ..Default::default()
+        };
+        let v = serde_json::to_value(result_with(&unread)).unwrap();
+        assert_eq!(
+            v["run"]["collect"],
+            serde_json::json!(["uptime", "security"])
+        );
+        assert!(v["machine"].get("boot").is_none());
+        assert!(v["machine"].get("security").is_none());
     }
 
     fn result_matching_baseline() -> ResultFile {

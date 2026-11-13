@@ -393,7 +393,11 @@ loadbearer net-server [--bind ADDR]
   firmware, CPU, memory and its modules, disks, drive health,
   [power settings](#power-settings), and the GPU and battery where present)
   plus the [age estimate](#how-old-the-machine-is),
-  and nothing else.
+  and nothing else. `info --collect uptime,elevation,security` adds what
+  [`run --collect`](#collected-only-when-asked-for) would add to a result,
+  so you can see it before you send it; `info --json` prints the `machine`
+  block, which has no place for `elevation` (it belongs to `run`), so with
+  `--json` that one is not read and a note on stderr says so.
 - **`mem`** — per-program memory use right now, in the style of
   [`ps_mem`](https://github.com/pixelb/ps_mem): grouped by program, smallest
   first, with a grand total. On Linux the numbers are true **PSS**
@@ -434,6 +438,7 @@ loadbearer net-server [--bind ADDR]
 | `--no-gpu` | Never touch the GPU: skip the `gpu` component **and** the OpenCL probe that `info` / `run` otherwise perform, so `OpenCL.dll` is never loaded. A global flag — works with any subcommand. Useful for fleet deployment where a stale ICD loader could stall enumeration. |
 | `--no-model-ref` | Skip the ["vs typical hardware"](#vs-typical-hardware) block — don't compare the CPU / GPU against their model reference. |
 | `--no-telemetry` | Don't sample CPU clocks / package power during the run (no `Clocks …` line, no `telemetry` field, no thermal-limit flag). |
+| `--collect LIST` | Also collect what is **off by default** because it describes this particular machine or its user rather than its hardware: `uptime` (`machine.boot`), `elevation` (`run.elevated`), `security` (`machine.security`: firmware mode, Secure Boot, TPM, and on Linux whether the root filesystem is on dm-crypt). Comma-separated or repeated; a name it doesn't know is refused. **Adds to** a `collect` list in the config file. What was asked for is recorded as `run.collect`. Also on `info`. See [Collected only when asked for](#collected-only-when-asked-for) and [PRIVACY.md](PRIVACY.md#collected-only-when-asked-for). |
 | `--tag K=V` | Attach a label to the result, repeatable (`--tag site=glasgow --tag ring=pilot`). Carried in the result JSON's `tags` field for a fleet collector to group by; **metadata only** — never affects a measurement or a grade. Keys take letters, digits, `_`, `-` and `.`. Also settable as a `[tags]` table in the config file, which `--tag` overrides per key. |
 | `--fail-under GRADE` | Exit **3** if the overall grade is worse than `GRADE` (`S`/`A`/`B`/`C`/`D`/`F`), so a management tool can flag the machine. A run that couldn't complete is still exit 1, keeping "this machine is slow" distinct from "this run broke". Ignored, with a note, when nothing in the run is graded (e.g. `--only network`). |
 | `--not-on-battery` | Don't run when the machine is on battery — the clocks are usually power-capped, so the numbers wouldn't be comparable. **Skipping exits 0**, not a failure. A machine with no battery counts as mains; a platform that won't say proceeds with a note rather than skipping. |
@@ -616,11 +621,26 @@ target_dir = "/var/tmp"
 # runs    = 7
 # seed    = 42
 
+# What to collect beyond the default inventory (off unless listed).
+# collect = ["uptime", "security"]
+
 # Labels carried into the result file for a collector to group by.
 # [tags]
 # site = "glasgow"
 # ring = "pilot"
 ```
+
+`collect` lists the [opt-in categories](#collected-only-when-asked-for):
+`uptime`, `elevation`, `security`. `--collect` on the command line **adds
+to** it rather than replacing it, so a hand-run on a machine with a fleet
+config can't silently drop what the fleet asked for; there is no switch to
+subtract one — leave out `--config` for a run without them.
+
+**Unknown keys are rejected, and that includes new ones.** A loadbearer older
+than a key (`collect` arrived after 1.8.1) refuses to start when handed a
+config file that uses it — the run fails at "parsing config file"; it doesn't
+skip the line. A config pushed fleet-wide must only use keys every loadbearer
+it reaches understands: upgrade the estate first, then add the key.
 
 ## Fleet use
 
@@ -705,9 +725,46 @@ What makes that work across repeat sweeps:
   someone turns the gates off. What the gates observed lands in the result's
   `gates` block, so you can filter for runs taken on mains and on a quiet
   machine.
+- **Uptime, elevation and security posture, if you want them** — see
+  [below](#collected-only-when-asked-for). Off unless asked.
 - **`--no-gpu`** is worth passing on a fleet: it skips the OpenCL probe
   entirely, so a stale ICD loader left by an uninstalled driver can't stall
   enumeration. GPU isn't in the grade anyway.
+
+### Collected only when asked for
+
+Everything above is collected by default because it is hardware and OS
+inventory. Three things are **not**, because each says something about one
+particular machine or the person using it — when it was last booted, whether
+this run was elevated, and whether it has Secure Boot, a TPM and disk
+encryption (a list of machines *without* those is sensitive if a results
+share or a collector leaks). Name them to get them:
+
+```
+loadbearer.exe run ... --collect uptime,elevation,security
+```
+
+or fleet-wide, in the config file: `collect = ["uptime", "security"]` —
+once every machine runs a loadbearer that knows the key (see
+[Configuration](#configuration): an older one refuses the whole file). Nothing
+in a category is read, attempted or logged unless its name was given.
+
+- **`uptime`** → `machine.boot`: `booted_at` and `uptime_secs`. On
+  Windows with Fast Startup (the default) "Shut down" doesn't restart the
+  kernel, so this is time since the last *restart*, not since power-on.
+- **`elevation`** → `run.elevated`: whether this run had administrator
+  (Windows) or root (Unix) rights. It also explains a Linux result without
+  `machine.drives`, `machine.memory` or `identity.serial`: those are
+  root-only reads, and an unelevated run simply doesn't get them.
+- **`security`** → `machine.security`: `firmware_mode`, `secure_boot`,
+  `tpm` and (Linux only) `disk_encryption`. **BitLocker isn't read on
+  Windows**: every documented way to read it needs administrator rights, WMI
+  or a child process, none of which loadbearer uses.
+
+`run.collect` lists what was asked for, so a block that's missing although its
+name is listed means "couldn't be read", and one whose name isn't listed means
+"not asked". Field details are under [Result files](#result-files); exactly
+what each reads is in [PRIVACY.md](PRIVACY.md#collected-only-when-asked-for).
 
 Set the step timeout to **at least 300 s** — a `short` run is ~40 s of work,
 but a busy machine plus the scratch-file fill takes longer, and a step killed
@@ -891,6 +948,11 @@ benchmark; use `--only cpu,memory,network` to skip it.
   after any `--jitter` wait and stops before the `--net-target` probe and
   the `--soak` phase, which has its own `duration_secs`. `loadbearer score`
   carries the block over unchanged. Absent in files from before it existed.
+  Two more fields appear only with [`--collect`](#collected-only-when-asked-for):
+  `collect`, the opt-in categories this run was asked for (`["uptime",
+  "elevation", "security"]`; omitted when none), and `elevated`, `true` /
+  `false` for whether the run had administrator or root rights (only with
+  `elevation`, and absent if the query failed — never a guessed `false`).
 - `machine` — the full inventory (as `loadbearer info --json`), including the
   GPU and battery when the machine has them.
 - `config` — profile, preset, curve-k, seed, thread count, baseline name, and
@@ -943,6 +1005,29 @@ benchmark; use `--only cpu,memory,network` to skip it.
   `platform_profile`, `governor`, `energy_preference` and `turbo`; on both,
   `held_back`, the settings in force that would hold a benchmark back (battery
   power aside, which is `source`). Empty — and absent — when none would.
+- `machine.boot` — only with `--collect uptime`: `booted_at` (RFC 3339 UTC,
+  to the second — the wall clock minus the uptime count) and `uptime_secs`,
+  when the inventory was taken. Counts time asleep; on Windows with Fast
+  Startup it runs on across a shutdown and only a restart resets it.
+- `machine.security` — only with `--collect security`; each part is absent
+  where it couldn't be read:
+  - `firmware_mode` — `"uefi"` or `"bios"` (not booted through UEFI:
+    legacy BIOS/CSM, or a VM started straight into its kernel, as WSL is).
+    On Linux `"bios"` is only said on x86.
+  - `secure_boot` — `true` / `false`. Absent on a machine that didn't boot
+    through UEFI, rather than `false`: there is no Secure Boot there to be off.
+  - `tpm` — `present` (`false`: the OS exposes no TPM — none fitted, off in
+    firmware, or no driver) and `version`, `"2.0"` or `"1.2"`, absent when
+    the OS doesn't say. Nothing that identifies the TPM is recorded.
+  - `disk_encryption` — **Linux only**, and only the root filesystem:
+    `system_volume` is `"encrypted"` when it sits on a cryptsetup dm-crypt
+    mapping (directly, or through LVM or RAID), with `method` `luks1`,
+    `luks2`, `plain`, …; or `"none_detected"`, which means no dm-crypt
+    under it — ZFS native encryption, fscrypt, eCryptfs and self-encrypting
+    drives aren't looked for, so it is **not** "unencrypted". Absent when the
+    chain couldn't be followed (a container's overlay root, say), and always
+    absent on Windows, where BitLocker can't be read without administrator
+    rights, WMI or a child process.
 - `link` — the `--net-target` link probe, if one ran (ungraded).
 - `soak` — the `--soak` sustained-load result, if one ran (ungraded): every
   per-second sample plus the derived peak / steady / retained / onset figures.

@@ -38,7 +38,7 @@ fn kv(key: &str, value: impl AsRef<str>, width: usize) {
     println!("  {key:<width$} {}", value.as_ref());
 }
 
-pub fn print_inventory(inv: &Inventory) {
+pub fn print_inventory(inv: &Inventory, asked: &crate::optin::Gathered) {
     println!("loadbearer {PKG_VERSION} — machine inventory");
 
     section("Host");
@@ -235,6 +235,13 @@ pub fn print_inventory(inv: &Inventory) {
         }
     }
 
+    if !asked.asked.is_empty() {
+        section("Collected on request (--collect)");
+        for (key, value) in opt_in_rows(inv, asked) {
+            row(key, value);
+        }
+    }
+
     section("Disks");
     if inv.disks.is_empty() {
         row("", "none detected");
@@ -252,6 +259,57 @@ pub fn print_inventory(inv: &Inventory) {
         }
     }
     println!();
+}
+
+/// One row per thing asked for, in `--collect` order, with "unknown" for
+/// what was asked for and couldn't be read. Nothing for what wasn't asked.
+pub fn opt_in_rows(inv: &Inventory, asked: &crate::optin::Gathered) -> Vec<(&'static str, String)> {
+    use crate::optin::Item;
+    let mut rows = Vec::new();
+    for item in asked.asked.items() {
+        match item {
+            Item::Uptime => rows.push((
+                "Booted",
+                inv.boot
+                    .as_ref()
+                    .map_or_else(|| "unknown".to_string(), |b| b.summary()),
+            )),
+            Item::Elevation => rows.push((
+                "Elevated",
+                match asked.elevated {
+                    Some(true) => "yes".to_string(),
+                    Some(false) => "no".to_string(),
+                    None => "unknown".to_string(),
+                },
+            )),
+            Item::Security => rows.extend(inv.security.clone().unwrap_or_default().rows()),
+        }
+    }
+    rows
+}
+
+/// "up 3h 05m · not elevated · UEFI · Secure Boot on · TPM 2.0" for a result
+/// whose run collected anything on request; `None` when it collected
+/// nothing, so a default result's summary is unchanged.
+pub fn opt_in_line(result: &ResultFile) -> Option<String> {
+    use crate::optin::Item;
+    let run = result.run.as_ref()?;
+    let parts: Vec<String> = run
+        .collect
+        .iter()
+        .filter_map(|item| match item {
+            Item::Uptime => result
+                .machine
+                .boot
+                .as_ref()
+                .map(|b| format!("up {}", crate::optin::span(b.uptime_secs))),
+            Item::Elevation => run
+                .elevated
+                .map(|e| if e { "elevated" } else { "not elevated" }.to_string()),
+            Item::Security => result.machine.security.as_ref().and_then(|s| s.summary()),
+        })
+        .collect();
+    (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
 /// Print the catalog of benchmarks, the active baseline and scoring profiles.
@@ -414,6 +472,9 @@ pub fn print_scored_report(result: &ResultFile) {
         cfg.duration_preset,
         took(result),
     );
+    if let Some(line) = opt_in_line(result) {
+        println!("  Requested {line}");
+    }
     if let Some(line) = result.telemetry.as_ref().and_then(|t| t.summary()) {
         println!("  {line}");
     }
@@ -904,5 +965,51 @@ fn truncate(s: &str, max: usize) -> String {
     } else {
         let keep: String = s.chars().take(max.saturating_sub(1)).collect();
         format!("{keep}…")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::optin::{Choice, Gathered, Item};
+
+    #[test]
+    fn info_shows_nothing_of_what_was_not_asked_for() {
+        let inv = Inventory::blank();
+        assert!(opt_in_rows(&inv, &Gathered::default()).is_empty());
+        // Asked for one: exactly its row.
+        let asked = Gathered {
+            asked: Choice::of([Item::Elevation]),
+            elevated: Some(true),
+            ..Default::default()
+        };
+        assert_eq!(
+            opt_in_rows(&inv, &asked),
+            vec![("Elevated", "yes".to_string())]
+        );
+    }
+
+    #[test]
+    fn info_says_unknown_for_what_was_asked_for_and_unread() {
+        let asked = Gathered {
+            asked: Choice::of([Item::Uptime, Item::Elevation, Item::Security]),
+            ..Default::default()
+        };
+        let rows = opt_in_rows(&Inventory::blank(), &asked);
+        let keys: Vec<&str> = rows.iter().map(|(k, _)| *k).collect();
+        assert_eq!(
+            keys,
+            [
+                "Booted",
+                "Elevated",
+                "Firmware",
+                "Secure Boot",
+                "TPM",
+                "Encryption"
+            ]
+        );
+        assert_eq!(rows[0].1, "unknown");
+        assert_eq!(rows[1].1, "unknown");
+        assert_eq!(rows[4].1, "unknown");
     }
 }

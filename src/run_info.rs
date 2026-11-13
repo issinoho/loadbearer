@@ -35,6 +35,34 @@ pub struct RunInfo {
     /// measured on a monotonic clock so a clock change mid-run can't skew it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub duration_secs: Option<f64>,
+    /// What this run was told to collect beyond the default inventory
+    /// (`--collect` and the config's `collect`). Omitted when nothing was,
+    /// so a block or field from the list that is missing means "asked, and
+    /// couldn't be read", and one not on the list means "not asked".
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub collect: Vec<crate::optin::Item>,
+    /// Whether this run had administrator / root rights. Only with
+    /// `--collect elevation`, and absent if the query failed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub elevated: Option<bool>,
+}
+
+/// What the invocation opted into, and the one opt-in fact about the run
+/// rather than the machine. Required by [`RunClock::finish`], so neither
+/// output path can forget it.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Invocation {
+    pub collect: Vec<crate::optin::Item>,
+    pub elevated: Option<bool>,
+}
+
+impl From<&crate::optin::Gathered> for Invocation {
+    fn from(g: &crate::optin::Gathered) -> Self {
+        Invocation {
+            collect: g.asked.items(),
+            elevated: g.elevated,
+        }
+    }
 }
 
 impl RunInfo {
@@ -81,13 +109,15 @@ impl RunClock {
         }
     }
 
-    pub fn finish(&self) -> RunInfo {
+    pub fn finish(&self, invocation: &Invocation) -> RunInfo {
         let elapsed = self.started.elapsed().as_secs_f64();
         RunInfo {
             id: self.id.clone(),
             started_at: self.started_at.format(&Rfc3339).ok(),
             // Milliseconds are already finer than anything this measures.
             duration_secs: Some((elapsed * 1000.0).round() / 1000.0),
+            collect: invocation.collect.clone(),
+            elevated: invocation.elevated,
         }
     }
 }
@@ -147,8 +177,8 @@ mod tests {
     // and is available in a build sandbox.
     #[test]
     fn each_run_gets_a_different_well_formed_id() {
-        let a = RunClock::start().finish();
-        let b = RunClock::start().finish();
+        let a = RunClock::start().finish(&Invocation::default());
+        let b = RunClock::start().finish(&Invocation::default());
         let (a_id, b_id) = (a.id.unwrap(), b.id.unwrap());
         assert!(well_formed(&a_id));
         assert!(well_formed(&b_id));
@@ -157,7 +187,7 @@ mod tests {
 
     #[test]
     fn the_block_has_a_start_and_a_non_negative_duration() {
-        let run = RunClock::start().finish();
+        let run = RunClock::start().finish(&Invocation::default());
         let started = run.started_at.as_deref().unwrap();
         // `time` is built without its parser; the shape is enough here.
         let b = started.as_bytes();
@@ -177,6 +207,7 @@ mod tests {
             id: Some("0f8fad5b-d9cb-469f-a165-70867728950e".into()),
             started_at: Some("2026-11-13T09:00:00Z".into()),
             duration_secs: Some(192.5),
+            ..Default::default()
         };
         let v = serde_json::to_value(&run).unwrap();
         assert_eq!(v["id"], "0f8fad5b-d9cb-469f-a165-70867728950e");
@@ -187,6 +218,29 @@ mod tests {
         let text = serde_json::to_string(&partial).unwrap();
         assert!(!text.contains("\"id\""), "{text}");
         assert!(RunInfo::default().is_empty());
+        // Nothing opted into: neither key is written.
+        assert!(!text.contains("collect") && !text.contains("elevated"));
+    }
+
+    #[test]
+    fn the_opt_ins_are_recorded_on_the_run() {
+        use crate::optin::Item;
+        let invocation = Invocation {
+            collect: vec![Item::Elevation, Item::Security],
+            elevated: Some(false),
+        };
+        let run = RunClock::start().finish(&invocation);
+        let v = serde_json::to_value(&run).unwrap();
+        assert_eq!(v["collect"], serde_json::json!(["elevation", "security"]));
+        assert_eq!(v["elevated"], false);
+        // Asked for elevation and the query failed: absent, not false.
+        let failed = Invocation {
+            collect: vec![Item::Elevation],
+            elevated: None,
+        };
+        let v = serde_json::to_value(RunClock::start().finish(&failed)).unwrap();
+        assert_eq!(v["collect"], serde_json::json!(["elevation"]));
+        assert!(v.get("elevated").is_none());
     }
 
     #[test]

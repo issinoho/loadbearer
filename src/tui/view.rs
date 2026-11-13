@@ -372,6 +372,12 @@ fn draw_results(f: &mut Frame, scroll: &mut u16, r: &ResultFile, area: Rect) {
         ),
         Style::default().fg(DIM),
     )));
+    if let Some(line) = crate::output::opt_in_line(r) {
+        lines.push(Line::from(Span::styled(
+            format!("requested: {line}"),
+            Style::default().fg(DIM),
+        )));
+    }
     if let Some(line) = r.telemetry.as_ref().and_then(|t| t.summary()) {
         let style = if r.telemetry.as_ref().is_some_and(|t| t.thermal_limited) {
             Style::default().fg(Color::Yellow)

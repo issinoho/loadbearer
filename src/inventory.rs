@@ -54,6 +54,14 @@ pub struct Inventory {
     /// say. Not graded.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub age: Option<crate::age::Age>,
+    /// When the machine last booted. Only with `--collect uptime`; absent
+    /// otherwise, or when it couldn't be read (`run.collect` says which).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub boot: Option<crate::boot::Boot>,
+    /// Firmware mode, Secure Boot, TPM, disk encryption. Only with
+    /// `--collect security`; each part absent where it couldn't be read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub security: Option<crate::security::Security>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -95,7 +103,17 @@ impl Inventory {
             battery: None,
             power: None,
             age: None,
+            boot: None,
+            security: None,
         }
+    }
+
+    /// Add the opt-in machine facts [`crate::optin::gather`] found. Elevation
+    /// is not among them: it belongs to the run, not the machine.
+    pub fn with_opt_in(mut self, gathered: &crate::optin::Gathered) -> Self {
+        self.boot = gathered.boot.clone();
+        self.security = gathered.security.clone();
+        self
     }
 }
 
@@ -161,6 +179,9 @@ pub fn collect() -> Inventory {
         battery: crate::battery::probe().cloned(),
         power: crate::power::collect(),
         age: None,
+        // Opt-in only: filled by `with_opt_in` from `optin::gather`, never here.
+        boot: None,
+        security: None,
     };
     inv.age = crate::age::Age::assess(&inv, crate::age::this_month());
     log::debug!(
