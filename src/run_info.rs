@@ -150,8 +150,8 @@ mod tests {
         let a = RunClock::start().finish();
         let b = RunClock::start().finish();
         let (a_id, b_id) = (a.id.unwrap(), b.id.unwrap());
-        assert!(well_formed(&a_id), "{a_id}");
-        assert!(well_formed(&b_id), "{b_id}");
+        assert!(well_formed(&a_id));
+        assert!(well_formed(&b_id));
         assert_ne!(a_id, b_id);
     }
 
