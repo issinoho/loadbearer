@@ -389,9 +389,10 @@ loadbearer net-server [--bind ADDR]
   throttling set in, and how steady the clock held. **Not scored** — it's the
   signal that separates two laptops with identical burst numbers. Also available
   as `loadbearer run --soak`, which embeds the result in the result JSON.
-- **`info`** — machine inventory (host, system model and firmware, CPU,
-  memory, disks, drive health, [power settings](#power-settings), and the GPU
-  and battery where present) plus the [age estimate](#how-old-the-machine-is),
+- **`info`** — machine inventory (host, OS release, system model and
+  firmware, CPU, memory and its modules, disks, drive health,
+  [power settings](#power-settings), and the GPU and battery where present)
+  plus the [age estimate](#how-old-the-machine-is),
   and nothing else.
 - **`mem`** — per-program memory use right now, in the style of
   [`ps_mem`](https://github.com/pixelb/ps_mem): grouped by program, smallest
@@ -666,6 +667,13 @@ What makes that work across repeat sweeps:
   repeat run of one machine from a machine you haven't seen; the firmware
   identifiers survive a reimage and are what asset and warranty records key
   on. Best-effort, and absent where the firmware or OS won't say.
+- **`run.id`** — a random ID per run, so a collector can name one run
+  without hashing the document; with `run.started_at` and
+  `run.duration_secs`, how long the benchmarks held the machine.
+- **`machine.os_detail`** and **`machine.memory`** — the Windows build and
+  edition (or the Linux distribution and release), and the RAM's slots and
+  module type and speed, as fields to filter an estate on: which machines are
+  behind on updates, which run their memory below its rated speed.
 - **`machine.age`** — how old the machine is, from its CPU's launch, its
   firmware date and its drive's power-on hours, in a form a collector can sort
   an estate by. [loadbearer-fleet](https://github.com/issinoho/loadbearer-fleet)
@@ -875,6 +883,14 @@ benchmark; use `--only cpu,memory,network` to skip it.
 `loadbearer run --output result.json` writes a versioned
 (`schema: "loadbearer.result/1"`) document containing:
 
+- `run` — `id`, a random UUID-v4-shaped string generated fresh for each run
+  and derived from nothing (not the machine, the time or the results);
+  `started_at`, when the benchmarks began (RFC 3339 UTC — `timestamp` is
+  when the document was written, at the end); and `duration_secs`, the
+  wall-clock seconds from then until the run was scored. The clock starts
+  after any `--jitter` wait and stops before the `--net-target` probe and
+  the `--soak` phase, which has its own `duration_secs`. `loadbearer score`
+  carries the block over unchanged. Absent in files from before it existed.
 - `machine` — the full inventory (as `loadbearer info --json`), including the
   GPU and battery when the machine has them.
 - `config` — profile, preset, curve-k, seed, thread count, baseline name, and
@@ -899,6 +915,19 @@ benchmark; use `--only cpu,memory,network` to skip it.
   absent where firmware doesn't report them or the OS won't say without root,
   and the whole block is absent when none could be read.
 - `machine.firmware` — system vendor and model, BIOS version and release date.
+- `machine.os_detail` — the OS release in parts, beside the free-text `os`
+  and `kernel`: on Windows `build` (with the update revision, `26100.2314`),
+  `version` (`24H2`) and `edition` (`Professional`, `Enterprise`,
+  `ServerStandard`, …); on Linux `distro`, `version` and `edition` — the
+  os-release `ID`, `VERSION_ID` and `VARIANT_ID`. Each field is absent
+  where the OS doesn't say.
+- `machine.memory` — `slots` (memory-device sockets for system RAM, filled
+  or not), `populated`, and `modules`, one per filled slot: `size_bytes`,
+  `type` (`DDR4`, `DDR5`, `LPDDR5`, …), `form_factor` (`DIMM`,
+  `SODIMM`, `Row Of Chips`, …), `speed_mts` (rated) and
+  `configured_speed_mts` (what it runs at), from the SMBIOS memory-device
+  table. Values the firmware reports as unknown are absent. Absent without
+  root on Linux, where the table is root-only.
 - `machine.drives` — each NVMe or SATA drive's health counters (power-on hours,
   power cycles, endurance used, data written; NVMe adds spare, unsafe
   shutdowns, media errors and warning flags). Absent without root on Linux.

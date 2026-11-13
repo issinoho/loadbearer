@@ -157,9 +157,9 @@ fn spawn_worker(init: RunInit, tx: Sender<Msg>) -> JoinHandle<()> {
         let sampler = crate::telemetry::Sampler::start(!no_telemetry);
         // Same policy as the plain path: an ungraded component that a security
         // policy refuses is noted and skipped, a graded one still stops the run.
-        let (mut outcomes, mut notes) =
+        let (mut outcomes, mut notes, clock) =
             match crate::run::run_benchmarks(&selected, &ctx, &mut progress) {
-                Ok(pair) => pair,
+                Ok(measured) => measured,
                 Err(err) => {
                     log::warn!(target: "loadbearer::tui", "worker: benchmarks failed: {err:#}");
                     let _ = tx.send(Msg::Failed(format!("{err:#}")));
@@ -183,6 +183,8 @@ fn spawn_worker(init: RunInit, tx: Sender<Msg>) -> JoinHandle<()> {
                 return;
             }
         };
+        // Same point as the plain path: scored, before link probe or soak.
+        let run = clock.finish();
         let model_ref = if no_model_ref {
             Vec::new()
         } else {
@@ -194,7 +196,7 @@ fn spawn_worker(init: RunInit, tx: Sender<Msg>) -> JoinHandle<()> {
                 &config.duration_preset,
             )
         };
-        let mut result = ResultFile::assemble(machine, config, outcomes, scored, None);
+        let mut result = ResultFile::assemble(machine, config, outcomes, scored, None, Some(run));
         result.model_ref = model_ref;
         result.telemetry = telemetry;
         result.notes = notes;

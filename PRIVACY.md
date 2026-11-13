@@ -13,10 +13,19 @@ name with `run --upload URL` — see [Network](#network).
 
 - **Result files** (`--output result.json`, or `--json` to stdout). These
   contain a machine inventory — hostname, CPU model/vendor, OS and kernel
-  version, RAM, disk models / mount points / capacities, and the GPU and
-  battery details where present — alongside the benchmark numbers. That is
-  deliberate: it is what makes `loadbearer compare` and `loadbearer baseline`
-  meaningful.
+  version with the OS build, release and edition, RAM with its memory-module
+  layout (slots filled, and each module's size, type and speed), disk models /
+  mount points / capacities, and the GPU and battery details where present —
+  alongside the benchmark numbers. That is deliberate: it is what makes
+  `loadbearer compare` and `loadbearer baseline` meaningful.
+
+  Each result also carries a `run` block: when the benchmarks started, how
+  long they took, and a run ID. The ID is **random, generated fresh for every
+  run from the operating system's random-number source, and derived from
+  nothing** — not from the machine, the time or the results — so it can't be
+  recomputed and identifies one run, never the machine. If the OS can't
+  supply randomness the ID is left out rather than made from something
+  guessable.
 
   Since 1.3.0 the inventory also carries a `machine.identity` block: the
   machine's **SMBIOS system UUID, chassis serial number and asset tag**, and
@@ -38,8 +47,10 @@ name with `run --upload URL` — see [Network](#network).
   derived from those and from the CPU model and battery cycle count, and
   `machine.power` (mains or battery and the power settings in force — on
   Windows that includes the power plan's name, which an IT department may
-  have chosen). None of these is per-unit: every machine of a model reports the same model and
-  firmware strings, and no drive serial number is read.
+  have chosen), `machine.memory` (how many memory slots are filled, and each
+  module's size, type, form factor and speed) and `machine.os_detail` (the OS
+  build, release and edition). None of these is per-unit: every machine of a model reports the same model and
+  firmware strings, and no drive or memory-module serial number is read.
 
   Anything a `--tag` puts in the file is text you supplied, so don't put
   personal data in one.
@@ -80,6 +91,25 @@ Beyond the CPU / memory / disk / GPU / battery inventory above, collecting
 Collecting `machine.firmware` reads the same SMBIOS table on Windows, and the
 world-readable `sys_vendor`, `product_name`, `product_version`, `bios_version`
 and `bios_date` files under `/sys/class/dmi/id/` on Linux.
+
+Collecting `machine.memory` takes the Memory Device entries (SMBIOS type 17),
+and the Physical Memory Array entries (type 16) that say which of them are
+system RAM, from the same raw SMBIOS table: on Windows through
+`GetSystemFirmwareTable` as above, and on Linux from
+`/sys/firmware/dmi/tables/DMI`, which is root-only by default, so an
+unprivileged run simply doesn't get it. Each module's serial number and asset
+tag sit in those entries and are **not read**; nor are its manufacturer and
+part number. No `dmidecode` or other subprocess is run.
+
+Collecting `machine.os_detail` reads:
+
+- **Windows** — exactly four values under
+  `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion` (read-only):
+  `CurrentBuildNumber`, `UBR`, `DisplayVersion` and `EditionID`. Nothing
+  else in that key is read — not the product ID, the registered owner or
+  organisation, or the install date.
+- **Linux** — the `ID`, `VERSION_ID` and `VARIANT_ID` lines of
+  `/etc/os-release` (or `/usr/lib/os-release`), which is world-readable.
 
 Collecting `machine.drives` asks each drive for a read-only health log — the
 SMART / Health Information page from an NVMe controller, the Device Statistics

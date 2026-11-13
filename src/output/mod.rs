@@ -45,6 +45,9 @@ pub fn print_inventory(inv: &Inventory) {
     row("Hostname", inv.hostname.as_deref().unwrap_or("unknown"));
     row("OS", inv.os.as_deref().unwrap_or("unknown"));
     row("Kernel", inv.kernel.as_deref().unwrap_or("unknown"));
+    if let Some(r) = inv.os_detail.as_ref().and_then(|o| o.summary()) {
+        row("Release", r);
+    }
     row("Architecture", &inv.arch);
     if let Some(fw) = &inv.firmware {
         if let Some(name) = fw.system_name() {
@@ -72,6 +75,9 @@ pub fn print_inventory(inv: &Inventory) {
 
     section("Memory");
     row("RAM", human_bytes(inv.ram_bytes));
+    if let Some(m) = inv.memory.as_ref().and_then(|m| m.summary()) {
+        row("Modules", m);
+    }
     row("Swap", human_bytes(inv.swap_bytes));
 
     if let Some(g) = &inv.gpu {
@@ -376,6 +382,17 @@ fn score_bar(score: f64) -> String {
     format!("{}{}", "█".repeat(filled), "░".repeat(WIDTH - filled))
 }
 
+/// " · took 3m 12s" for the line saying how the run was done, or nothing for
+/// a file from before the `run` block.
+pub fn took(result: &ResultFile) -> String {
+    result
+        .run
+        .as_ref()
+        .and_then(|r| r.took())
+        .map(|t| format!(" · {t}"))
+        .unwrap_or_default()
+}
+
 /// Render a full scored assessment.
 pub fn print_scored_report(result: &ResultFile) {
     let m = &result.machine;
@@ -390,8 +407,12 @@ pub fn print_scored_report(result: &ResultFile) {
         human_bytes(m.ram_bytes),
     );
     println!(
-        "  Profile   {} · curve k={} · baseline {} · {} preset",
-        cfg.profile, cfg.curve_k, cfg.baseline, cfg.duration_preset,
+        "  Profile   {} · curve k={} · baseline {} · {} preset{}",
+        cfg.profile,
+        cfg.curve_k,
+        cfg.baseline,
+        cfg.duration_preset,
+        took(result),
     );
     if let Some(line) = result.telemetry.as_ref().and_then(|t| t.summary()) {
         println!("  {line}");

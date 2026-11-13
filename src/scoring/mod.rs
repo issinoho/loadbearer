@@ -187,6 +187,11 @@ pub struct ResultFile {
     pub schema: String,
     pub tool_version: String,
     pub timestamp: String,
+    /// Which run this was, when its benchmarks started and how long they
+    /// took. Absent in files written before it existed, and in synthetic
+    /// results (a model reference) that no run produced.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run: Option<crate::run_info::RunInfo>,
     pub machine: Inventory,
     pub config: RunConfig,
     /// Unscored metrics, kept for full fidelity and re-scoring.
@@ -229,12 +234,18 @@ pub struct ResultFile {
 }
 
 impl ResultFile {
+    /// `run` is an argument rather than something set afterwards so that
+    /// neither output path of `loadbearer run` can leave it out: a real run
+    /// passes [`RunClock::finish`](crate::run_info::RunClock::finish), a
+    /// re-score passes the original's block through, and only a synthetic
+    /// result passes `None`.
     pub fn assemble(
         machine: Inventory,
         config: RunConfig,
         raw: Vec<BenchmarkOutcome>,
         scored: ScoredRun,
         link: Option<LinkResult>,
+        run: Option<crate::run_info::RunInfo>,
     ) -> Self {
         Self {
             schema: SCHEMA.to_string(),
@@ -242,6 +253,7 @@ impl ResultFile {
             timestamp: OffsetDateTime::now_utc()
                 .format(&Rfc3339)
                 .unwrap_or_default(),
+            run: run.filter(|r| !r.is_empty()),
             machine,
             config,
             raw,
@@ -572,6 +584,7 @@ mod tests {
             firmware: None,
             os: Some("TestOS".into()),
             kernel: None,
+            os_detail: None,
             arch: "x86_64".into(),
             cpu_model: "Test CPU".into(),
             cpu_vendor: "TestVendor".into(),
@@ -580,6 +593,7 @@ mod tests {
             cpu_mhz_spot: 0,
             ram_bytes: 16 << 30,
             swap_bytes: 0,
+            memory: None,
             disks: vec![],
             drives: vec![],
             gpu: None,
@@ -604,7 +618,7 @@ mod tests {
             only: vec![],
             build_isa: String::new(),
         };
-        let result = ResultFile::assemble(fake_inventory(), config, outcomes, scored, None);
+        let result = ResultFile::assemble(fake_inventory(), config, outcomes, scored, None, None);
 
         let json = serde_json::to_string(&result).unwrap();
         let back: ResultFile = serde_json::from_str(&json).unwrap();
@@ -615,6 +629,44 @@ mod tests {
         assert_eq!(back.overall.grade, result.overall.grade);
         assert_eq!(back.raw.len(), result.raw.len());
         assert_eq!(back.machine.cpu_logical_cores, 8);
+    }
+
+    #[test]
+    fn the_run_block_round_trips_and_older_files_still_read() {
+        let mut result = result_matching_baseline();
+        assert!(result.run.is_none());
+        let run = crate::run_info::RunInfo {
+            id: Some("0f8fad5b-d9cb-469f-a165-70867728950e".into()),
+            started_at: Some("2026-11-13T09:00:00Z".into()),
+            duration_secs: Some(61.25),
+        };
+        result.run = Some(run.clone());
+        let json = serde_json::to_string(&result).unwrap();
+        let back: ResultFile = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.run, Some(run));
+
+        // A file written before the block — or the new machine blocks —
+        // existed has none of those keys, and reads with them absent.
+        let mut v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        v.as_object_mut().unwrap().remove("run");
+        let old: ResultFile = serde_json::from_value(v).unwrap();
+        assert!(old.run.is_none());
+        assert!(old.machine.memory.is_none() && old.machine.os_detail.is_none());
+
+        // An empty block is not written at all.
+        let empty = ResultFile::assemble(
+            fake_inventory(),
+            result.config.clone(),
+            result.raw.clone(),
+            ScoredRun {
+                components: result.components.clone(),
+                overall: result.overall.clone(),
+            },
+            None,
+            Some(crate::run_info::RunInfo::default()),
+        );
+        let text = serde_json::to_string(&empty).unwrap();
+        assert!(!text.contains("\"run\""), "{text}");
     }
 
     fn result_matching_baseline() -> ResultFile {
@@ -631,7 +683,7 @@ mod tests {
             only: vec![],
             build_isa: String::new(),
         };
-        ResultFile::assemble(fake_inventory(), config, outcomes, scored, None)
+        ResultFile::assemble(fake_inventory(), config, outcomes, scored, None, None)
     }
 
     #[test]
