@@ -26,6 +26,7 @@ mod score;
 mod scoring;
 mod security;
 mod soak;
+mod status;
 mod tags;
 mod telemetry;
 mod tui;

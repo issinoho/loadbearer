@@ -441,12 +441,13 @@ loadbearer net-server [--bind ADDR]
 | `--collect LIST` | Also collect what is **off by default** because it describes this particular machine or its user rather than its hardware: `uptime` (`machine.boot`), `elevation` (`run.elevated`), `security` (`machine.security`: firmware mode, Secure Boot, TPM, and on Linux whether the root filesystem is on dm-crypt). Comma-separated or repeated; a name it doesn't know is refused. **Adds to** a `collect` list in the config file. What was asked for is recorded as `run.collect`. Also on `info`. See [Collected only when asked for](#collected-only-when-asked-for) and [PRIVACY.md](PRIVACY.md#collected-only-when-asked-for). |
 | `--tag K=V` | Attach a label to the result, repeatable (`--tag site=glasgow --tag ring=pilot`). Carried in the result JSON's `tags` field for a fleet collector to group by; **metadata only** — never affects a measurement or a grade. Keys take letters, digits, `_`, `-` and `.`. Also settable as a `[tags]` table in the config file, which `--tag` overrides per key. |
 | `--fail-under GRADE` | Exit **3** if the overall grade is worse than `GRADE` (`S`/`A`/`B`/`C`/`D`/`F`), so a management tool can flag the machine. A run that couldn't complete is still exit 1, keeping "this machine is slow" distinct from "this run broke". Ignored, with a note, when nothing in the run is graded (e.g. `--only network`). |
-| `--not-on-battery` | Don't run when the machine is on battery — the clocks are usually power-capped, so the numbers wouldn't be comparable. **Skipping exits 0**, not a failure. A machine with no battery counts as mains; a platform that won't say proceeds with a note rather than skipping. |
-| `--if-idle` | Don't run when the machine is already busy — global CPU load at or above **20 %**, sampled just before starting. Skipping exits 0. This asks "is the machine busy", not "is anyone using it": a user reading a document won't register. |
-| `--jitter SECS` | Wait a random 0–`SECS` before starting, so an estate told to run at 09:00 doesn't all hit the same file share at 09:00. Seeded per host, so machines pick different delays. Only paid by a run that's actually going to happen. |
-| `--skip-if-newer-than AGE` | Don't run if `--output` already exists and is newer than `AGE` (`30s`, `15m`, `12h`, `7d`) — so a deployment tool retrying doesn't re-benchmark. Skipping exits 0. Requires `--output`, whose mtime is the record; nothing extra is persisted. A bare number is rejected rather than guessed at. |
+| `--not-on-battery` | Don't run when the machine is on battery — the clocks are usually power-capped, so the numbers wouldn't be comparable. **Skipping exits 0**, not a failure; with `--upload` it also [reports the skip](#fleet-use). A machine with no battery counts as mains; a platform that won't say proceeds with a note rather than skipping. |
+| `--if-idle` | Don't run when the machine is already busy — global CPU load at or above **20 %**, sampled just before starting. Skipping exits 0; with `--upload` it also [reports the skip](#fleet-use). This asks "is the machine busy", not "is anyone using it": a user reading a document won't register. |
+| `--jitter SECS` | Wait a random 0–`SECS` before starting, so an estate told to run at 09:00 doesn't all hit the same file share at 09:00. Seeded per host, so machines pick different delays. Only paid by a run that's actually going to happen — or by a skip that is about to be reported to the `--upload` server, so a fleet skipped at once doesn't report at once. A skip that sends nothing never waits. |
+| `--skip-if-newer-than AGE` | Don't run if `--output` already exists and is newer than `AGE` (`30s`, `15m`, `12h`, `7d`) — so a deployment tool retrying doesn't re-benchmark. Skipping exits 0, and is never reported to the fleet: a recent result exists, which says everything. Requires `--output`, whose mtime is the record; nothing extra is persisted. A bare number is rejected rather than guessed at. |
 | `--output FILE` | Write the full result as a versioned JSON file. Works alongside the TUI or plain output. |
 | `--upload URL` | When the run finishes, post the result to a [loadbearer-fleet](https://github.com/issinoho/loadbearer-fleet) server's `/api/upload` at `URL`. https only, except to loopback; redirects aren't followed; a URL with a user, password or query string is refused. A failed upload exits **4** — after `--output` has been written. Also settable as `[upload] url` in the config file. See [Fleet use](#fleet-use). |
+| `--no-status` | Don't send the [run status record](#fleet-use) when `--not-on-battery` or `--if-idle` skips a run. On by default when an upload is configured; without `--upload` there is nothing to send either way. Also settable as `status = false` under `[upload]`; either one turns it off, and nothing turns it back on. Exit codes are unaffected. |
 | `--upload-token-file FILE` | The fleet ingest token for `--upload`, read from a file so it never appears on a command line. Falls back to `[upload] token_file`, then `LOADBEARER_UPLOAD_TOKEN`. |
 | `--plain` | Disable the TUI and emit the plain-text report. Implied automatically when stdout is not a terminal. |
 | `--json` | Disable the TUI and emit only the result JSON to stdout. |
@@ -628,6 +629,13 @@ target_dir = "/var/tmp"
 # [tags]
 # site = "glasgow"
 # ring = "pilot"
+
+# Post the result to a loadbearer-fleet server (see Fleet use). status = false
+# stops a skipped run from reporting the skip to it.
+# [upload]
+# url = "https://fleet.example.com/api/upload"
+# token_file = "C:/ProgramData/loadbearer/fleet-token"
+# status = false
 ```
 
 `collect` lists the [opt-in categories](#collected-only-when-asked-for):
@@ -637,7 +645,7 @@ config can't silently drop what the fleet asked for; there is no switch to
 subtract one — leave out `--config` for a run without them.
 
 **Unknown keys are rejected, and that includes new ones.** A loadbearer older
-than a key (`collect` arrived after 1.8.1) refuses to start when handed a
+than a key (`collect` and `[upload] status` arrived after 1.8.1) refuses to start when handed a
 config file that uses it — the run fails at "parsing config file"; it doesn't
 skip the line. A config pushed fleet-wide must only use keys every loadbearer
 it reaches understands: upgrade the estate first, then add the key.
@@ -680,6 +688,40 @@ token scoped to a site only accepts results carrying that site's `--tag`. A
 rate-limited server's `Retry-After` is honoured, up to two minutes; behind a
 proxy, set `HTTPS_PROXY`.
 
+**A skipped run tells the server so.** Without this, a laptop that is skipped
+every night for being on battery looks the same as one whose collector has died:
+both just go stale. So when `--not-on-battery` or `--if-idle` stops a run and
+an upload is configured, loadbearer posts a small `loadbearer.run-status/1`
+document to the same URL, with the same token:
+
+```json
+{
+  "schema": "loadbearer.run-status/1",
+  "tool_version": "1.9.0",
+  "timestamp": "2026-11-13T22:40:12Z",
+  "status": "skipped",
+  "reason": "on_battery",
+  "detail": "on battery power, and --not-on-battery was given (…)",
+  "hostname": "PC-0142",
+  "identity": { "machine_id": "…", "smbios_uuid": "…", "serial": "…" },
+  "tags": { "site": "glasgow" }
+}
+```
+
+`reason` is `on_battery` or `busy`. `hostname`, `identity` and `tags` are what a
+result carries for the machine, so the server can file the record with its
+results and apply a site-scoped token; nothing else from the inventory is in
+it, and a field that couldn't be read is left out. It is sent only with an
+upload target, never for `--skip-if-newer-than`, and `--no-status` (or
+`status = false` under `[upload]`) turns it off. It is posted once, with a
+ten-second limit and no retry, and is not written to `--output` or stdout. A
+server that answers anything but HTTP 200 `{"outcome":"recorded"}` costs one
+warning line, and the skip **still exits 0**: an older loadbearer-fleet answers
+400 because it doesn't know the document, and the client carries on. A server
+needs to accept this schema on `/api/upload` and answer `recorded`; exit `4`
+keeps meaning only that a completed run's result was not delivered. See
+[PRIVACY.md](PRIVACY.md#network).
+
 What makes that work across repeat sweeps:
 
 - **`machine.identity`** — the SMBIOS UUID, serial and asset tag, plus the OS
@@ -719,7 +761,8 @@ What makes that work across repeat sweeps:
   a machine running off battery. `--not-on-battery`, `--if-idle`,
   `--skip-if-newer-than 7d` (don't re-benchmark on a redeploy) and
   `--jitter 300` (don't have 500 machines hit the share at once) let the caller
-  say when *not* to run. **A gate declining to run exits 0**, because deciding
+  say when *not* to run. **A gate declining to run exits 0** — whatever becomes of
+  its [status record](#fleet-use) — because deciding
   not to benchmark is the tool doing as it was told — a fleet where every
   docked-at-lunchtime laptop shows as a failed deployment is a fleet where
   someone turns the gates off. What the gates observed lands in the result's
@@ -1141,8 +1184,9 @@ CI runs all three on Linux and Windows for every push and pull request. Tagged
 ## Stability
 
 From 1.0.0, loadbearer follows semantic versioning for its **CLI** (subcommands
-and flags), the four `schema`-tagged JSON formats (`loadbearer.result/1`,
-`loadbearer.soak/1`, `loadbearer.compare/1`, `loadbearer.mem/1`), and its
+and flags), the five `schema`-tagged JSON formats (`loadbearer.result/1`,
+`loadbearer.soak/1`, `loadbearer.compare/1`, `loadbearer.mem/1`,
+`loadbearer.run-status/1`), and its
 **exit codes** — a breaking change to any of those is a major release.
 
 **Not** covered, and free to change in any release: absolute score values and
@@ -1159,7 +1203,8 @@ enforces, and how to add a benchmark. All participants follow the
 [SECURITY.md](SECURITY.md), not the public tracker.
 
 loadbearer collects no data, and sends nothing anywhere unless `run --upload`
-names a server to send a result to — see [PRIVACY.md](PRIVACY.md).
+names a server to send a result, or a skipped run's status record, to — see
+[PRIVACY.md](PRIVACY.md).
 
 ## License
 

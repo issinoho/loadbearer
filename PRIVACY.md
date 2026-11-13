@@ -5,7 +5,8 @@ to.**
 
 It is a local command-line tool. It has no telemetry, no analytics, no crash
 reporting, no update check, and no account or licence system. There is no
-server side of its own. The one thing it will send is a result file, to a
+server side of its own. The only things it will send are a result file and,
+when a scheduled run is skipped, a small status record, both to a
 [loadbearer-fleet](https://github.com/issinoho/loadbearer-fleet) server you
 name with `run --upload URL` — see [Network](#network).
 
@@ -207,13 +208,38 @@ protector information.
 - An **outbound** connection is made only when you pass `--net-target HOST:PORT`
   (a deliberate two-machine link test) or `--upload URL`, and a **listening**
   socket is opened only when you run `loadbearer net-server`.
-- `--upload` sends **the result file and nothing else** — the same document
-  `--output` writes, inventory and `machine.identity` included — in one HTTPS
-  `POST` to the URL you give, when the run finishes. It carries the ingest
-  token you supply, read from a file or `LOADBEARER_UPLOAD_TOKEN`, as an
+- `--upload` sends **the result file** — the same document `--output`
+  writes, inventory and `machine.identity` included — in one HTTPS `POST` to
+  the URL you give, when the run finishes. It carries the ingest token you
+  supply, read from a file or `LOADBEARER_UPLOAD_TOKEN`, as an
   `Authorization` header, and a `User-Agent` naming the loadbearer version.
   Plain `http://` is refused except to this machine, and redirects are not
-  followed. The token is never logged or written into the result.
+  followed. The token is never logged or written into the result. The one
+  other thing `--upload` can send is the run status record, next.
+- **A run status record, when a run is skipped and `--upload` is set.** If
+  `--not-on-battery` or `--if-idle` stops a run and an upload target is
+  configured, loadbearer sends one small JSON document to that same URL, with
+  the same token and under the same transport rules, so the fleet can tell a
+  machine that keeps being skipped from one that has stopped reporting. Its
+  fields are exactly: `schema` (`loadbearer.run-status/1`), `tool_version`,
+  `timestamp`, `status` (`skipped`), `reason` (`on_battery` or `busy`),
+  `detail` (the sentence the skip prints on stderr), `hostname`,
+  `identity` and `tags`. `identity` is the same `machine.identity` block a
+  result carries (machine ID, SMBIOS UUID, serial, asset tag, whichever could
+  be read) and `tags` are your `--tag` values, so the server can file the
+  record under the same machine and apply a site-scoped token. There is **no
+  other inventory**: no CPU, memory, disks, firmware, power state, and nothing
+  from `--collect`. The record is sent **only** with an upload target, **only**
+  for a battery or busy skip, and **never** for `--skip-if-newer-than`. It is
+  sent once, with a ten-second limit and no retry; if it cannot be delivered
+  (the network is down, or an older server answers HTTP 400 because it does not
+  know the document) that is one warning line on stderr and in the diagnostic
+  log, and the run still exits 0. `--no-status`, or `status = false` under
+  `[upload]` in the config file, turns it off. The identity is read only when
+  a record is about to be sent. The record is not written to `--output` or to
+  stdout, and the diagnostic log says only whether a skip was reported and, if
+  not, why — never the identity values. **Without `--upload`, a skipped run
+  still reads nothing, writes nothing and sends nothing.**
 - The GPU probe and benchmark load the OS OpenCL driver locally; no network.
 
 ## The website
