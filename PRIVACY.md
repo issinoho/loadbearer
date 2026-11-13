@@ -52,6 +52,11 @@ name with `run --upload URL` — see [Network](#network).
   build, release and edition). None of these is per-unit: every machine of a model reports the same model and
   firmware strings, and no drive or memory-module serial number is read.
 
+  Three further things **are** per-unit, and that is exactly why they are
+  not collected unless you ask: when the machine last booted, whether the run
+  was elevated, and its security posture (Secure Boot, TPM, disk
+  encryption). See [Collected only when asked for](#collected-only-when-asked-for).
+
   Anything a `--tag` puts in the file is text you supplied, so don't put
   personal data in one.
 
@@ -67,8 +72,11 @@ name with `run --upload URL` — see [Network](#network).
   it said, because a log is the artefact people paste into a bug report while a
   result file is one they choose to share. The exception is an identifier
   rejected as an OEM placeholder ("To Be Filled By O.E.M." and friends), which
-  is logged as-is: it describes the firmware, not the machine. `--no-log`
-  disables the log entirely.
+  is logged as-is: it describes the firmware, not the machine. For what is
+  [collected only when asked for](#collected-only-when-asked-for), the log
+  records which categories were asked for and, at `debug`, whether each part
+  was readable — never the values, and nothing at all about a category that
+  wasn't asked for. `--no-log` disables the log entirely.
 - **A scratch file** in `--target-dir` for the disk benchmark, deleted when the
   run ends.
 
@@ -122,8 +130,75 @@ log from a SATA drive:
   are skipped). Both nodes are root-only by default, so an unprivileged run
   simply doesn't get them.
 
+Only with `--collect` (see [below](#collected-only-when-asked-for)) —
+**opt-in**, never read otherwise:
+
+- **`uptime`** — *Windows* `GetTickCount64`; *Linux* `/proc/uptime` (or the
+  `sysinfo(2)` call). Both through the `sysinfo` crate.
+- **`elevation`** — *Windows* `GetTokenInformation(TokenElevation)` on this
+  process's own token, opened for `TOKEN_QUERY`; *Unix* `geteuid()`.
+- **`security`** — *Windows*: `GetFirmwareType`; the single value
+  `UEFISecureBootEnabled` under
+  `HKLM\SYSTEM\CurrentControlSet\Control\SecureBoot\State` (read-only);
+  and `Tbsi_GetDeviceInfo` from `tbs.dll`, which is loaded from System32
+  only when `security` is asked for, so a run that doesn't ask never maps
+  it. *Linux*: whether `/sys/firmware/efi` exists; the `SecureBoot` variable
+  in efivarfs
+  (`/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c`,
+  world-readable); `/sys/class/tpm/tpm0/tpm_version_major` and whether
+  `/sys/class/tpmrm/tpmrm0` exists; `/proc/self/mountinfo` for the device
+  under `/`, then `/sys/dev/block/<major:minor>/dm/uuid` and `slaves/` down
+  the device chain.
+
 All of these are ordinary reads of local system information, and all of them
 fail quietly.
+
+## Collected only when asked for
+
+Everything above is hardware and OS inventory, collected on every run. Three
+more things are **off unless you name them** — `run --collect
+uptime,elevation,security` (or `info --collect …` to see them first), or
+`collect = [...]` in a `--config` file — because each says something about
+one particular machine or the person using it, which the default inventory
+deliberately doesn't:
+
+- **`uptime`** adds `machine.boot`: when the machine last booted and how long
+  it has been up. That says something about how a person uses the machine —
+  when they start work, whether they ever restart.
+- **`elevation`** adds `run.elevated`: whether this run had administrator or
+  root rights. That is about the invocation, not the hardware, which is why
+  it sits in the `run` block.
+- **`security`** adds `machine.security`: whether the machine booted through
+  UEFI, whether Secure Boot is on, whether there is a TPM and which version,
+  and (Linux only) whether the root filesystem is on dm-crypt. A list of the
+  machines *without* Secure Boot or disk encryption is useful to an attacker
+  if a results share, a collector or a backup leaks.
+
+Unlike the hardware blocks above, these are per-unit: two machines of the same
+model report different values. That is why they are opt-in.
+
+Nothing in a category is read, attempted or logged unless its name was given —
+the code that reads it does not run. What was asked for is written into the
+result as `run.collect`, so a reader can tell "not asked" from "could not be
+read". Each part is absent where it couldn't be read; nothing is guessed.
+
+**Deliberately not read:** the TPM's endorsement key, manufacturer, firmware
+revision or anything else that identifies it; the device-mapper UUID of an
+encrypted volume (it is read, to see its type prefix, and neither kept nor
+logged); any volume but the root filesystem; BitLocker recovery or key
+protector information.
+
+**Not read, because it can't be within the promises above:**
+
+- **BitLocker state on Windows.** Every documented way to read it —
+  `Win32_EncryptableVolume` (WMI), `manage-bde` and `Get-BitLockerVolume`
+  (child processes) — needs administrator rights, and the shell's
+  `System.Volume.BitLockerProtection` property is COM. What a standard user
+  can read is undocumented and has no stated meaning, so there is no
+  `disk_encryption` part on Windows.
+- **Other kinds of Linux encryption** — ZFS native encryption, fscrypt,
+  eCryptfs, self-encrypting drives — aren't looked for: "no dm-crypt under
+  `/`" is reported as `"none_detected"`, never as "not encrypted".
 
 ## Network
 

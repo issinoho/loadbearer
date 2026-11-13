@@ -287,6 +287,8 @@ mod tests {
             battery: None,
             power: None,
             age: None,
+            boot: None,
+            security: None,
         }
     }
 
@@ -336,6 +338,7 @@ mod tests {
             id: Some("0f8fad5b-d9cb-469f-a165-70867728950e".into()),
             started_at: Some("2026-11-13T09:00:00Z".into()),
             duration_secs: Some(42.0),
+            ..Default::default()
         };
         original.run = Some(run.clone());
         let (out, _) = rescore(

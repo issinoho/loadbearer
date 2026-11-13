@@ -22,6 +22,16 @@ curve_k = 0.5
 # Override the number of timed iterations per subtest.
 # runs = 5
 
+# Also collect what is off by default, because it describes this particular
+# machine or its user rather than its hardware: "uptime" (when it last
+# booted), "elevation" (whether the run had admin / root rights), "security"
+# (firmware mode, Secure Boot, TPM, and on Linux whether / is on dm-crypt).
+# See PRIVACY.md. `--collect` on the command line adds to this list.
+# NOTE: unknown keys are rejected, and loadbearer 1.8.1 and older don't know
+# this one: handed this file with `collect` set, they refuse to run at all.
+# Upgrade every machine a config is pushed to before setting it.
+# collect = ["uptime", "security"]
+
 # Labels carried into the result file, for a fleet collector to group by.
 # Metadata only: nothing here affects a measurement or a grade. `--tag k=v`
 # overrides an individual key without discarding the rest, so a config pushed

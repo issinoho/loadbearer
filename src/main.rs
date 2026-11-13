@@ -1,10 +1,12 @@
 mod age;
 mod battery;
 mod benches;
+mod boot;
 mod cli;
 mod compare;
 mod config;
 mod drives;
+mod elevation;
 mod engine;
 mod firmware;
 mod gates;
@@ -13,6 +15,7 @@ mod identity;
 mod inventory;
 mod logging;
 mod mem;
+mod optin;
 mod os_detail;
 mod output;
 mod power;
@@ -21,6 +24,7 @@ mod run;
 mod run_info;
 mod score;
 mod scoring;
+mod security;
 mod soak;
 mod tags;
 mod telemetry;
@@ -132,11 +136,23 @@ fn dispatch(cli: Cli) -> Result<u8> {
     }
     match cli.command {
         Command::Info(args) => {
-            let inv = inventory::collect();
+            let mut choice = optin::Choice::resolve(None, &args.collect);
+            // `info --json` is the `machine` block, and elevation belongs to
+            // a run's `run` block, so it has nowhere to go: rather than read
+            // it and drop it, it isn't read.
+            if args.json && choice.has(optin::Item::Elevation) {
+                eprintln!(
+                    "note: elevation is recorded in a run's `run` block, not in `machine`, \
+                     so `info --json` doesn't read it; plain `info --collect elevation` shows it"
+                );
+                choice = choice.without(optin::Item::Elevation);
+            }
+            let asked = optin::gather(&choice, &optin::Host);
+            let inv = inventory::collect().with_opt_in(&asked);
             if args.json {
                 println!("{}", serde_json::to_string_pretty(&inv)?);
             } else {
-                output::print_inventory(&inv);
+                output::print_inventory(&inv, &asked);
             }
             Ok(exit::OK)
         }

@@ -42,6 +42,21 @@ pub enum GradeArg {
     F,
 }
 
+/// Something collected only when asked for, with `--collect`. Each says
+/// something about this particular machine or its user, where everything
+/// collected by default is hardware and OS inventory.
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[value(rename_all = "lower")]
+pub enum CollectArg {
+    /// When the machine last booted, and so how long it has been up (`machine.boot`).
+    Uptime,
+    /// Whether this run was elevated: administrator on Windows, root on Unix (`run.elevated`).
+    Elevation,
+    /// Security posture: firmware mode, Secure Boot, TPM, and (Linux) whether
+    /// the root filesystem is on dm-crypt (`machine.security`).
+    Security,
+}
+
 /// Benchmark and grade a machine's CPU, memory and disk.
 ///
 /// Run the same build on two machines and compare their result files to see
@@ -144,6 +159,11 @@ pub struct InfoArgs {
     /// Emit machine-readable JSON instead of formatted text.
     #[arg(long)]
     pub json: bool,
+
+    /// Also collect these, which are off by default (comma-separated or
+    /// repeated). Shows what `run --collect` would add to a result.
+    #[arg(long, value_enum, value_delimiter = ',', value_name = "LIST")]
+    pub collect: Vec<CollectArg>,
 }
 
 #[derive(Args, Debug)]
@@ -212,6 +232,11 @@ pub struct RunArgs {
     /// Don't sample CPU clocks / package power during the run.
     #[arg(long)]
     pub no_telemetry: bool,
+
+    /// Also collect these, which are off by default (comma-separated or
+    /// repeated). Added to any `collect` list in the config file.
+    #[arg(long, value_enum, value_delimiter = ',', value_name = "LIST")]
+    pub collect: Vec<CollectArg>,
 
     /// Attach a `key=value` label to the result, repeatable. Metadata only —
     /// never affects a measurement or a grade (e.g. `--tag site=glasgow`).

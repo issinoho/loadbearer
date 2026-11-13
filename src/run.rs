@@ -18,7 +18,7 @@ use crate::engine::progress::PlainProgress;
 use crate::engine::{Benchmark, BenchmarkOutcome, DurationPreset, RunContext, run_benchmark};
 use crate::inventory::Inventory;
 use crate::output;
-use crate::run_info::RunClock;
+use crate::run_info::{Invocation, RunClock};
 use crate::scoring::{
     Baseline, Profile, ResultFile, RunConfig, profile_by_name, profile_names, score_run,
 };
@@ -62,6 +62,8 @@ struct Resolved {
     only: Vec<String>,
     tags: crate::tags::Tags,
     upload: Option<crate::upload::Target>,
+    /// What to collect beyond the default inventory: config plus CLI.
+    collect: crate::optin::Choice,
 }
 
 fn resolve(args: &RunArgs) -> Result<Resolved> {
@@ -121,6 +123,7 @@ fn resolve(args: &RunArgs) -> Result<Resolved> {
         only,
         tags: crate::tags::resolve(file.tags.as_ref(), &args.tags)?,
         upload,
+        collect: crate::optin::Choice::resolve(file.collect.as_deref(), &args.collect),
     })
 }
 
@@ -152,7 +155,11 @@ pub fn execute(args: RunArgs) -> Result<u8> {
     };
 
     let baseline = Baseline::reference_v1();
-    let machine = crate::inventory::collect();
+    // After the gates, like the rest of the inventory: a skipped run reads
+    // none of what was opted into either.
+    let asked = crate::optin::gather(&r.collect, &crate::optin::Host);
+    let machine = crate::inventory::collect().with_opt_in(&asked);
+    let invocation = Invocation::from(&asked);
 
     let target_dir = match r.target_dir {
         Some(dir) => dir,
@@ -200,6 +207,7 @@ pub fn execute(args: RunArgs) -> Result<u8> {
             r.tags,
             gate_report,
             r.upload.as_ref(),
+            invocation,
         )
     } else {
         run_plain(
@@ -214,6 +222,7 @@ pub fn execute(args: RunArgs) -> Result<u8> {
             r.tags,
             gate_report,
             r.upload.as_ref(),
+            &invocation,
         )
     }
 }
@@ -231,6 +240,7 @@ fn run_interactive(
     tags: crate::tags::Tags,
     gate_report: crate::gates::GateReport,
     upload: Option<&crate::upload::Target>,
+    invocation: Invocation,
 ) -> Result<u8> {
     let header = format!(
         "{} · {} · {} threads · {} preset · {} profile",
@@ -252,6 +262,7 @@ fn run_interactive(
         soak: soak_config(args),
         no_model_ref: args.no_model_ref,
         no_telemetry: args.no_telemetry,
+        invocation,
     };
 
     let code = match tui::run(init)? {
@@ -306,6 +317,7 @@ fn run_plain(
     tags: crate::tags::Tags,
     gate_report: crate::gates::GateReport,
     upload: Option<&crate::upload::Target>,
+    invocation: &Invocation,
 ) -> Result<u8> {
     if !args.json {
         eprintln!(
@@ -334,7 +346,7 @@ fn run_plain(
     let scored = score_run(&outcomes, baseline, profile, curve_k)?;
     // Stopped before the link probe: the TUI probes only after its results
     // screen closes, so this is the last point the two paths agree on.
-    let run = clock.finish();
+    let run = clock.finish(invocation);
     let (link, link_notes) = probe_link(args);
     notes.extend(link_notes);
     let model_ref = model_ref(

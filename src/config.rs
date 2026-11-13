@@ -20,6 +20,11 @@ pub struct FileConfig {
     /// `key = "value"` labels carried into the result file. `--tag` wins per
     /// key; see `crate::tags`.
     pub tags: Option<crate::tags::Tags>,
+    /// What to collect beyond the default inventory: `uptime`, `elevation`,
+    /// `security`. `--collect` adds to this list; see `crate::optin`. A
+    /// loadbearer older than this key refuses the whole file, like any
+    /// unknown key.
+    pub collect: Option<Vec<crate::optin::Item>>,
     /// Where `run` posts its result. `--upload` / `--upload-token-file` win.
     pub upload: Option<UploadConfig>,
 }
@@ -80,6 +85,28 @@ mod tests {
     #[test]
     fn unknown_key_is_rejected() {
         assert!(toml::from_str::<FileConfig>("nope = 1").is_err());
+    }
+
+    #[test]
+    fn parses_a_collect_list() {
+        use crate::optin::Item;
+        let cfg: FileConfig = toml::from_str("collect = [\"uptime\", \"security\"]").unwrap();
+        assert_eq!(cfg.collect, Some(vec![Item::Uptime, Item::Security]));
+        let empty: FileConfig = toml::from_str("collect = []").unwrap();
+        assert_eq!(empty.collect, Some(vec![]));
+    }
+
+    #[test]
+    fn an_unknown_collect_name_is_refused_naming_the_valid_ones() {
+        let err = toml::from_str::<FileConfig>("collect = [\"uptime\", \"serial\"]")
+            .unwrap_err()
+            .to_string();
+        for name in ["serial", "uptime", "elevation", "security"] {
+            assert!(err.contains(name), "{err}");
+        }
+        // Not a list, and the wrong case, are refused too.
+        assert!(toml::from_str::<FileConfig>("collect = \"uptime\"").is_err());
+        assert!(toml::from_str::<FileConfig>("collect = [\"Uptime\"]").is_err());
     }
 
     #[test]

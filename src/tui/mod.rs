@@ -38,6 +38,8 @@ pub struct RunInit {
     pub no_model_ref: bool,
     /// Suppress CPU clock / package-power sampling during the run.
     pub no_telemetry: bool,
+    /// What was opted into, and whether the run was elevated, for `run`.
+    pub invocation: crate::run_info::Invocation,
 }
 
 /// Run the interactive session. `Ok(Some(result))` on completion, `Ok(None)` if
@@ -149,6 +151,7 @@ fn spawn_worker(init: RunInit, tx: Sender<Msg>) -> JoinHandle<()> {
             soak,
             no_model_ref,
             no_telemetry,
+            invocation,
             ..
         } = init;
 
@@ -184,7 +187,7 @@ fn spawn_worker(init: RunInit, tx: Sender<Msg>) -> JoinHandle<()> {
             }
         };
         // Same point as the plain path: scored, before link probe or soak.
-        let run = clock.finish();
+        let run = clock.finish(&invocation);
         let model_ref = if no_model_ref {
             Vec::new()
         } else {
