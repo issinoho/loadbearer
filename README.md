@@ -361,7 +361,7 @@ that `loadbearer compare` can diff against another machine's.
 loadbearer run        [OPTIONS]
 loadbearer compare    FILE [FILE ...] [--against MODEL] [--plain] [--json]
 loadbearer score      FILE [--baseline FILE] [--profile NAME] [--curve-k FLOAT] [--output FILE] [--json]
-loadbearer soak       [--duration SECS] [--threads N] [--seed N] [--output FILE] [--json]
+loadbearer soak       [--duration SECS] [--threads N] [--seed N] [--collect LIST] [--config FILE] [--output FILE] [--json]
 loadbearer info       [--json]
 loadbearer mem        [--limit N] [--swap] [--json]
 loadbearer list
@@ -389,6 +389,10 @@ loadbearer net-server [--bind ADDR]
   throttling set in, and how steady the clock held. **Not scored** — it's the
   signal that separates two laptops with identical burst numbers. Also available
   as `loadbearer run --soak`, which embeds the result in the result JSON.
+  `soak --collect uptime,elevation,security` adds the same
+  [opt-in categories](#collected-only-when-asked-for) to the soak document, in
+  its `machine` block and a `run` block that carries only `collect` and
+  `elevated`.
 - **`info`** — machine inventory (host, OS release, system model and
   firmware, CPU, memory and its modules, disks, drive health,
   [power settings](#power-settings), and the GPU and battery where present)
@@ -438,7 +442,7 @@ loadbearer net-server [--bind ADDR]
 | `--no-gpu` | Never touch the GPU: skip the `gpu` component **and** the OpenCL probe that `info` / `run` otherwise perform, so `OpenCL.dll` is never loaded. A global flag — works with any subcommand. Useful for fleet deployment where a stale ICD loader could stall enumeration. |
 | `--no-model-ref` | Skip the ["vs typical hardware"](#vs-typical-hardware) block — don't compare the CPU / GPU against their model reference. |
 | `--no-telemetry` | Don't sample CPU clocks / package power during the run (no `Clocks …` line, no `telemetry` field, no thermal-limit flag). |
-| `--collect LIST` | Also collect what is **off by default** because it describes this particular machine or its user rather than its hardware: `uptime` (`machine.boot`), `elevation` (`run.elevated`), `security` (`machine.security`: firmware mode, Secure Boot, TPM, and on Linux whether the root filesystem is on dm-crypt). Comma-separated or repeated; a name it doesn't know is refused. **Adds to** a `collect` list in the config file. What was asked for is recorded as `run.collect`. Also on `info`. See [Collected only when asked for](#collected-only-when-asked-for) and [PRIVACY.md](PRIVACY.md#collected-only-when-asked-for). |
+| `--collect LIST` | Also collect what is **off by default** because it describes this particular machine or its user rather than its hardware: `uptime` (`machine.boot`), `elevation` (`run.elevated`), `security` (`machine.security`: firmware mode, Secure Boot, TPM, and on Linux whether the root filesystem is on dm-crypt). Comma-separated or repeated; a name it doesn't know is refused. **Adds to** a `collect` list in the config file. What was asked for is recorded as `run.collect`. Also on `info` and `soak`. See [Collected only when asked for](#collected-only-when-asked-for) and [PRIVACY.md](PRIVACY.md#collected-only-when-asked-for). |
 | `--tag K=V` | Attach a label to the result, repeatable (`--tag site=glasgow --tag ring=pilot`). Carried in the result JSON's `tags` field for a fleet collector to group by; **metadata only** — never affects a measurement or a grade. Keys take letters, digits, `_`, `-` and `.`. Also settable as a `[tags]` table in the config file, which `--tag` overrides per key. |
 | `--fail-under GRADE` | Exit **3** if the overall grade is worse than `GRADE` (`S`/`A`/`B`/`C`/`D`/`F`), so a management tool can flag the machine. A run that couldn't complete is still exit 1, keeping "this machine is slow" distinct from "this run broke". Ignored, with a note, when nothing in the run is graded (e.g. `--only network`). |
 | `--not-on-battery` | Don't run when the machine is on battery — the clocks are usually power-capped, so the numbers wouldn't be comparable. **Skipping exits 0**, not a failure; with `--upload` it also [reports the skip](#fleet-use). A machine with no battery counts as mains; a platform that won't say proceeds with a note rather than skipping. |
@@ -526,6 +530,8 @@ again later.
 | `--duration SECS` | Sustained-load duration (default 90; range 15–1800). |
 | `--threads N` | Worker threads (default: one per logical CPU). |
 | `--seed N` | Seed for the sustained-load kernel. |
+| `--collect LIST` | Also collect the [opt-in categories](#collected-only-when-asked-for) (`uptime`, `elevation`, `security`), as for `run`. `machine.boot` and `machine.security` go in the document's `machine` block; what was asked for, and `elevated`, in a `run` block holding just those (a soak has no run ID or timing). Adds to a `collect` list in `--config`; the document has no `run` block when nothing is asked. |
+| `--config FILE` | Read `collect` from a config file, the same file `run --config` takes. Nothing else in it is used by `soak`. |
 | `--output FILE` | Write the soak result as a `loadbearer.soak/1` JSON document. |
 | `--json` | Emit only the JSON to stdout. |
 
@@ -639,7 +645,8 @@ target_dir = "/var/tmp"
 ```
 
 `collect` lists the [opt-in categories](#collected-only-when-asked-for):
-`uptime`, `elevation`, `security`. `--collect` on the command line **adds
+`uptime`, `elevation`, `security`. `run` and `soak` read it
+(`soak --config FILE`, and nothing else in the file). `--collect` on the command line **adds
 to** it rather than replacing it, so a hand-run on a machine with a fleet
 config can't silently drop what the fleet asked for; there is no switch to
 subtract one — leave out `--config` for a run without them.
@@ -803,6 +810,11 @@ in a category is read, attempted or logged unless its name was given.
   `tpm` and (Linux only) `disk_encryption`. **BitLocker isn't read on
   Windows**: every documented way to read it needs administrator rights, WMI
   or a child process, none of which loadbearer uses.
+
+On `soak` the same two places apply: `machine.boot` and `machine.security` in
+the soak document's `machine` block, and a `run` block holding only `collect`
+and `elevated` (no `id`, `started_at` or `duration_secs`), left out when
+nothing is asked.
 
 `run.collect` lists what was asked for, so a block that's missing although its
 name is listed means "couldn't be read", and one whose name isn't listed means
@@ -996,6 +1008,8 @@ benchmark; use `--only cpu,memory,network` to skip it.
   "elevation", "security"]`; omitted when none), and `elevated`, `true` /
   `false` for whether the run had administrator or root rights (only with
   `elevation`, and absent if the query failed — never a guessed `false`).
+  A `loadbearer.soak/1` document has the same block, with only these two
+  fields, and only when something was asked for.
 - `machine` — the full inventory (as `loadbearer info --json`), including the
   GPU and battery when the machine has them.
 - `config` — profile, preset, curve-k, seed, thread count, baseline name, and

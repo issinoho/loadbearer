@@ -138,6 +138,17 @@ pub struct SoakArgs {
     #[arg(long = "tag", value_name = "K=V")]
     pub tags: Vec<String>,
 
+    /// Also collect these, which are off by default (comma-separated or
+    /// repeated). Added to any `collect` list in the config file; written to
+    /// the soak document's `machine` and `run` blocks.
+    #[arg(long, value_enum, value_delimiter = ',', value_name = "LIST")]
+    pub collect: Vec<CollectArg>,
+
+    /// Read the `collect` list from a config file (the rest of it is for
+    /// `run`); `--collect` adds to it.
+    #[arg(long, value_name = "FILE")]
+    pub config: Option<PathBuf>,
+
     /// Write the soak result JSON to a file.
     #[arg(long, value_name = "FILE")]
     pub output: Option<PathBuf>,
