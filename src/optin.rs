@@ -20,6 +20,9 @@
 //! name is there and the block or field is not).
 
 use std::collections::BTreeSet;
+use std::path::Path;
+
+use anyhow::Result;
 
 use serde::{Deserialize, Serialize};
 
@@ -81,6 +84,19 @@ impl Choice {
                 .copied()
                 .chain(cli.iter().map(|&c| Item::from(c))),
         )
+    }
+
+    /// [`resolve`](Self::resolve) for a command that has no other use for the
+    /// config file (`soak`, `info`): reads `collect` from it and nothing else,
+    /// so one fleet file can set what every command collects. `run` loads the
+    /// whole file itself and calls `resolve`. Fails on a file that can't be
+    /// read or parsed, as `run` does, before anything is collected.
+    pub fn load(config: Option<&Path>, cli: &[CollectArg]) -> Result<Self> {
+        let file = match config {
+            Some(path) => crate::config::FileConfig::load(path)?,
+            None => crate::config::FileConfig::default(),
+        };
+        Ok(Self::resolve(file.collect.as_deref(), cli))
     }
 
     pub fn has(&self, item: Item) -> bool {
@@ -341,6 +357,83 @@ mod tests {
                 assert!(err.contains(name), "{err}");
             }
         }
+    }
+
+    #[test]
+    fn soak_takes_the_same_flags_and_refuses_the_same_typo() {
+        use crate::cli::Command;
+        let Command::Soak(soak) = parse(&[
+            "loadbearer",
+            "soak",
+            "--collect",
+            "uptime,security",
+            "--config",
+            "lb.toml",
+        ])
+        .unwrap()
+        .command
+        else {
+            panic!("not soak");
+        };
+        assert_eq!(soak.collect, vec![CollectArg::Uptime, CollectArg::Security]);
+        assert!(soak.config.is_some());
+        let Command::Soak(soak) = parse(&["loadbearer", "soak"]).unwrap().command else {
+            panic!("not soak");
+        };
+        assert!(soak.collect.is_empty() && soak.config.is_none());
+        assert!(parse(&["loadbearer", "soak", "--collect", "serial"]).is_err());
+    }
+
+    /// A config file holding `text`, in a directory of its own.
+    fn config_file(tag: &str, text: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("lb-optin-{tag}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("lb.toml");
+        std::fs::write(&path, text).unwrap();
+        path
+    }
+
+    #[test]
+    fn load_reads_collect_from_the_config_and_the_flag_adds_to_it() {
+        let path = config_file(
+            "load",
+            "collect = [\"uptime\"]
+profile = \"general\"
+",
+        );
+        let both = Choice::load(Some(&path), &[CollectArg::Security]).unwrap();
+        assert_eq!(both.items(), vec![Item::Uptime, Item::Security]);
+        let file_only = Choice::load(Some(&path), &[]).unwrap();
+        assert_eq!(file_only.items(), vec![Item::Uptime]);
+        // No config and no flag: nothing is asked.
+        assert!(Choice::load(None, &[]).unwrap().is_empty());
+        assert_eq!(
+            Choice::load(None, &[CollectArg::Elevation])
+                .unwrap()
+                .items(),
+            vec![Item::Elevation]
+        );
+        // A config with no collect key asks for nothing.
+        let silent = config_file(
+            "silent",
+            "profile = \"general\"
+",
+        );
+        assert!(Choice::load(Some(&silent), &[]).unwrap().is_empty());
+    }
+
+    #[test]
+    fn load_fails_on_a_config_it_cannot_read_or_parse() {
+        let missing = std::env::temp_dir()
+            .join("lb-optin-no-such-dir")
+            .join("lb.toml");
+        assert!(Choice::load(Some(&missing), &[]).is_err());
+        let bad = config_file(
+            "bad",
+            "collect = [\"serial\"]
+",
+        );
+        assert!(Choice::load(Some(&bad), &[CollectArg::Uptime]).is_err());
     }
 
     #[test]

@@ -2,6 +2,16 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## Unreleased
+
+- **`soak --collect`.** `soak` takes `--collect uptime,elevation,security` and
+  `--config FILE` (it reads only the `collect` list), through the same code as
+  `run`. `machine.boot` and `machine.security` go in the soak document's
+  `machine` block, and a new optional `run` block holds `collect` and
+  `elevated`, as in a result file but without a run ID or timing. With
+  nothing asked the document is unchanged. The schema stays
+  `loadbearer.soak/1`.
+
 ## 1.9.0 - Sat, 14 Nov 2026
 
 **A fuller picture of the machine, and a run that says when it was skipped.**

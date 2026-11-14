@@ -66,6 +66,16 @@ impl From<&crate::optin::Gathered> for Invocation {
 }
 
 impl RunInfo {
+    /// A block holding only what the invocation opted into, for a document with
+    /// no benchmark run to time or name (`soak`). Empty when nothing was asked.
+    pub fn of_invocation(invocation: &Invocation) -> Self {
+        RunInfo {
+            collect: invocation.collect.clone(),
+            elevated: invocation.elevated,
+            ..RunInfo::default()
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         *self == RunInfo::default()
     }

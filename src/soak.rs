@@ -38,6 +38,7 @@ use time::format_description::well_known::Rfc3339;
 use crate::cli::SoakArgs;
 use crate::inventory::Inventory;
 use crate::output;
+use crate::run_info::{Invocation, RunInfo};
 
 /// Default sustained-load duration when `--duration` is not given.
 pub const DEFAULT_SOAK_SECS: u64 = 90;
@@ -171,13 +172,42 @@ pub struct SoakDocument {
     /// `key=value` labels from `--tag` / the config file. Metadata only.
     #[serde(default, skip_serializing_if = "crate::tags::Tags::is_empty")]
     pub tags: crate::tags::Tags,
+    /// What `--collect` asked for and whether this was elevated, as in a run's
+    /// `run` block but without the ID and timing, which a soak has no use for.
+    /// Omitted when nothing was asked.
+    #[serde(default, skip_serializing_if = "RunInfo::is_empty")]
+    pub run: RunInfo,
     pub soak: SoakResult,
+}
+
+/// The document `soak` writes. `machine` already carries `boot` and `security`
+/// if they were asked for; `run` records what was asked and the elevation, the
+/// same way a run's result does.
+fn assemble(
+    machine: Inventory,
+    tags: crate::tags::Tags,
+    asked: &crate::optin::Gathered,
+    soak: SoakResult,
+) -> SoakDocument {
+    SoakDocument {
+        schema: SOAK_SCHEMA.to_string(),
+        tool_version: env!("CARGO_PKG_VERSION").to_string(),
+        timestamp: OffsetDateTime::now_utc()
+            .format(&Rfc3339)
+            .unwrap_or_default(),
+        machine,
+        tags,
+        run: RunInfo::of_invocation(&Invocation::from(asked)),
+        soak,
+    }
 }
 
 /// `loadbearer soak` — run the sustained-load test on its own.
 pub fn execute(args: SoakArgs) -> Result<()> {
     // Before the run, not after: a mistyped tag shouldn't cost a soak.
     let tags = crate::tags::resolve(None, &args.tags)?;
+    // Likewise the config file: a bad one fails here, not after 90 s.
+    let choice = crate::optin::Choice::load(args.config.as_deref(), &args.collect)?;
 
     let threads = args
         .threads
@@ -189,19 +219,11 @@ pub fn execute(args: SoakArgs) -> Result<()> {
         seed: args.seed.unwrap_or(DEFAULT_SEED),
     };
 
-    let machine = crate::inventory::collect();
+    let asked = crate::optin::gather(&choice, &crate::optin::Host);
+    let machine = crate::inventory::collect().with_opt_in(&asked);
     let result = run_with_progress(&cfg, args.json);
 
-    let doc = SoakDocument {
-        schema: SOAK_SCHEMA.to_string(),
-        tool_version: env!("CARGO_PKG_VERSION").to_string(),
-        timestamp: OffsetDateTime::now_utc()
-            .format(&Rfc3339)
-            .unwrap_or_default(),
-        machine,
-        tags,
-        soak: result,
-    };
+    let doc = assemble(machine, tags, &asked, result);
 
     if args.json {
         println!("{}", serde_json::to_string_pretty(&doc)?);
@@ -571,5 +593,84 @@ mod tests {
             threads: 8,
             seed: 1,
         }
+    }
+
+    fn document(asked: &crate::optin::Gathered) -> serde_json::Value {
+        let samples = (0..30).map(|t| sample(t as f64, 1000.0)).collect();
+        let machine = crate::inventory::collect().with_opt_in(asked);
+        let doc = assemble(
+            machine,
+            crate::tags::Tags::default(),
+            asked,
+            derive(&cfg(30), 8, samples),
+        );
+        serde_json::to_value(doc).unwrap()
+    }
+
+    #[test]
+    fn by_default_a_soak_document_has_none_of_the_opt_in_blocks() {
+        let asked = crate::optin::gather(&crate::optin::Choice::default(), &crate::optin::Host);
+        let v = document(&asked);
+        assert!(v.get("run").is_none(), "run block without being asked");
+        for key in ["boot", "security"] {
+            assert!(v["machine"].get(key).is_none(), "machine.{key}");
+        }
+    }
+
+    #[test]
+    fn what_was_asked_lands_in_the_soak_document_as_it_does_in_a_result() {
+        use crate::optin::{Choice, Gathered, Item};
+        let asked = Gathered {
+            asked: Choice::of([Item::Uptime, Item::Elevation, Item::Security]),
+            boot: Some(crate::boot::Boot {
+                booted_at: "2026-11-13T08:00:00Z".into(),
+                uptime_secs: 11_100,
+            }),
+            elevated: Some(false),
+            security: Some(crate::security::Security {
+                firmware_mode: Some("uefi".into()),
+                ..Default::default()
+            }),
+        };
+        let v = document(&asked);
+        assert_eq!(v["machine"]["boot"]["uptime_secs"], 11_100);
+        assert_eq!(v["machine"]["security"]["firmware_mode"], "uefi");
+        assert_eq!(
+            v["run"]["collect"],
+            serde_json::json!(["uptime", "elevation", "security"])
+        );
+        assert_eq!(v["run"]["elevated"], false);
+        // Only what was asked: a soak has no run ID or timing to record.
+        for key in ["id", "started_at", "duration_secs"] {
+            assert!(v["run"].get(key).is_none(), "run.{key}");
+        }
+        let back: SoakDocument = serde_json::from_value(v).unwrap();
+        assert_eq!(back.run.collect.len(), 3);
+        assert_eq!(back.machine.boot, asked.boot);
+    }
+
+    #[test]
+    fn asked_but_unreadable_is_listed_with_no_blocks() {
+        use crate::optin::{Choice, Gathered, Item};
+        let unread = Gathered {
+            asked: Choice::of([Item::Uptime, Item::Elevation, Item::Security]),
+            ..Default::default()
+        };
+        let v = document(&unread);
+        assert_eq!(
+            v["run"]["collect"],
+            serde_json::json!(["uptime", "elevation", "security"])
+        );
+        assert!(v["run"].get("elevated").is_none());
+        assert!(v["machine"].get("boot").is_none());
+        assert!(v["machine"].get("security").is_none());
+    }
+
+    #[test]
+    fn a_document_from_before_collect_still_reads() {
+        let asked = crate::optin::Gathered::default();
+        let v = document(&asked);
+        let back: SoakDocument = serde_json::from_value(v).unwrap();
+        assert!(back.run.is_empty());
     }
 }

@@ -158,8 +158,8 @@ fail quietly.
 
 Everything above is hardware and OS inventory, collected on every run. Three
 more things are **off unless you name them** — `run --collect
-uptime,elevation,security` (or `info --collect …` to see them first), or
-`collect = [...]` in a `--config` file — because each says something about
+uptime,elevation,security` (or `info --collect …` to see them first, or
+`soak --collect …`), or `collect = [...]` in a `--config` file — because each says something about
 one particular machine or the person using it, which the default inventory
 deliberately doesn't:
 
@@ -181,7 +181,7 @@ model report different values. That is why they are opt-in.
 Nothing in a category is read, attempted or logged unless its name was given —
 the code that reads it does not run. What was asked for is written into the
 result as `run.collect`, so a reader can tell "not asked" from "could not be
-read". Each part is absent where it couldn't be read; nothing is guessed.
+read". A `soak` document records it in a `run` block holding only that and `run.elevated`. Each part is absent where it couldn't be read; nothing is guessed.
 
 **Deliberately not read:** the TPM's endorsement key, manufacturer, firmware
 revision or anything else that identifies it; the device-mapper UUID of an
