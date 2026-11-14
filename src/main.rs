@@ -137,14 +137,14 @@ fn dispatch(cli: Cli) -> Result<u8> {
     }
     match cli.command {
         Command::Info(args) => {
-            let mut choice = optin::Choice::resolve(None, &args.collect);
+            let mut choice = optin::Choice::load(args.config.as_deref(), &args.collect)?;
             // `info --json` is the `machine` block, and elevation belongs to
             // a run's `run` block, so it has nowhere to go: rather than read
             // it and drop it, it isn't read.
             if args.json && choice.has(optin::Item::Elevation) {
                 eprintln!(
                     "note: elevation is recorded in a run's `run` block, not in `machine`, \
-                     so `info --json` doesn't read it; plain `info --collect elevation` shows it"
+                     so `info --json` doesn't read it; plain `info` shows it"
                 );
                 choice = choice.without(optin::Item::Elevation);
             }

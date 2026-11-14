@@ -362,7 +362,7 @@ loadbearer run        [OPTIONS]
 loadbearer compare    FILE [FILE ...] [--against MODEL] [--plain] [--json]
 loadbearer score      FILE [--baseline FILE] [--profile NAME] [--curve-k FLOAT] [--output FILE] [--json]
 loadbearer soak       [--duration SECS] [--threads N] [--seed N] [--collect LIST] [--config FILE] [--output FILE] [--json]
-loadbearer info       [--json]
+loadbearer info       [--collect LIST] [--config FILE] [--json]
 loadbearer mem        [--limit N] [--swap] [--json]
 loadbearer list
 loadbearer baseline   [FILE ...] [--name NAME] [--description TEXT]
@@ -399,7 +399,11 @@ loadbearer net-server [--bind ADDR]
   plus the [age estimate](#how-old-the-machine-is),
   and nothing else. `info --collect uptime,elevation,security` adds what
   [`run --collect`](#collected-only-when-asked-for) would add to a result,
-  so you can see it before you send it; `info --json` prints the `machine`
+  so you can see it before you send it. `info --config FILE` takes the
+  `collect` list from the same config file as `run --config` (nothing else in
+  it is used), so `info` can show what a run with that file would add;
+  `--collect` adds to it, and with neither, `info` prints none of them.
+  `info --json` prints the `machine`
   block, which has no place for `elevation` (it belongs to `run`), so with
   `--json` that one is not read and a note on stderr says so.
 - **`mem`** — per-program memory use right now, in the style of
@@ -442,7 +446,7 @@ loadbearer net-server [--bind ADDR]
 | `--no-gpu` | Never touch the GPU: skip the `gpu` component **and** the OpenCL probe that `info` / `run` otherwise perform, so `OpenCL.dll` is never loaded. A global flag — works with any subcommand. Useful for fleet deployment where a stale ICD loader could stall enumeration. |
 | `--no-model-ref` | Skip the ["vs typical hardware"](#vs-typical-hardware) block — don't compare the CPU / GPU against their model reference. |
 | `--no-telemetry` | Don't sample CPU clocks / package power during the run (no `Clocks …` line, no `telemetry` field, no thermal-limit flag). |
-| `--collect LIST` | Also collect what is **off by default** because it describes this particular machine or its user rather than its hardware: `uptime` (`machine.boot`), `elevation` (`run.elevated`), `security` (`machine.security`: firmware mode, Secure Boot, TPM, and on Linux whether the root filesystem is on dm-crypt). Comma-separated or repeated; a name it doesn't know is refused. **Adds to** a `collect` list in the config file. What was asked for is recorded as `run.collect`. Also on `info` and `soak`. See [Collected only when asked for](#collected-only-when-asked-for) and [PRIVACY.md](PRIVACY.md#collected-only-when-asked-for). |
+| `--collect LIST` | Also collect what is **off by default** because it describes this particular machine or its user rather than its hardware: `uptime` (`machine.boot`), `elevation` (`run.elevated`), `security` (`machine.security`: firmware mode, Secure Boot, TPM, and on Linux whether the root filesystem is on dm-crypt). Comma-separated or repeated; a name it doesn't know is refused. **Adds to** a `collect` list in the config file. What was asked for is recorded as `run.collect`. Also on `info` and `soak`, which take `--config` for the `collect` list alone. See [Collected only when asked for](#collected-only-when-asked-for) and [PRIVACY.md](PRIVACY.md#collected-only-when-asked-for). |
 | `--tag K=V` | Attach a label to the result, repeatable (`--tag site=glasgow --tag ring=pilot`). Carried in the result JSON's `tags` field for a fleet collector to group by; **metadata only** — never affects a measurement or a grade. Keys take letters, digits, `_`, `-` and `.`. Also settable as a `[tags]` table in the config file, which `--tag` overrides per key. |
 | `--fail-under GRADE` | Exit **3** if the overall grade is worse than `GRADE` (`S`/`A`/`B`/`C`/`D`/`F`), so a management tool can flag the machine. A run that couldn't complete is still exit 1, keeping "this machine is slow" distinct from "this run broke". Ignored, with a note, when nothing in the run is graded (e.g. `--only network`). |
 | `--not-on-battery` | Don't run when the machine is on battery — the clocks are usually power-capped, so the numbers wouldn't be comparable. **Skipping exits 0**, not a failure; with `--upload` it also [reports the skip](#fleet-use). A machine with no battery counts as mains; a platform that won't say proceeds with a note rather than skipping. |
@@ -645,8 +649,8 @@ target_dir = "/var/tmp"
 ```
 
 `collect` lists the [opt-in categories](#collected-only-when-asked-for):
-`uptime`, `elevation`, `security`. `run` and `soak` read it
-(`soak --config FILE`, and nothing else in the file). `--collect` on the command line **adds
+`uptime`, `elevation`, `security`. `run`, `soak` and `info` read it
+(`--config FILE` on each; `soak` and `info` use nothing else in the file). `--collect` on the command line **adds
 to** it rather than replacing it, so a hand-run on a machine with a fleet
 config can't silently drop what the fleet asked for; there is no switch to
 subtract one — leave out `--config` for a run without them.

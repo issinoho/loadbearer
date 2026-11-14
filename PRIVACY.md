@@ -159,7 +159,8 @@ fail quietly.
 Everything above is hardware and OS inventory, collected on every run. Three
 more things are **off unless you name them** — `run --collect
 uptime,elevation,security` (or `info --collect …` to see them first, or
-`soak --collect …`), or `collect = [...]` in a `--config` file — because each says something about
+`soak --collect …`), or `collect = [...]` in a `--config` file, which `info` and
+`soak` read as well — because each says something about
 one particular machine or the person using it, which the default inventory
 deliberately doesn't:
 

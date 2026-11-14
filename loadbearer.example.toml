@@ -27,7 +27,8 @@ curve_k = 0.5
 # booted), "elevation" (whether the run had admin / root rights), "security"
 # (firmware mode, Secure Boot, TPM, and on Linux whether / is on dm-crypt).
 # See PRIVACY.md. `--collect` on the command line adds to this list.
-# `run` and `soak` read it (`soak --config FILE` uses nothing else in the file).
+# `run`, `soak` and `info` read it (`--config FILE`); the last two use nothing
+# else in the file.
 # NOTE: unknown keys are rejected, and loadbearer 1.8.1 and older don't know
 # this one: handed this file with `collect` set, they refuse to run at all.
 # Upgrade every machine a config is pushed to before setting it.

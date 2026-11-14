@@ -343,6 +343,14 @@ mod tests {
             panic!("not info");
         };
         assert_eq!(info.collect, vec![CollectArg::Uptime]);
+        assert!(info.config.is_none());
+        let Command::Info(info) = parse(&["loadbearer", "info", "--config", "lb.toml"])
+            .unwrap()
+            .command
+        else {
+            panic!("not info");
+        };
+        assert!(info.config.is_some() && info.collect.is_empty());
         // Not given: nothing.
         let Command::Run(run) = parse(&["loadbearer", "run"]).unwrap().command else {
             panic!("not run");
