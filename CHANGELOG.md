@@ -2,6 +2,69 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## 1.9.0 - Sat, 14 Nov 2026
+
+**A fuller picture of the machine, and a run that says when it was skipped.**
+Result files record the OS build and edition, the memory layout and how long
+the run took; `--collect` adds uptime, elevation and security posture for
+those who ask; and a scheduled run that is skipped can tell the fleet server
+so. No measurement changes: 1.8.x scores and result files are directly
+comparable, nothing here touches a grade, and every addition to the result
+file is an optional field, so the schema stays `loadbearer.result/1`.
+
+**For fleets:** upgrade loadbearer-fleet to 0.12.0 first. An older server
+answers `400` to a skipped run's report, which costs one warning line per
+skip and nothing else. And upgrade loadbearer before pushing a config file
+that uses the new `collect` or `[upload] status` keys: 1.8.1 and earlier
+refuse a config with a key they do not know.
+
+- **A run ID, and how long the run took.** A new `run` block holds a random
+  ID generated fresh for each run and derived from nothing, when the
+  benchmarks started, and their duration. The clock starts after the gates,
+  so a `--jitter` wait is not in it. The results summary ends with
+  "took 7m 52s", and `score` carries the block through unchanged.
+- **The memory layout.** `machine.memory` lists the slots, how many are
+  populated, and each module's size, type, form factor, rated speed and the
+  speed it is running at; `info` shows it on a Modules row. Windows reads it
+  from the firmware table it already reads. Linux can read it only as root,
+  and reports nothing otherwise. No module serial number, asset tag,
+  manufacturer or part number is read.
+- **The OS build and edition.** `machine.os_detail` holds the build with its
+  update revision, the display version and the edition on Windows (`24H2`,
+  `26100.2314`, `Enterprise`), and the distribution ID, version and variant
+  from os-release on Linux; `info` shows it on a Release row. `machine.os`
+  and `machine.kernel` are unchanged.
+- **`--collect uptime,elevation,security`**, on `run` and `info`, or
+  `collect = [...]` in the config file, for three things that say something
+  about one machine or the person using it and so are read only when named.
+  `uptime` records when the machine last booted. `elevation` records whether
+  the run was administrator or root. `security` records the firmware mode,
+  Secure Boot, whether there is a TPM and its version, and on Linux whether
+  the root filesystem is on dm-crypt. Nothing in a category is read,
+  attempted or logged unless it is named, and `run.collect` records what was
+  asked for, so a missing block means "not asked" rather than "could not be
+  read". The command line adds to the config file's list.
+- **Disk encryption is not read on Windows.** Every documented way to learn
+  BitLocker's state needs administrator rights, WMI, COM or a child process,
+  none of which loadbearer uses. On Linux, `none_detected` means exactly "no
+  dm-crypt under `/`": ZFS native encryption, fscrypt, eCryptfs and
+  self-encrypting drives are not looked for.
+- **A skipped run tells the fleet server so.** When `--not-on-battery` or
+  `--if-idle` stops a run and `--upload` is set, loadbearer sends a small
+  run status record (`loadbearer.run-status/1`) to the same URL: the reason,
+  and the hostname, identity and tags a result would carry, with no other
+  inventory. It is never sent for `--skip-if-newer-than`, and never without
+  `--upload`, where a skipped run still reads, writes and sends nothing. A
+  skip still exits 0 whatever happens to the report: one attempt, a
+  ten-second limit, and one warning line if it cannot be delivered.
+  `--no-status`, or `status = false` under `[upload]`, turns it off.
+- **PRIVACY.md is updated for all of it**: each new read and what is
+  deliberately not read, what `--collect` adds and why it is off by default,
+  and the run status record's exact fields and when it is sent. It no longer
+  says `--upload` sends the result file and nothing else. No elevated
+  privileges are needed for anything here, and there is still no WMI, COM or
+  child process.
+
 ## 1.8.1 - Thu, 5 Nov 2026
 
 A fix and a help-text improvement, with no measurement changes: 1.8.0 scores
