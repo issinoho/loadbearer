@@ -175,6 +175,12 @@ pub struct InfoArgs {
     /// repeated). Shows what `run --collect` would add to a result.
     #[arg(long, value_enum, value_delimiter = ',', value_name = "LIST")]
     pub collect: Vec<CollectArg>,
+
+    /// Read the `collect` list from a config file, as `run --config` does, so
+    /// `info` shows what a run with that file would add (the rest of the file
+    /// is for `run`); `--collect` adds to it.
+    #[arg(long, value_name = "FILE")]
+    pub config: Option<PathBuf>,
 }
 
 #[derive(Args, Debug)]

@@ -4,6 +4,11 @@ All notable changes to loadbearer are documented in this file.
 
 ## Unreleased
 
+- **`info --config`.** `info` reads the config file's `collect` list the way
+  `run` does (`--config FILE`, no default path), so it shows the opt-in
+  categories a run with that file would collect; `--collect` adds to it, as
+  on `run`. With neither, `info` prints nothing from those categories, as
+  before.
 - **`soak --collect`.** `soak` takes `--collect uptime,elevation,security` and
   `--config FILE` (it reads only the `collect` list), through the same code as
   `run`. `machine.boot` and `machine.security` go in the soak document's
