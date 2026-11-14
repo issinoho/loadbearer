@@ -2,7 +2,12 @@
 
 All notable changes to loadbearer are documented in this file.
 
-## Unreleased
+## 1.10.0 - Sat, 14 Nov 2026
+
+**The opt-in categories reach `soak` and `info --config`.** What 1.9.0 gave
+`run` with `--collect` now works the same way for a soak and when `info` reads
+a config file. No measurement changes, nothing is collected that was not
+asked for, and both schemas keep their names.
 
 - **`info --config`.** `info` reads the config file's `collect` list the way
   `run` does (`--config FILE`, no default path), so it shows the opt-in
