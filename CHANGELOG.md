@@ -2,6 +2,14 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## Unreleased
+
+- **Website and code signing policy brought up to date.** The page now says a
+  skipped run can report itself and that `--collect` and the one WMI read are
+  opt-in, and CODE_SIGNING_POLICY.md names `--upload` among the outbound
+  connections, and the README and wiki say which loadbearer-fleet understands
+  BitLocker. SECURITY.md lists the one WMI read. No behaviour change.
+
 ## 1.11.0 - Mon, 16 Nov 2026
 
 **BitLocker, read, and the one exception that takes.** On an elevated Windows

@@ -37,9 +37,14 @@ loadbearer is a local command-line tool. It:
   filesystem detection) and the target directory's filesystem type;
 - makes an **outbound** connection only when you pass `--net-target`, or
   `--upload` (one HTTPS `POST` of the result to a loadbearer-fleet server),
-  and opens a **listening** socket only when you run `loadbearer net-server`.
+  and opens a **listening** socket only when you run `loadbearer net-server`;
+- uses WMI (and so COM) in one place only: with `--collect security`, on an
+  elevated Windows run, it asks `Win32_EncryptableVolume` for the BitLocker
+  state of the system volume, on a thread of its own with a ten-second limit
+  (see PRIVACY.md). It starts no child process anywhere.
 
-It stores no credentials or secrets and needs no elevated privileges. For
+It stores no credentials or secrets and needs no elevated privileges (the
+BitLocker read above is simply skipped without them). For
 `--upload` it *reads* one — a fleet ingest token, from the file named by
 `--upload-token-file` or `[upload] token_file`, or from
 `LOADBEARER_UPLOAD_TOKEN` — and sends it only as the `Authorization` header of
