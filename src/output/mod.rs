@@ -35,7 +35,11 @@ fn row(key: &str, value: impl AsRef<str>) {
 }
 
 fn kv(key: &str, value: impl AsRef<str>, width: usize) {
-    println!("  {key:<width$} {}", value.as_ref());
+    println!("{}", kv_text(key, value, width));
+}
+
+fn kv_text(key: &str, value: impl AsRef<str>, width: usize) -> String {
+    format!("  {key:<width$} {}", value.as_ref())
 }
 
 pub fn print_inventory(inv: &Inventory, asked: &crate::optin::Gathered) {
@@ -724,8 +728,25 @@ fn print_age_block(a: &crate::age::Age, m: &Inventory) {
     }
 }
 
-/// Standalone `loadbearer soak` report: a machine line and the soak block.
-pub fn print_soak_report(m: &Inventory, s: &SoakResult) {
+/// The "Collected on request" section of the standalone soak report: the same
+/// rows and wording as `info` (via [`opt_in_rows`]), "unknown" for what was
+/// asked for and couldn't be read. Empty, not a bare heading, when nothing was
+/// asked, so a default soak report is unchanged.
+pub fn soak_opt_in_text(m: &Inventory, asked: &crate::optin::Gathered) -> String {
+    if asked.asked.is_empty() {
+        return String::new();
+    }
+    let mut text = String::from("\nCollected on request (--collect)\n");
+    for (key, value) in opt_in_rows(m, asked) {
+        text.push_str(&kv_text(key, value, 15));
+        text.push('\n');
+    }
+    text
+}
+
+/// Standalone `loadbearer soak` report: a machine line, anything collected on
+/// request, and the soak block.
+pub fn print_soak_report(m: &Inventory, s: &SoakResult, asked: &crate::optin::Gathered) {
     println!("\nloadbearer {PKG_VERSION} — soak test");
     println!(
         "\n  Machine   {} · {} · {} threads · {} RAM",
@@ -734,6 +755,7 @@ pub fn print_soak_report(m: &Inventory, s: &SoakResult) {
         m.cpu_logical_cores,
         human_bytes(m.ram_bytes),
     );
+    print!("{}", soak_opt_in_text(m, asked));
     print_soak_block(s);
     println!(
         "\n  Sustained load is not part of any grade. \"Retained\" is steady-state \
@@ -1011,5 +1033,49 @@ mod tests {
         assert_eq!(rows[0].1, "unknown");
         assert_eq!(rows[1].1, "unknown");
         assert_eq!(rows[4].1, "unknown");
+    }
+
+    #[test]
+    fn soak_report_adds_nothing_when_nothing_was_asked() {
+        assert_eq!(
+            soak_opt_in_text(&Inventory::blank(), &Gathered::default()),
+            ""
+        );
+    }
+
+    #[test]
+    fn soak_report_shows_what_was_asked_with_the_same_rows_as_info() {
+        let mut inv = Inventory::blank();
+        inv.boot = Some(crate::boot::Boot {
+            booted_at: "2026-11-13T08:00:00Z".into(),
+            uptime_secs: 11_100,
+        });
+        let asked = Gathered {
+            asked: Choice::of([Item::Uptime, Item::Elevation]),
+            boot: inv.boot.clone(),
+            elevated: Some(false),
+            ..Default::default()
+        };
+        let text = soak_opt_in_text(&inv, &asked);
+        assert!(text.starts_with("\nCollected on request (--collect)\n"));
+        let rows = opt_in_rows(&inv, &asked);
+        assert_eq!(rows.len(), 2);
+        for (key, value) in &rows {
+            assert!(text.contains(&kv_text(key, value, 15)));
+        }
+        assert!(text.contains("Elevated        no\n"));
+        assert!(text.contains("up 3h 05m"));
+    }
+
+    #[test]
+    fn soak_report_says_unknown_for_what_was_asked_and_unread() {
+        let asked = Gathered {
+            asked: Choice::of([Item::Uptime, Item::Elevation, Item::Security]),
+            ..Default::default()
+        };
+        let text = soak_opt_in_text(&Inventory::blank(), &asked);
+        assert!(text.contains("Booted          unknown\n"));
+        assert!(text.contains("Elevated        unknown\n"));
+        assert!(text.contains("Secure Boot     unknown\n"));
     }
 }

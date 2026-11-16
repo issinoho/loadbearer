@@ -392,7 +392,7 @@ loadbearer net-server [--bind ADDR]
   `soak --collect uptime,elevation,security` adds the same
   [opt-in categories](#collected-only-when-asked-for) to the soak document, in
   its `machine` block and a `run` block that carries only `collect` and
-  `elevated`.
+  `elevated`, and shows them in the text report as `info` does.
 - **`info`** — machine inventory (host, OS release, system model and
   firmware, CPU, memory and its modules, disks, drive health,
   [power settings](#power-settings), and the GPU and battery where present)
@@ -538,6 +538,11 @@ again later.
 | `--config FILE` | Read `collect` from a config file, the same file `run --config` takes. Nothing else in it is used by `soak`. |
 | `--output FILE` | Write the soak result as a `loadbearer.soak/1` JSON document. |
 | `--json` | Emit only the JSON to stdout. |
+
+With `--collect`, the text report also has a `Collected on request (--collect)`
+section under the machine line, with the same rows and wording as `info`
+(`Booted`, `Elevated`, `Firmware`, `Secure Boot`, `TPM`, `Encryption`); anything
+asked for and not readable shows as `unknown`. Without it the report is as below.
 
 ```
   SOAK      90s · 20 threads · not graded

@@ -228,7 +228,7 @@ pub fn execute(args: SoakArgs) -> Result<()> {
     if args.json {
         println!("{}", serde_json::to_string_pretty(&doc)?);
     } else {
-        output::print_soak_report(&doc.machine, &doc.soak);
+        output::print_soak_report(&doc.machine, &doc.soak, &asked);
     }
     if let Some(path) = &args.output {
         crate::util::ensure_parent_dir(path)

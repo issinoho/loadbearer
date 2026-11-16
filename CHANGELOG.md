@@ -2,6 +2,14 @@
 
 All notable changes to loadbearer are documented in this file.
 
+## Unreleased
+
+- **`soak` shows what `--collect` gathered.** The text report gets a
+  `Collected on request (--collect)` section under the machine line, with the
+  same rows and wording as `info`; what was asked for and could not be read
+  shows as `unknown`. With nothing asked the report is unchanged, and the JSON
+  document is unchanged either way.
+
 ## 1.10.0 - Sat, 14 Nov 2026
 
 **The opt-in categories reach `soak` and `info --config`.** What 1.9.0 gave
