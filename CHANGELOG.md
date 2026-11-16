@@ -4,6 +4,30 @@ All notable changes to loadbearer are documented in this file.
 
 ## Unreleased
 
+- **Privacy change: on an elevated Windows run, `--collect security` now
+  reads BitLocker through WMI.** Until now loadbearer used no WMI and no COM
+  anywhere, and so reported no `disk_encryption` on Windows: every documented
+  way to read BitLocker needs administrator rights. That promise now has one
+  stated exception. Only with `--collect security`, only on Windows, and only
+  when the process is elevated (a scheduled task as SYSTEM, say), loadbearer
+  asks WMI's `Win32_EncryptableVolume` for four properties — `DriveLetter`,
+  `ConversionStatus`, `ProtectionStatus`, `EncryptionMethod` — of the volume
+  holding the Windows directory, and nothing else: no volume ID, key
+  protector or recovery information, and no other volume. It runs on a
+  thread of its own, leaves the process's COM security settings alone, and
+  gives up after ten seconds. Unelevated, or wherever WMI gives no answer,
+  `disk_encryption` stays absent, as before; nothing is guessed. Still no
+  child process anywhere. PRIVACY.md says exactly this.
+- **BitLocker's answer, in `machine.security.disk_encryption`.**
+  `system_volume` is `encrypted`, `not_encrypted` (Windows can say so
+  outright, unlike Linux's `none_detected`) or `partly_encrypted` (encryption
+  or decryption in progress or paused); `method` is `bitlocker`; and two new
+  optional fields, `cipher` (`xts-aes-128`, `xts-aes-256`, `aes-128`, …,
+  `hardware`) and `protection` (`on` / `off`), keep "encrypted" apart from
+  "protected", since protection can be suspended on an encrypted volume.
+  `info`, the results summary and the soak report show it as, for example,
+  `encrypted (BitLocker, XTS-AES 256, protection on)`. Linux documents are
+  byte-for-byte unchanged, and the schemas keep their names.
 - **`soak` shows what `--collect` gathered.** The text report gets a
   `Collected on request (--collect)` section under the machine line, with the
   same rows and wording as `info`; what was asked for and could not be read

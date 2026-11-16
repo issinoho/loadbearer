@@ -3,25 +3,48 @@
 //! whether its system volume is encrypted.
 //!
 //! Each part is present only if it could be read, by an unprivileged process,
-//! without WMI, COM or a child process (see PRIVACY.md). A part that can't be
-//! read that way on a platform is simply absent there:
+//! without WMI, COM or a child process (see PRIVACY.md) — with **one stated
+//! exception**, BitLocker on an elevated Windows run, below. A part that can't
+//! be read on a platform is simply absent there:
 //!
 //! | Part              | Windows                                   | Linux |
 //! |-------------------|-------------------------------------------|-------|
 //! | `firmware_mode`   | `GetFirmwareType`                         | whether `/sys/firmware/efi` exists (x86 only for `"bios"`) |
 //! | `secure_boot`     | `UEFISecureBootEnabled` under `HKLM\SYSTEM\CurrentControlSet\Control\SecureBoot\State` | the `SecureBoot` EFI variable in efivarfs |
 //! | `tpm`             | `Tbsi_GetDeviceInfo` (tbs.dll, loaded from System32 only when asked) | `/sys/class/tpm/tpm0/tpm_version_major`, `/sys/class/tpmrm/tpmrm0` |
-//! | `disk_encryption` | **not read** — see below                  | the root filesystem's device-mapper chain in sysfs |
+//! | `disk_encryption` | **elevated runs only**: WMI's `Win32_EncryptableVolume`, the system volume — see below | the root filesystem's device-mapper chain in sysfs |
 //!
-//! **BitLocker is not read on Windows.** Every documented way to learn its
-//! state — `Win32_EncryptableVolume` (WMI), `manage-bde` and
+//! **BitLocker is read through WMI, and only when the run is elevated.** It is
+//! the one place loadbearer uses WMI or COM. Every documented way to learn
+//! BitLocker's state — `Win32_EncryptableVolume` (WMI), `manage-bde` and
 //! `Get-BitLockerVolume` (child processes) — needs administrator rights, and
-//! the shell's `System.Volume.BitLockerProtection` property is COM. What a
-//! standard user *can* read (the `BitLockerStatus\BootStatus` registry value,
-//! `fveapi.dll`'s `FveGetStatus`) is undocumented, with no stated meaning to
-//! hold it to — and "encrypted" and "protection on" are different things
-//! (protection can be suspended on an encrypted volume). A guess is worse than
-//! nothing, so Windows reports no `disk_encryption`.
+//! what a standard user *can* read (the `BitLockerStatus\BootStatus` registry
+//! value, `fveapi.dll`'s `FveGetStatus`) is undocumented, with no stated
+//! meaning to hold it to. So of the documented sources, the one that needs no
+//! child process is used, and only where it can answer:
+//!
+//! - only with `--collect security`, and only when this process is elevated
+//!   ([`crate::elevation`]); otherwise WMI is never touched and
+//!   `disk_encryption` is absent;
+//! - only the class `Win32_EncryptableVolume` in
+//!   `ROOT\CIMV2\Security\MicrosoftVolumeEncryption`, and only its
+//!   `DriveLetter`, `ConversionStatus`, `ProtectionStatus` and
+//!   `EncryptionMethod`, of only the volume holding the Windows directory
+//!   (`GetSystemWindowsDirectoryW`'s drive letter, named in the query's
+//!   `WHERE`). `DeviceID`, `PersistentVolumeID`, key protectors, recovery
+//!   information and every other volume are never asked for, and no volume
+//!   identifier is recorded or logged;
+//! - on a thread of its own that initialises COM and uninitialises it again,
+//!   without `CoInitializeSecurity` (which would set process-wide state): the
+//!   proxy blanket is set on the WMI proxies instead. The whole read is given
+//!   ten seconds; past that it is abandoned and the part is absent.
+//!
+//! Anything that goes wrong — not elevated, no such namespace or class, a
+//! failed or timed-out query, no row for the system volume, a value the
+//! documentation doesn't list — is an absent `disk_encryption`, never a guess
+//! and never a fall-back to an undocumented source. "Encrypted" and
+//! "protection on" are kept apart (`system_volume` and `protection`), since
+//! protection can be suspended on an encrypted volume.
 //!
 //! On Linux only the **root filesystem** is looked at, not every volume, and
 //! only for **dm-crypt** set up by cryptsetup (LUKS1, LUKS2, plain, …),
@@ -49,7 +72,7 @@ pub struct Security {
     pub secure_boot: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tpm: Option<Tpm>,
-    /// Linux only for now; see the module docs.
+    /// Linux, and Windows on an elevated run; see the module docs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub disk_encryption: Option<DiskEncryption>,
 }
@@ -66,14 +89,33 @@ pub struct Tpm {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DiskEncryption {
-    /// `"encrypted"`: the root filesystem sits on a dm-crypt mapping, directly
-    /// or through LVM / RAID. `"none_detected"`: neither it nor any device
-    /// beneath it is dm-crypt — other kinds of encryption are not looked for.
+    /// Linux — `"encrypted"`: the root filesystem sits on a dm-crypt mapping,
+    /// directly or through LVM / RAID. `"none_detected"`: neither it nor any
+    /// device beneath it is dm-crypt — other kinds of encryption are not
+    /// looked for.
+    ///
+    /// Windows — the system volume's BitLocker `ConversionStatus`:
+    /// `"encrypted"` (fully encrypted), `"not_encrypted"` (fully decrypted),
+    /// or `"partly_encrypted"` (encryption or decryption in progress or
+    /// paused).
     pub system_volume: String,
-    /// With `"encrypted"`: `luks1`, `luks2`, `plain`, `loopaes`, `tcrypt`,
-    /// `bitlk` or `fvault2`, the cryptsetup type.
+    /// Linux, with `"encrypted"`: `luks1`, `luks2`, `plain`, `loopaes`,
+    /// `tcrypt`, `bitlk` or `fvault2`, the cryptsetup type. Windows, with
+    /// `"encrypted"` or `"partly_encrypted"`: `bitlocker`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub method: Option<String>,
+    /// Windows only, with `"encrypted"` or `"partly_encrypted"`: BitLocker's
+    /// `EncryptionMethod` — `xts-aes-128`, `xts-aes-256`, `aes-128`,
+    /// `aes-256`, `aes-128-diffuser`, `aes-256-diffuser`, or `hardware` (the
+    /// drive's own encryption). Absent when BitLocker reports none or an
+    /// unknown method.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cipher: Option<String>,
+    /// Windows only: BitLocker's `ProtectionStatus`, `"on"` or `"off"`. Off
+    /// on an encrypted volume means protection is suspended (the key is in
+    /// the clear on the disk). Absent when BitLocker can't tell.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub protection: Option<String>,
 }
 
 impl Security {
@@ -117,7 +159,9 @@ impl Security {
                 "Encryption",
                 match &self.disk_encryption {
                     Some(d) => d.summary(),
-                    None if cfg!(windows) => "not read on Windows (BitLocker needs admin)".into(),
+                    None if cfg!(windows) => {
+                        "unknown (BitLocker is read only when elevated)".into()
+                    }
                     None => unknown(),
                 },
             ),
@@ -156,8 +200,29 @@ impl Tpm {
 }
 
 impl DiskEncryption {
+    /// Linux: "root on LUKS2". Windows: "encrypted (BitLocker, XTS-AES 256,
+    /// protection on)", "partly encrypted (…)", "not encrypted".
     fn summary(&self) -> String {
+        let bitlocker = || {
+            let details: Vec<String> = [
+                Some("BitLocker".to_string()),
+                self.cipher.as_deref().map(cipher_name),
+                self.protection
+                    .as_deref()
+                    .map(|p| format!("protection {p}")),
+            ]
+            .into_iter()
+            .flatten()
+            .collect();
+            details.join(", ")
+        };
         match (self.system_volume.as_str(), self.method.as_deref()) {
+            ("encrypted", Some(METHOD_BITLOCKER)) => format!("encrypted ({})", bitlocker()),
+            ("partly_encrypted", Some(METHOD_BITLOCKER)) => {
+                format!("partly encrypted ({})", bitlocker())
+            }
+            ("partly_encrypted", _) => "partly encrypted".to_string(),
+            ("not_encrypted", _) => "not encrypted".to_string(),
             ("encrypted", Some(m)) => format!("root on {}", m.to_uppercase()),
             ("encrypted", None) => "root encrypted".to_string(),
             ("none_detected", _) => "no dm-crypt under root".to_string(),
@@ -183,8 +248,169 @@ fn platform_read() -> Security {
         firmware_mode: win::firmware_type().and_then(firmware_mode_from_type),
         secure_boot: secure_boot_from_dword(win::secure_boot_state()),
         tpm: win::tbs_device_info().and_then(|(rc, v)| tpm_from_tbs(rc, v)),
-        disk_encryption: None,
+        disk_encryption: bitlocker_state(
+            crate::elevation::read(),
+            win::system_windows_directory().as_deref(),
+            wmi::encryptable_volumes,
+        ),
     }
+}
+
+/// `method` for a volume BitLocker has encrypted, or is encrypting.
+const METHOD_BITLOCKER: &str = "bitlocker";
+
+/// A cipher slug as people write it: "XTS-AES 256", "AES 128 with diffuser",
+/// "hardware encryption". A slug a later version added is shown as it is.
+fn cipher_name(slug: &str) -> String {
+    match slug {
+        "xts-aes-128" => "XTS-AES 128",
+        "xts-aes-256" => "XTS-AES 256",
+        "aes-128" => "AES 128",
+        "aes-256" => "AES 256",
+        "aes-128-diffuser" => "AES 128 with diffuser",
+        "aes-256-diffuser" => "AES 256 with diffuser",
+        "hardware" => "hardware encryption",
+        other => other,
+    }
+    .to_string()
+}
+
+/// The four `Win32_EncryptableVolume` properties loadbearer asks for, as WMI
+/// returned them: `None` for a property that was null or of an unexpected
+/// type.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) struct EncryptableVolume {
+    /// `"C:"`; null for a volume without a drive letter.
+    pub drive_letter: Option<String>,
+    pub conversion_status: Option<u32>,
+    pub protection_status: Option<u32>,
+    pub encryption_method: Option<u32>,
+}
+
+/// The drive letter of a path such as `C:\WINDOWS`, upper-cased. Anything
+/// else — a UNC or `\\?\` path, an empty string — has none.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn drive_letter_of(path: &str) -> Option<char> {
+    let mut chars = path.chars();
+    let letter = chars.next().filter(char::is_ascii_alphabetic)?;
+    (chars.next() == Some(':')).then(|| letter.to_ascii_uppercase())
+}
+
+/// The one volume whose `DriveLetter` is `letter:`, case-insensitively. None,
+/// or more than one, is no answer.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn system_volume(volumes: &[EncryptableVolume], letter: char) -> Option<&EncryptableVolume> {
+    let want = format!("{letter}:");
+    let mut matching = volumes.iter().filter(|v| {
+        v.drive_letter
+            .as_deref()
+            .is_some_and(|d| d.trim().eq_ignore_ascii_case(&want))
+    });
+    let first = matching.next()?;
+    matching.next().is_none().then_some(first)
+}
+
+/// `ConversionStatus`, from Win32_EncryptableVolume's documentation:
+/// 0 FullyDecrypted, 1 FullyEncrypted, 2 EncryptionInProgress,
+/// 3 DecryptionInProgress, 4 EncryptionPaused, 5 DecryptionPaused (the last
+/// four all "partially encrypted"). Any other value is no answer.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn system_volume_from_conversion(status: u32) -> Option<&'static str> {
+    match status {
+        0 => Some("not_encrypted"),
+        1 => Some("encrypted"),
+        2..=5 => Some("partly_encrypted"),
+        _ => None,
+    }
+}
+
+/// `EncryptionMethod`, from GetEncryptionMethod's documentation: 0 None,
+/// 1 AES_128_WITH_DIFFUSER, 2 AES_256_WITH_DIFFUSER, 3 AES_128, 4 AES_256,
+/// 5 HARDWARE_ENCRYPTION, 6 XTS_AES_128, 7 XTS_AES_256. None (0), UNKNOWN
+/// ((uint32)-1) and any value not listed have no cipher to report. (The
+/// class page's property table calls 7 "XTS-AES 256 WITH DIFFUSER"; the
+/// method page, and XTS itself, have no diffuser, so the method page is
+/// followed.)
+#[cfg_attr(not(windows), allow(dead_code))]
+fn cipher_from_method(method: u32) -> Option<&'static str> {
+    match method {
+        1 => Some("aes-128-diffuser"),
+        2 => Some("aes-256-diffuser"),
+        3 => Some("aes-128"),
+        4 => Some("aes-256"),
+        5 => Some("hardware"),
+        6 => Some("xts-aes-128"),
+        7 => Some("xts-aes-256"),
+        _ => None,
+    }
+}
+
+/// `ProtectionStatus`: 0 Unprotected, 1 Protected, 2 Unknown. Unknown, or
+/// a value not listed, is no answer.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn protection_from_status(status: u32) -> Option<&'static str> {
+    match status {
+        0 => Some("off"),
+        1 => Some("on"),
+        _ => None,
+    }
+}
+
+/// The system volume's [`DiskEncryption`], or `None` when its
+/// `ConversionStatus` is missing or undocumented: `system_volume` is the
+/// part's whole point, and is never guessed.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn bitlocker_from_volume(v: &EncryptableVolume) -> Option<DiskEncryption> {
+    let system_volume = system_volume_from_conversion(v.conversion_status?)?;
+    let on_disk = system_volume != "not_encrypted";
+    Some(DiskEncryption {
+        system_volume: system_volume.into(),
+        method: on_disk.then(|| METHOD_BITLOCKER.into()),
+        cipher: v
+            .encryption_method
+            .filter(|_| on_disk)
+            .and_then(cipher_from_method)
+            .map(Into::into),
+        protection: v
+            .protection_status
+            .and_then(protection_from_status)
+            .map(Into::into),
+    })
+}
+
+/// Why the WMI read gave no answer, for a debug log line. Never carries a
+/// volume identifier, nor the drive letter.
+pub(crate) type WmiFailure = String;
+
+/// BitLocker's state for the system volume, the policy around the WMI read:
+/// nothing is asked of WMI (`query` isn't called) unless the run is known to
+/// be elevated and the Windows directory has a drive letter. Every way of
+/// not getting an answer is `None` and a debug line.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn bitlocker_state(
+    elevated: Option<bool>,
+    windows_dir: Option<&str>,
+    query: impl FnOnce(char) -> Result<Vec<EncryptableVolume>, WmiFailure>,
+) -> Option<DiskEncryption> {
+    let skip = |why: &str| {
+        log::debug!(target: "loadbearer::security", "BitLocker not read: {why}");
+        None
+    };
+    if elevated != Some(true) {
+        return skip("this run is not elevated");
+    }
+    let Some(letter) = windows_dir.and_then(drive_letter_of) else {
+        return skip("the Windows directory has no drive letter");
+    };
+    let volumes = match query(letter) {
+        Ok(v) => v,
+        Err(why) => return skip(&why),
+    };
+    let Some(volume) = system_volume(&volumes, letter) else {
+        return skip("no single Win32_EncryptableVolume for the system volume");
+    };
+    bitlocker_from_volume(volume).or_else(|| skip("ConversionStatus missing or undocumented"))
 }
 
 /// `GetFirmwareType`'s `FIRMWARE_TYPE`: 1 is BIOS, 2 is UEFI; anything else
@@ -244,6 +470,22 @@ mod win {
         HKEY_LOCAL_MACHINE, RRF_RT_REG_DWORD, RegGetValueW,
     };
     use windows_sys::Win32::System::SystemInformation::GetFirmwareType;
+
+    /// The Windows directory, `C:\WINDOWS` say: its drive letter names the
+    /// system volume. `GetSystemWindowsDirectoryW` rather than
+    /// `GetWindowsDirectoryW`, which a Terminal Server session redirects.
+    pub fn system_windows_directory() -> Option<String> {
+        use windows_sys::Win32::System::SystemInformation::GetSystemWindowsDirectoryW;
+        let mut buf = [0u16; 261];
+        // SAFETY: the buffer is valid for writes of the length passed.
+        let n = unsafe { GetSystemWindowsDirectoryW(buf.as_mut_ptr(), buf.len() as u32) } as usize;
+        // 0 is failure; a length that doesn't fit is the size it would need.
+        let Some(path) = buf.get(..n).filter(|_| n != 0 && n < buf.len()) else {
+            log::debug!(target: "loadbearer::security", "GetSystemWindowsDirectoryW failed");
+            return None;
+        };
+        Some(String::from_utf16_lossy(path))
+    }
 
     pub fn firmware_type() -> Option<i32> {
         let mut t = 0i32;
@@ -332,6 +574,250 @@ mod win {
         };
         // Not logged: TBS_E_TPM_NOT_FOUND would say there is no TPM.
         Some((rc, info.tpm_version))
+    }
+}
+
+/// The one WMI read loadbearer makes (see the module docs): the system
+/// volume's row of `Win32_EncryptableVolume`, four properties of it, on a
+/// thread of its own, given [`TIMEOUT`] in all.
+#[cfg(windows)]
+mod wmi {
+    use super::{EncryptableVolume, WmiFailure};
+    use std::sync::mpsc;
+    use std::time::Duration;
+    use windows::Win32::System::Com::{
+        CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx,
+        CoSetProxyBlanket, CoUninitialize, EOAC_NONE, RPC_C_AUTHN_LEVEL_PKT_PRIVACY,
+        RPC_C_IMP_LEVEL_IMPERSONATE,
+    };
+    use windows::Win32::System::Variant::{VARIANT, VT_BSTR, VT_I4, VT_UI4, VariantClear};
+    use windows::Win32::System::Wmi::{
+        IEnumWbemClassObject, IWbemClassObject, IWbemLocator, WBEM_FLAG_CONNECT_USE_MAX_WAIT,
+        WBEM_FLAG_FORWARD_ONLY, WBEM_FLAG_RETURN_IMMEDIATELY, WBEM_GENERIC_FLAG_TYPE,
+        WBEM_S_TIMEDOUT, WbemLocator,
+    };
+    use windows::core::{BSTR, HRESULT, IUnknown, PCWSTR, Param, w};
+
+    /// How long the whole read may take before it is given up as absent.
+    const TIMEOUT: Duration = Duration::from_secs(10);
+    /// How long one `IEnumWbemClassObject::Next` may wait, in milliseconds.
+    const NEXT_TIMEOUT_MS: i32 = 5_000;
+    /// The query names one drive letter, so one row is expected; more than
+    /// this is not the answer to the question asked.
+    const MAX_ROWS: usize = 4;
+
+    const NAMESPACE: &str = r"ROOT\CIMV2\Security\MicrosoftVolumeEncryption";
+    /// `RPC_C_AUTHN_WINNT` and `RPC_C_AUTHZ_NONE` from rpcdce.h, as in
+    /// Microsoft's WMI client examples.
+    const RPC_C_AUTHN_WINNT: u32 = 10;
+    const RPC_C_AUTHZ_NONE: u32 = 0;
+
+    /// The rows for `letter:`, or why there are none. Returns within
+    /// [`TIMEOUT`] whatever WMI does: a thread that hasn't answered by then is
+    /// left to finish on its own (each of its calls is bounded, see
+    /// [`read`]) and its answer, if it ever comes, is dropped.
+    pub fn encryptable_volumes(letter: char) -> Result<Vec<EncryptableVolume>, WmiFailure> {
+        let (tx, rx) = mpsc::sync_channel(1);
+        let thread = std::thread::Builder::new()
+            .name("loadbearer-wmi".into())
+            .spawn(move || {
+                // The receiver may be gone, after a timeout: nothing to do.
+                let _ = tx.send(on_own_thread(letter));
+            })
+            .map_err(|_| "could not start the WMI thread".to_string())?;
+        match rx.recv_timeout(TIMEOUT) {
+            Ok(answer) => {
+                // It has sent, so all that's left is returning: no wait.
+                let _ = thread.join();
+                answer
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => Err("WMI did not answer in time".into()),
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                Err("the WMI thread ended without an answer".into())
+            }
+        }
+    }
+
+    /// COM, initialised on this thread for as long as it lives.
+    struct Com;
+
+    impl Com {
+        fn init() -> Result<Com, WmiFailure> {
+            // SAFETY: a fresh thread, initialised once; S_FALSE (already
+            // initialised) is success too and is balanced the same way.
+            let hr = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
+            if hr.is_err() {
+                return Err(format!("CoInitializeEx failed ({})", hex(hr)));
+            }
+            Ok(Com)
+        }
+    }
+
+    impl Drop for Com {
+        fn drop(&mut self) {
+            // SAFETY: balances the successful CoInitializeEx in `init`, on the
+            // same thread; every interface pointer was released before this.
+            unsafe { CoUninitialize() };
+        }
+    }
+
+    fn on_own_thread(letter: char) -> Result<Vec<EncryptableVolume>, WmiFailure> {
+        let _com = Com::init()?;
+        // Every interface `read` obtains is a local of it, so all are
+        // released before `_com` uninitialises COM.
+        read(letter)
+    }
+
+    fn hex(hr: HRESULT) -> String {
+        format!("{:#010x}", hr.0 as u32)
+    }
+
+    fn failed(what: &str, e: windows::core::Error) -> WmiFailure {
+        format!("{what} failed ({})", hex(e.code()))
+    }
+
+    /// Ask for the blanket the BitLocker provider needs — an encrypted
+    /// connection (`PKT_PRIVACY`), impersonation — on this proxy alone,
+    /// rather than process-wide through `CoInitializeSecurity`.
+    fn set_blanket(proxy: impl Param<IUnknown>, what: &str) -> Result<(), WmiFailure> {
+        // SAFETY: `proxy` is a live interface pointer from this apartment;
+        // no server principal name or auth identity is passed.
+        unsafe {
+            CoSetProxyBlanket(
+                proxy,
+                RPC_C_AUTHN_WINNT,
+                RPC_C_AUTHZ_NONE,
+                PCWSTR::null(),
+                RPC_C_AUTHN_LEVEL_PKT_PRIVACY,
+                RPC_C_IMP_LEVEL_IMPERSONATE,
+                None,
+                EOAC_NONE,
+            )
+        }
+        .map_err(|e| failed(what, e))
+    }
+
+    /// Connect, query, and read the four properties of each row. Every call
+    /// is bounded: `ConnectServer` by `WBEM_FLAG_CONNECT_USE_MAX_WAIT`, the
+    /// query returns at once (`WBEM_FLAG_RETURN_IMMEDIATELY`), and each
+    /// `Next` waits at most [`NEXT_TIMEOUT_MS`].
+    fn read(letter: char) -> Result<Vec<EncryptableVolume>, WmiFailure> {
+        if !letter.is_ascii_alphabetic() {
+            return Err("not a drive letter".into());
+        }
+        // SAFETY: COM is initialised on this thread (see `on_own_thread`).
+        let locator: IWbemLocator =
+            unsafe { CoCreateInstance(&WbemLocator, None, CLSCTX_INPROC_SERVER) }
+                .map_err(|e| failed("CoCreateInstance(WbemLocator)", e))?;
+        let none = BSTR::new();
+        // SAFETY: every BSTR outlives the call; no context object is passed.
+        let services = unsafe {
+            locator.ConnectServer(
+                &BSTR::from(NAMESPACE),
+                &none,
+                &none,
+                &none,
+                WBEM_FLAG_CONNECT_USE_MAX_WAIT.0,
+                &none,
+                None,
+            )
+        }
+        .map_err(|e| failed("ConnectServer(MicrosoftVolumeEncryption)", e))?;
+        set_blanket(&services, "CoSetProxyBlanket(services)")?;
+
+        // Only the four properties, and only the system volume's row: the
+        // letter is a single ASCII letter, checked above, so it can't change
+        // the query's shape.
+        let query = format!(
+            "SELECT DriveLetter, ConversionStatus, ProtectionStatus, EncryptionMethod \
+             FROM Win32_EncryptableVolume WHERE DriveLetter = '{letter}:'"
+        );
+        let flags =
+            WBEM_GENERIC_FLAG_TYPE(WBEM_FLAG_FORWARD_ONLY.0 | WBEM_FLAG_RETURN_IMMEDIATELY.0);
+        // SAFETY: both BSTRs outlive the call; no context object is passed.
+        let rows: IEnumWbemClassObject =
+            unsafe { services.ExecQuery(&BSTR::from("WQL"), &BSTR::from(query), flags, None) }
+                .map_err(|e| failed("ExecQuery(Win32_EncryptableVolume)", e))?;
+        set_blanket(&rows, "CoSetProxyBlanket(enumerator)")?;
+
+        let mut volumes = Vec::new();
+        loop {
+            let mut row: [Option<IWbemClassObject>; 1] = [None];
+            let mut returned = 0u32;
+            // SAFETY: `row` has room for the one object `Next` may return,
+            // and `returned` is a valid out-pointer.
+            let hr = unsafe { rows.Next(NEXT_TIMEOUT_MS, &mut row, &mut returned) };
+            if hr == HRESULT(WBEM_S_TIMEDOUT.0) {
+                return Err("Win32_EncryptableVolume enumeration timed out".into());
+            }
+            if hr.is_err() {
+                return Err(format!(
+                    "Win32_EncryptableVolume enumeration failed ({})",
+                    hex(hr)
+                ));
+            }
+            let [object] = row;
+            match object {
+                Some(object) if returned == 1 => volumes.push(volume(&object)),
+                // WBEM_S_FALSE with nothing returned: the end.
+                _ => break,
+            }
+            if volumes.len() > MAX_ROWS {
+                return Err("more Win32_EncryptableVolume rows than asked for".into());
+            }
+        }
+        Ok(volumes)
+    }
+
+    fn volume(object: &IWbemClassObject) -> EncryptableVolume {
+        EncryptableVolume {
+            drive_letter: property(object, w!("DriveLetter"), string_of),
+            conversion_status: property(object, w!("ConversionStatus"), u32_of),
+            protection_status: property(object, w!("ProtectionStatus"), u32_of),
+            encryption_method: property(object, w!("EncryptionMethod"), u32_of),
+        }
+    }
+
+    /// One property's value, through `decode`; `None` if `Get` fails.
+    fn property<T>(
+        object: &IWbemClassObject,
+        name: PCWSTR,
+        decode: fn(&VARIANT) -> Option<T>,
+    ) -> Option<T> {
+        let mut value = VARIANT::default();
+        // SAFETY: `name` is a NUL-terminated literal; `value` is an empty
+        // VARIANT for `Get` to fill; type and flavour aren't asked for.
+        if unsafe { object.Get(name, 0, &mut value, None, None) }.is_err() {
+            return None;
+        }
+        let decoded = decode(&value);
+        // SAFETY: `value` was filled by `Get` and is cleared exactly once,
+        // which frees a BSTR it holds.
+        let _ = unsafe { VariantClear(&mut value) };
+        decoded
+    }
+
+    /// A CIM `uint32` arrives as `VT_I4` (WMI's automation mapping), its bits
+    /// unchanged — so `(uint32)-1` is `0xFFFFFFFF`. `VT_UI4` is taken too.
+    fn u32_of(v: &VARIANT) -> Option<u32> {
+        // SAFETY: `vt` says which union member is live; only that one is read.
+        unsafe {
+            let inner = &v.Anonymous.Anonymous;
+            match inner.vt {
+                VT_I4 => Some(inner.Anonymous.lVal as u32),
+                VT_UI4 => Some(inner.Anonymous.ulVal),
+                _ => None,
+            }
+        }
+    }
+
+    /// A string, or `None` for `VT_NULL` (a volume without a drive letter).
+    fn string_of(v: &VARIANT) -> Option<String> {
+        // SAFETY: as in `u32_of`; the BSTR is borrowed, not taken.
+        unsafe {
+            let inner = &v.Anonymous.Anonymous;
+            (inner.vt == VT_BSTR).then(|| inner.Anonymous.bstrVal.to_string())
+        }
     }
 }
 
@@ -568,10 +1054,11 @@ mod sysfs {
             Walk::Crypt(m) => Some(DiskEncryption {
                 system_volume: "encrypted".into(),
                 method: Some(m.into()),
+                ..Default::default()
             }),
             Walk::NoCrypt => Some(DiskEncryption {
                 system_volume: "none_detected".into(),
-                method: None,
+                ..Default::default()
             }),
             Walk::Unknown => None,
         }
@@ -794,7 +1281,8 @@ mod tests {
             sysfs::disk_encryption(&t),
             Some(DiskEncryption {
                 system_volume: "encrypted".into(),
-                method: Some("luks2".into())
+                method: Some("luks2".into()),
+                ..Default::default()
             })
         );
     }
@@ -826,7 +1314,7 @@ mod tests {
             sysfs::disk_encryption(&t),
             Some(DiskEncryption {
                 system_volume: "none_detected".into(),
-                method: None
+                ..Default::default()
             })
         );
     }
@@ -922,8 +1410,23 @@ mod tests {
             disk_encryption: Some(DiskEncryption {
                 system_volume: "encrypted".into(),
                 method: Some("luks2".into()),
+                ..Default::default()
             }),
         };
+        // A Linux document is exactly what it was before `cipher` and
+        // `protection` existed.
+        assert_eq!(
+            serde_json::to_string(&s.disk_encryption).unwrap(),
+            r#"{"system_volume":"encrypted","method":"luks2"}"#
+        );
+        let none = DiskEncryption {
+            system_volume: "none_detected".into(),
+            ..Default::default()
+        };
+        assert_eq!(
+            serde_json::to_string(&none).unwrap(),
+            r#"{"system_volume":"none_detected"}"#
+        );
         let v = serde_json::to_value(&s).unwrap();
         assert_eq!(v["firmware_mode"], "uefi");
         assert_eq!(v["secure_boot"], true);
@@ -943,5 +1446,229 @@ mod tests {
         assert_eq!(text, r#"{"tpm":{"present":false}}"#);
         assert_eq!(partial.summary().as_deref(), Some("TPM none"));
         assert!(Security::default().summary().is_none());
+    }
+
+    // --- BitLocker (pure, tested everywhere) ---
+
+    fn vol(letter: Option<&str>, cs: u32, ps: u32, em: u32) -> EncryptableVolume {
+        EncryptableVolume {
+            drive_letter: letter.map(Into::into),
+            conversion_status: Some(cs),
+            protection_status: Some(ps),
+            encryption_method: Some(em),
+        }
+    }
+
+    #[test]
+    fn every_documented_conversion_status() {
+        assert_eq!(system_volume_from_conversion(0), Some("not_encrypted"));
+        assert_eq!(system_volume_from_conversion(1), Some("encrypted"));
+        // In progress or paused, either way: partly encrypted.
+        for s in 2..=5 {
+            assert_eq!(system_volume_from_conversion(s), Some("partly_encrypted"));
+        }
+        for s in [6, 100, u32::MAX] {
+            assert_eq!(system_volume_from_conversion(s), None);
+        }
+    }
+
+    #[test]
+    fn every_documented_encryption_method() {
+        let table = [
+            (1, "aes-128-diffuser"),
+            (2, "aes-256-diffuser"),
+            (3, "aes-128"),
+            (4, "aes-256"),
+            (5, "hardware"),
+            (6, "xts-aes-128"),
+            (7, "xts-aes-256"),
+        ];
+        for (n, slug) in table {
+            assert_eq!(cipher_from_method(n), Some(slug));
+        }
+        // None (0), UNKNOWN ((uint32)-1) and anything unlisted.
+        for n in [0, 8, 99, u32::MAX] {
+            assert_eq!(cipher_from_method(n), None);
+        }
+        assert_eq!(cipher_name("xts-aes-256"), "XTS-AES 256");
+        assert_eq!(cipher_name("aes-128-diffuser"), "AES 128 with diffuser");
+        assert_eq!(cipher_name("hardware"), "hardware encryption");
+        // From a later version: shown as it is.
+        assert_eq!(cipher_name("aes-512"), "aes-512");
+    }
+
+    #[test]
+    fn every_documented_protection_status() {
+        assert_eq!(protection_from_status(0), Some("off"));
+        assert_eq!(protection_from_status(1), Some("on"));
+        // 2 is "unknown": no answer, like anything unlisted.
+        assert_eq!(protection_from_status(2), None);
+        assert_eq!(protection_from_status(3), None);
+    }
+
+    #[test]
+    fn a_volume_decodes() {
+        // As observed on a fully encrypted XTS-AES 256 OS volume.
+        assert_eq!(
+            bitlocker_from_volume(&vol(Some("C:"), 1, 1, 7)),
+            Some(DiskEncryption {
+                system_volume: "encrypted".into(),
+                method: Some("bitlocker".into()),
+                cipher: Some("xts-aes-256".into()),
+                protection: Some("on".into()),
+            })
+        );
+        // Encrypted with protection suspended.
+        let suspended = bitlocker_from_volume(&vol(Some("C:"), 1, 0, 6)).unwrap();
+        assert_eq!(suspended.protection.as_deref(), Some("off"));
+        assert_eq!(suspended.cipher.as_deref(), Some("xts-aes-128"));
+        // Encryption paused part-way.
+        let paused = bitlocker_from_volume(&vol(Some("C:"), 4, 0, 4)).unwrap();
+        assert_eq!(paused.system_volume, "partly_encrypted");
+        assert_eq!(paused.method.as_deref(), Some("bitlocker"));
+        // Fully decrypted: no method, no cipher, protection off.
+        assert_eq!(
+            bitlocker_from_volume(&vol(Some("C:"), 0, 0, 0)),
+            Some(DiskEncryption {
+                system_volume: "not_encrypted".into(),
+                protection: Some("off".into()),
+                ..Default::default()
+            })
+        );
+        // An unknown method or protection drops just that field.
+        let unknown = bitlocker_from_volume(&vol(Some("C:"), 1, 2, u32::MAX)).unwrap();
+        assert_eq!((unknown.cipher, unknown.protection), (None, None));
+        assert_eq!(unknown.system_volume, "encrypted");
+        // An undocumented or missing ConversionStatus drops the whole part.
+        assert_eq!(bitlocker_from_volume(&vol(Some("C:"), 9, 1, 7)), None);
+        let missing = EncryptableVolume {
+            conversion_status: None,
+            ..vol(Some("C:"), 1, 1, 7)
+        };
+        assert_eq!(bitlocker_from_volume(&missing), None);
+    }
+
+    #[test]
+    fn the_system_volume_is_found_by_drive_letter() {
+        assert_eq!(drive_letter_of(r"C:\WINDOWS"), Some('C'));
+        assert_eq!(drive_letter_of(r"d:\Windows"), Some('D'));
+        assert_eq!(drive_letter_of(r"\\?\C:\Windows"), None);
+        assert_eq!(drive_letter_of(r"\\server\share"), None);
+        assert_eq!(drive_letter_of(""), None);
+        assert_eq!(drive_letter_of("1:"), None);
+
+        let vols = [
+            vol(None, 0, 0, 0),
+            vol(Some("D:"), 0, 0, 0),
+            vol(Some("c:"), 1, 1, 7),
+        ];
+        assert!(system_volume(&vols, 'C').is_some_and(|v| v.encryption_method == Some(7)));
+        assert!(system_volume(&vols, 'E').is_none());
+        // Two rows for one letter: no answer rather than a pick.
+        let twice = [vol(Some("C:"), 1, 1, 7), vol(Some("C:"), 0, 0, 0)];
+        assert!(system_volume(&twice, 'C').is_none());
+        assert!(system_volume(&[], 'C').is_none());
+    }
+
+    #[test]
+    fn bitlocker_is_asked_for_only_when_elevated() {
+        let asked = std::cell::Cell::new(false);
+        let query = |_: char| {
+            asked.set(true);
+            Ok(vec![vol(Some("C:"), 1, 1, 7)])
+        };
+        for elevated in [Some(false), None] {
+            assert_eq!(bitlocker_state(elevated, Some(r"C:\Windows"), query), None);
+            assert!(!asked.get(), "WMI was queried without elevation");
+        }
+        // No drive letter to ask about: not asked either.
+        assert_eq!(bitlocker_state(Some(true), None, query), None);
+        assert!(!asked.get());
+
+        let got = bitlocker_state(Some(true), Some(r"C:\Windows"), query);
+        assert!(asked.get());
+        assert_eq!(got.unwrap().system_volume, "encrypted");
+        // The letter asked about is the Windows directory's.
+        let letter = std::cell::Cell::new(' ');
+        let _ = bitlocker_state(Some(true), Some(r"e:\Windows"), |l| {
+            letter.set(l);
+            Ok(vec![])
+        });
+        assert_eq!(letter.get(), 'E');
+    }
+
+    #[test]
+    fn a_failed_or_empty_query_is_absent() {
+        let win = Some(r"C:\Windows");
+        assert_eq!(
+            bitlocker_state(Some(true), win, |_| Err("timed out".into())),
+            None
+        );
+        assert_eq!(bitlocker_state(Some(true), win, |_| Ok(vec![])), None);
+        let other = |_: char| Ok(vec![vol(Some("D:"), 1, 1, 7)]);
+        assert_eq!(bitlocker_state(Some(true), win, other), None);
+    }
+
+    #[test]
+    fn bitlocker_json_shape_and_summaries() {
+        let enc = bitlocker_from_volume(&vol(Some("C:"), 1, 1, 7)).unwrap();
+        assert_eq!(
+            serde_json::to_string(&enc).unwrap(),
+            r#"{"system_volume":"encrypted","method":"bitlocker","cipher":"xts-aes-256","protection":"on"}"#
+        );
+        assert_eq!(
+            enc.summary(),
+            "encrypted (BitLocker, XTS-AES 256, protection on)"
+        );
+        let suspended = bitlocker_from_volume(&vol(Some("C:"), 1, 0, 5)).unwrap();
+        assert_eq!(
+            suspended.summary(),
+            "encrypted (BitLocker, hardware encryption, protection off)"
+        );
+        let paused = bitlocker_from_volume(&vol(Some("C:"), 5, 2, u32::MAX)).unwrap();
+        assert_eq!(paused.summary(), "partly encrypted (BitLocker)");
+        let off = bitlocker_from_volume(&vol(Some("C:"), 0, 0, 0)).unwrap();
+        assert_eq!(
+            serde_json::to_string(&off).unwrap(),
+            r#"{"system_volume":"not_encrypted","protection":"off"}"#
+        );
+        assert_eq!(off.summary(), "not encrypted");
+
+        let s = Security {
+            firmware_mode: Some("uefi".into()),
+            disk_encryption: Some(enc.clone()),
+            ..Default::default()
+        };
+        assert_eq!(
+            s.summary().as_deref(),
+            Some("UEFI · encrypted (BitLocker, XTS-AES 256, protection on)")
+        );
+        let row = s.rows().into_iter().find(|(k, _)| *k == "Encryption");
+        assert_eq!(
+            row.map(|(_, v)| v).as_deref(),
+            Some("encrypted (BitLocker, XTS-AES 256, protection on)")
+        );
+        // Round trip, and a document from before the new fields still parses.
+        let back: DiskEncryption =
+            serde_json::from_value(serde_json::to_value(&enc).unwrap()).unwrap();
+        assert_eq!(back, enc);
+        let old: DiskEncryption =
+            serde_json::from_str(r#"{"system_volume":"encrypted","method":"luks2"}"#).unwrap();
+        assert_eq!((old.cipher, old.protection), (None, None));
+    }
+
+    #[test]
+    fn unread_encryption_wording() {
+        let row = Security::default()
+            .rows()
+            .into_iter()
+            .find(|(k, _)| *k == "Encryption")
+            .map(|(_, v)| v);
+        let want = if cfg!(windows) {
+            "unknown (BitLocker is read only when elevated)"
+        } else {
+            "unknown"
+        };
+        assert_eq!(row.as_deref(), Some(want));
     }
 }

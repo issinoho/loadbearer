@@ -92,7 +92,10 @@ Beyond the CPU / memory / disk / GPU / battery inventory above, collecting
 - **Windows** — the `MachineGuid` value under
   `HKLM\SOFTWARE\Microsoft\Cryptography` (read-only), and the raw SMBIOS
   firmware table via `GetSystemFirmwareTable`. No COM, no WMI, no `wmic`
-  subprocess, and no child process of any kind.
+  subprocess, and no child process of any kind. (loadbearer never starts a
+  child process to read anything, and uses WMI, and so COM, in exactly one
+  place: BitLocker's state, only with `--collect security` on an elevated
+  run — see [Collected only when asked for](#collected-only-when-asked-for).)
 - **Linux** — `/etc/machine-id` (or `/var/lib/dbus/machine-id`) and
   `/sys/class/dmi/id/`. The UUID and serial there are root-only by default, so
   an unprivileged run simply doesn't get them.
@@ -143,7 +146,9 @@ Only with `--collect` (see [below](#collected-only-when-asked-for)) —
   `HKLM\SYSTEM\CurrentControlSet\Control\SecureBoot\State` (read-only);
   and `Tbsi_GetDeviceInfo` from `tbs.dll`, which is loaded from System32
   only when `security` is asked for, so a run that doesn't ask never maps
-  it. *Linux*: whether `/sys/firmware/efi` exists; the `SecureBoot` variable
+  it. On an **elevated** run only, four properties of the system volume's
+  `Win32_EncryptableVolume` through WMI — the one use of WMI or COM
+  anywhere, [below](#collected-only-when-asked-for). *Linux*: whether `/sys/firmware/efi` exists; the `SecureBoot` variable
   in efivarfs
   (`/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c`,
   world-readable); `/sys/class/tpm/tpm0/tpm_version_major` and whether
@@ -172,9 +177,11 @@ deliberately doesn't:
   it sits in the `run` block.
 - **`security`** adds `machine.security`: whether the machine booted through
   UEFI, whether Secure Boot is on, whether there is a TPM and which version,
-  and (Linux only) whether the root filesystem is on dm-crypt. A list of the
-  machines *without* Secure Boot or disk encryption is useful to an attacker
-  if a results share, a collector or a backup leaks.
+  and whether the system volume is encrypted: on Linux, whether the root
+  filesystem is on dm-crypt; on Windows, **only when the run is elevated**,
+  the system volume's BitLocker state (below). A list of the machines
+  *without* Secure Boot or disk encryption is useful to an attacker if a
+  results share, a collector or a backup leaks.
 
 Unlike the hardware blocks above, these are per-unit: two machines of the same
 model report different values. That is why they are opt-in.
@@ -184,20 +191,45 @@ the code that reads it does not run. What was asked for is written into the
 result as `run.collect`, so a reader can tell "not asked" from "could not be
 read". A `soak` document records it in a `run` block holding only that and `run.elevated`. Each part is absent where it couldn't be read; nothing is guessed.
 
+Everything in `security` is read without administrator rights, WMI, COM or a
+child process — **with one exception, BitLocker on Windows**:
+
+- **BitLocker is read through WMI, and only when the run is elevated.**
+  Every documented way to learn BitLocker's state — `Win32_EncryptableVolume`
+  (WMI), `manage-bde` and `Get-BitLockerVolume` (child processes) — needs
+  administrator rights, and what a standard user can read is undocumented and
+  has no stated meaning. So loadbearer uses the documented WMI class, and only
+  when all of these hold: `security` was asked for, this is Windows, and the
+  process is elevated ("Run as administrator", or a service or scheduled task
+  running as SYSTEM). Otherwise WMI is not touched and there is no
+  `disk_encryption` part.
+- **What it reads:** the class `Win32_EncryptableVolume` in the namespace
+  `ROOT\CIMV2\Security\MicrosoftVolumeEncryption`, its properties
+  `DriveLetter`, `ConversionStatus`, `ProtectionStatus` and
+  `EncryptionMethod`, and only for the volume holding the Windows directory
+  (the query names its drive letter). The result records whether that volume
+  is encrypted, partly encrypted or not encrypted, the cipher, and whether
+  protection is on — not the drive letter.
+- **What it never reads or asks for:** the volume's `DeviceID` or
+  `PersistentVolumeID`, its key protectors, recovery passwords or keys, any
+  other volume, or any other WMI class. No volume identifier is recorded or
+  logged.
+- **How:** on a short-lived thread of its own, which initialises COM and
+  uninitialises it when done, without changing the process's COM security
+  settings. The read is given ten seconds; if WMI hasn't answered, or the
+  namespace or class is missing, or the query fails, `disk_encryption` is
+  absent. Nothing is guessed, and nothing undocumented is tried instead.
+
 **Deliberately not read:** the TPM's endorsement key, manufacturer, firmware
 revision or anything else that identifies it; the device-mapper UUID of an
 encrypted volume (it is read, to see its type prefix, and neither kept nor
-logged); any volume but the root filesystem; BitLocker recovery or key
-protector information.
+logged); any volume but the root filesystem (Linux) or the system volume
+(Windows); BitLocker recovery or key protector information.
 
-**Not read, because it can't be within the promises above:**
+**Not read:**
 
-- **BitLocker state on Windows.** Every documented way to read it —
-  `Win32_EncryptableVolume` (WMI), `manage-bde` and `Get-BitLockerVolume`
-  (child processes) — needs administrator rights, and the shell's
-  `System.Volume.BitLockerProtection` property is COM. What a standard user
-  can read is undocumented and has no stated meaning, so there is no
-  `disk_encryption` part on Windows.
+- **BitLocker on a run that isn't elevated**, for the reasons above: there is
+  no `disk_encryption` part then.
 - **Other kinds of Linux encryption** — ZFS native encryption, fscrypt,
   eCryptfs, self-encrypting drives — aren't looked for: "no dm-crypt under
   `/`" is reported as `"none_detected"`, never as "not encrypted".
