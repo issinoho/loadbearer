@@ -52,8 +52,9 @@ pub enum CollectArg {
     Uptime,
     /// Whether this run was elevated: administrator on Windows, root on Unix (`run.elevated`).
     Elevation,
-    /// Security posture: firmware mode, Secure Boot, TPM, and (Linux) whether
-    /// the root filesystem is on dm-crypt (`machine.security`).
+    /// Security posture: firmware mode, Secure Boot, TPM, and whether the
+    /// system volume is encrypted — dm-crypt on Linux, BitLocker on Windows
+    /// (elevated runs only, read through WMI) (`machine.security`).
     Security,
 }
 

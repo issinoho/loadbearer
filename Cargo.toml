@@ -52,6 +52,16 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_IO",
     "Win32_System_Power",
 ] }
+# `--collect security` on an elevated run only: BitLocker's state through
+# WMI's Win32_EncryptableVolume (see src/security.rs). The COM bindings
+# windows-sys lacks. Already in the tree, at this version, through sysinfo, so
+# naming it adds no crate, only these features.
+windows = { version = "0.62", features = [
+    "Win32_System_Com",
+    "Win32_System_Ole",
+    "Win32_System_Variant",
+    "Win32_System_Wmi",
+] }
 
 [build-dependencies]
 time = { version = "0.3", default-features = false, features = ["std"] }

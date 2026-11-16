@@ -25,8 +25,9 @@ curve_k = 0.5
 # Also collect what is off by default, because it describes this particular
 # machine or its user rather than its hardware: "uptime" (when it last
 # booted), "elevation" (whether the run had admin / root rights), "security"
-# (firmware mode, Secure Boot, TPM, and on Linux whether / is on dm-crypt).
-# See PRIVACY.md. `--collect` on the command line adds to this list.
+# (firmware mode, Secure Boot, TPM, and whether the system volume is
+# encrypted: on Linux whether / is on dm-crypt; on Windows, only when the run
+# is elevated, its BitLocker state, read through WMI). See PRIVACY.md. `--collect` on the command line adds to this list.
 # `run`, `soak` and `info` read it (`--config FILE`); the last two use nothing
 # else in the file.
 # NOTE: unknown keys are rejected, and loadbearer 1.8.1 and older don't know

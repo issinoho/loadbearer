@@ -446,7 +446,7 @@ loadbearer net-server [--bind ADDR]
 | `--no-gpu` | Never touch the GPU: skip the `gpu` component **and** the OpenCL probe that `info` / `run` otherwise perform, so `OpenCL.dll` is never loaded. A global flag — works with any subcommand. Useful for fleet deployment where a stale ICD loader could stall enumeration. |
 | `--no-model-ref` | Skip the ["vs typical hardware"](#vs-typical-hardware) block — don't compare the CPU / GPU against their model reference. |
 | `--no-telemetry` | Don't sample CPU clocks / package power during the run (no `Clocks …` line, no `telemetry` field, no thermal-limit flag). |
-| `--collect LIST` | Also collect what is **off by default** because it describes this particular machine or its user rather than its hardware: `uptime` (`machine.boot`), `elevation` (`run.elevated`), `security` (`machine.security`: firmware mode, Secure Boot, TPM, and on Linux whether the root filesystem is on dm-crypt). Comma-separated or repeated; a name it doesn't know is refused. **Adds to** a `collect` list in the config file. What was asked for is recorded as `run.collect`. Also on `info` and `soak`, which take `--config` for the `collect` list alone. See [Collected only when asked for](#collected-only-when-asked-for) and [PRIVACY.md](PRIVACY.md#collected-only-when-asked-for). |
+| `--collect LIST` | Also collect what is **off by default** because it describes this particular machine or its user rather than its hardware: `uptime` (`machine.boot`), `elevation` (`run.elevated`), `security` (`machine.security`: firmware mode, Secure Boot, TPM, and whether the system volume is encrypted — on Linux whether the root filesystem is on dm-crypt, on Windows its BitLocker state, read through WMI and only when the run is elevated). Comma-separated or repeated; a name it doesn't know is refused. **Adds to** a `collect` list in the config file. What was asked for is recorded as `run.collect`. Also on `info` and `soak`, which take `--config` for the `collect` list alone. See [Collected only when asked for](#collected-only-when-asked-for) and [PRIVACY.md](PRIVACY.md#collected-only-when-asked-for). |
 | `--tag K=V` | Attach a label to the result, repeatable (`--tag site=glasgow --tag ring=pilot`). Carried in the result JSON's `tags` field for a fleet collector to group by; **metadata only** — never affects a measurement or a grade. Keys take letters, digits, `_`, `-` and `.`. Also settable as a `[tags]` table in the config file, which `--tag` overrides per key. |
 | `--fail-under GRADE` | Exit **3** if the overall grade is worse than `GRADE` (`S`/`A`/`B`/`C`/`D`/`F`), so a management tool can flag the machine. A run that couldn't complete is still exit 1, keeping "this machine is slow" distinct from "this run broke". Ignored, with a note, when nothing in the run is graded (e.g. `--only network`). |
 | `--not-on-battery` | Don't run when the machine is on battery — the clocks are usually power-capped, so the numbers wouldn't be comparable. **Skipping exits 0**, not a failure; with `--upload` it also [reports the skip](#fleet-use). A machine with no battery counts as mains; a platform that won't say proceeds with a note rather than skipping. |
@@ -816,9 +816,14 @@ in a category is read, attempted or logged unless its name was given.
   `machine.drives`, `machine.memory` or `identity.serial`: those are
   root-only reads, and an unelevated run simply doesn't get them.
 - **`security`** → `machine.security`: `firmware_mode`, `secure_boot`,
-  `tpm` and (Linux only) `disk_encryption`. **BitLocker isn't read on
-  Windows**: every documented way to read it needs administrator rights, WMI
-  or a child process, none of which loadbearer uses.
+  `tpm` and `disk_encryption`. **On Windows, BitLocker is read only when the
+  run is elevated**: every documented way to read it needs administrator
+  rights, so on an elevated run (a scheduled task as SYSTEM, say) loadbearer
+  asks WMI's `Win32_EncryptableVolume` for the system volume's encryption
+  state, cipher and protection status. It is the one place loadbearer uses
+  WMI or COM, and nothing else of the volume — no identifier, key protector
+  or recovery information — is asked for. Unelevated, `disk_encryption` is
+  absent on Windows.
 
 On `soak` the same two places apply: `machine.boot` and `machine.security` in
 the soak document's `machine` block, and a `run` block holding only `collect`
@@ -1085,15 +1090,25 @@ benchmark; use `--only cpu,memory,network` to skip it.
   - `tpm` — `present` (`false`: the OS exposes no TPM — none fitted, off in
     firmware, or no driver) and `version`, `"2.0"` or `"1.2"`, absent when
     the OS doesn't say. Nothing that identifies the TPM is recorded.
-  - `disk_encryption` — **Linux only**, and only the root filesystem:
-    `system_volume` is `"encrypted"` when it sits on a cryptsetup dm-crypt
-    mapping (directly, or through LVM or RAID), with `method` `luks1`,
-    `luks2`, `plain`, …; or `"none_detected"`, which means no dm-crypt
-    under it — ZFS native encryption, fscrypt, eCryptfs and self-encrypting
-    drives aren't looked for, so it is **not** "unencrypted". Absent when the
-    chain couldn't be followed (a container's overlay root, say), and always
-    absent on Windows, where BitLocker can't be read without administrator
-    rights, WMI or a child process.
+  - `disk_encryption` — the system volume only.
+    - **Linux**, the root filesystem: `system_volume` is `"encrypted"` when
+      it sits on a cryptsetup dm-crypt mapping (directly, or through LVM or
+      RAID), with `method` `luks1`, `luks2`, `plain`, …; or
+      `"none_detected"`, which means no dm-crypt under it — ZFS native
+      encryption, fscrypt, eCryptfs and self-encrypting drives aren't looked
+      for, so it is **not** "unencrypted". Absent when the chain couldn't be
+      followed (a container's overlay root, say).
+    - **Windows**, **elevated runs only**, the volume holding the Windows
+      directory, from BitLocker: `system_volume` is `"encrypted"` (fully),
+      `"not_encrypted"` (fully decrypted — BitLocker can say so outright),
+      or `"partly_encrypted"` (encryption or decryption in progress or
+      paused); `method` `"bitlocker"` unless not encrypted; `cipher`, one of
+      `xts-aes-128`, `xts-aes-256`, `aes-128`, `aes-256`,
+      `aes-128-diffuser`, `aes-256-diffuser` or `hardware` (the drive's own
+      encryption); and `protection`, `"on"` or `"off"` — off on an encrypted
+      volume means BitLocker is suspended. `cipher` and `protection` are
+      absent where BitLocker reports an unknown value. The whole part is
+      absent on a run that isn't elevated, and wherever WMI gives no answer.
 - `link` — the `--net-target` link probe, if one ran (ungraded).
 - `soak` — the `--soak` sustained-load result, if one ran (ungraded): every
   per-second sample plus the derived peak / steady / retained / onset figures.
