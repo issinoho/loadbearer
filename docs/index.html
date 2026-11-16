@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>loadbearer — grade any machine, and know which one is faster</title>
-<meta name="description" content="loadbearer is a single-binary command-line tool that benchmarks a machine's CPU, memory, disk, network stack and GPU, scores every measurement against a shared reference baseline, and grades each component — and the whole machine — on an S-to-F scale. Its compare mode reads two result files and tells you which machine wins, by how much, and why; a sustained-load test shows how much speed a machine keeps once it throttles. No GUI, no network calls, no runtime. Windows, Linux, and macOS on Apple Silicon. A companion server, loadbearer-fleet, indexes a folder of collected results into a dashboard over the whole estate.">
+<meta name="description" content="loadbearer is a single-binary command-line tool that benchmarks a machine's CPU, memory, disk, network stack and GPU, scores every measurement against a shared reference baseline, and grades each component — and the whole machine — on an S-to-F scale. Its compare mode reads two result files and tells you which machine wins, by how much, and why; a sustained-load test shows how much speed a machine keeps once it throttles. No GUI, no runtime, and no network calls unless you ask for one. Windows, Linux, and macOS on Apple Silicon. A companion server, loadbearer-fleet, indexes a folder of collected results into a dashboard over the whole estate.">
 
 <link rel="canonical" href="https://loadbearer.issinoho.com/">
 <link rel="icon" type="image/svg+xml" href="assets/logo-mark.svg">
 
 <meta property="og:type" content="website">
 <meta property="og:title" content="loadbearer — grade any machine, and know which one is faster">
-<meta property="og:description" content="Benchmarks CPU, memory, disk, network and GPU, scores every metric against a shared baseline, and grades the machine on an S-to-F scale. compare mode: which of two machines wins, by how much, and why. Plus a sustained-load throttle test. Single binary, no network calls. Windows, Linux, macOS (Apple Silicon).">
+<meta property="og:description" content="Benchmarks CPU, memory, disk, network and GPU, scores every metric against a shared baseline, and grades the machine on an S-to-F scale. compare mode: which of two machines wins, by how much, and why. Plus a sustained-load throttle test. Single binary, no network calls unless asked. Windows, Linux, macOS (Apple Silicon).">
 <meta property="og:url" content="https://loadbearer.issinoho.com/">
 <meta property="og:image" content="https://loadbearer.issinoho.com/assets/og-image.svg">
 <meta property="og:image:type" content="image/svg+xml">
@@ -183,7 +183,7 @@
         <h3>Honest and self-contained</h3>
         <p>One static binary, no runtime. No network calls unless you ask for
         one — the network test is loopback only, and a result goes to a fleet
-        server only with <code>--upload</code>. Disk reads bypass the OS page cache
+        server only with <code>--upload</code> (plus a short note if a scheduled run is skipped). Uptime, elevation and security posture are read only if you name them with <code>--collect</code>, and BitLocker is the one thing read through WMI &mdash; only then, on an elevated Windows run. Disk reads bypass the OS page cache
         (<code>O_DIRECT</code> / <code>FILE_FLAG_NO_BUFFERING</code>). Workloads
         are reproducible with <code>--seed</code>.</p>
       </article>
@@ -427,7 +427,7 @@ sudo apt install loadbearer</pre>
       <span class="eyebrow">At fleet scale</span>
       <h2>Now do it for every machine you own</h2>
       <p><strong>loadbearer-fleet</strong> is a companion server. Point it at the
-      folder your deployment tool drops result files into and it indexes them and
+      folder your deployment tool drops result files into, or let each machine post its own with <code>--upload</code>, and it indexes them and
       reports across the estate — summary, peer groups, drilldown, how old each
       machine is, and the red flags worth acting on. Separate repository, separate release, also MIT.
       <b>Early, but usable.</b></p>

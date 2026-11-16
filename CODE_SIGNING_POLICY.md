@@ -131,7 +131,7 @@ who runs the manual re-signing step.
 loadbearer collects no data and transfers no information to any networked
 system unless specifically requested by the user or the person operating it
 (the `network` benchmark is loopback-only; outbound connections happen only on
-an explicit `--net-target`, and a listening socket only on `loadbearer
+an explicit `--net-target` or `--upload`, and a listening socket only on `loadbearer
 net-server`). See [PRIVACY.md](PRIVACY.md).
 
 ## Reporting a suspected violation

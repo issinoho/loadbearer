@@ -823,7 +823,7 @@ in a category is read, attempted or logged unless its name was given.
   state, cipher and protection status. It is the one place loadbearer uses
   WMI or COM, and nothing else of the volume — no identifier, key protector
   or recovery information — is asked for. Unelevated, `disk_encryption` is
-  absent on Windows.
+  absent on Windows. loadbearer-fleet 0.14.0 or later understands the BitLocker values; upgrade the server first.
 
 On `soak` the same two places apply: `machine.boot` and `machine.security` in
 the soak document's `machine` block, and a `run` block holding only `collect`
