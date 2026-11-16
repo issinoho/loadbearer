@@ -2,7 +2,18 @@
 
 All notable changes to loadbearer are documented in this file.
 
-## Unreleased
+## 1.11.0 - Mon, 16 Nov 2026
+
+**BitLocker, read, and the one exception that takes.** On an elevated Windows
+run made with `--collect security`, loadbearer now reads whether the system
+volume is encrypted and whether BitLocker protection is on. That needs WMI,
+which loadbearer had promised not to use, so the promise now has one stated
+exception; the first entry below and PRIVACY.md say exactly what it is. No
+measurement changes, nothing is read that was not asked for, and the schemas
+keep their names.
+
+**For fleets:** upgrade loadbearer-fleet to 0.14.0 first, so the new values
+are understood when they arrive.
 
 - **Privacy change: on an elevated Windows run, `--collect security` now
   reads BitLocker through WMI.** Until now loadbearer used no WMI and no COM
